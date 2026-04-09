@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;family=Be+Vietnam+Pro:wght@300;400;500;600&amp;family=Space+Grotesk:wght@400;500;700&amp;family=DM+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container": "#211f1f",
+                    "surface": "#141313",
+                    "on-background": "#e6e1e1",
+                    "primary": "#ffb68b",
+                    "surface-tint": "#ffb68b",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed": "#251a00",
+                    "on-secondary-fixed-variant": "#49473e",
+                    "primary-container": "#f08030",
+                    "surface-bright": "#3a3939",
+                    "inverse-primary": "#994700",
+                    "error-container": "#93000a",
+                    "on-surface-variant": "#ddc1b2",
+                    "surface-container-high": "#2b2a29",
+                    "on-secondary": "#333029",
+                    "surface-container-highest": "#363434",
+                    "secondary-container": "#49473e",
+                    "outline-variant": "#564337",
+                    "inverse-on-surface": "#323030",
+                    "tertiary-fixed": "#ffdf97",
+                    "on-primary-fixed": "#321300",
+                    "surface-dim": "#141313",
+                    "secondary-fixed": "#e8e2d7",
+                    "on-error-container": "#ffdad6",
+                    "on-secondary-container": "#bab5aa",
+                    "primary-fixed-dim": "#ffb68b",
+                    "surface-container-low": "#1c1b1b",
+                    "on-primary": "#522300",
+                    "surface-variant": "#363434",
+                    "on-error": "#690005",
+                    "on-tertiary": "#3e2e00",
+                    "tertiary-fixed-dim": "#f0c040",
+                    "outline": "#a58c7e",
+                    "on-primary-container": "#5a2700",
+                    "on-secondary-fixed": "#1d1c15",
+                    "tertiary": "#f0c040",
+                    "on-surface": "#e6e1e1",
+                    "primary-fixed": "#ffdbc8",
+                    "tertiary-container": "#c49814",
+                    "background": "#141313",
+                    "secondary-fixed-dim": "#cbc6bb",
+                    "on-tertiary-fixed-variant": "#5a4400",
+                    "surface-container-lowest": "#0f0e0e",
+                    "inverse-surface": "#e6e1e1",
+                    "secondary": "#cbc6bb",
+                    "on-tertiary-container": "#453300",
+                    "on-primary-fixed-variant": "#743400"
+            },
+            "borderRadius": {
+                    "DEFAULT": "1rem",
+                    "lg": "2rem",
+                    "xl": "3rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["Plus Jakarta Sans"],
+                    "body": ["Be Vietnam Pro"],
+                    "label": ["Space Grotesk"],
+                    "mono": ["DM Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      body { background-color: #141313; color: #e6e1e1; font-family: 'Be Vietnam Pro', sans-serif; }
+      .primary-gradient { background: linear-gradient(45deg, #ffb68b 0%, #f08030 100%); }
+      .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .nav-bg { background-color: #1e1e1e; }
+      .fab-glow { box-shadow: 0 0 40px 0 rgba(240, 128, 48, 0.4); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen pb-32">
+<!-- Top App Bar Type A -->
+<header class="fixed top-0 w-full z-50 h-[72px] px-6 flex items-center bg-[#141313]">
+<h1 class="font-['Plus_Jakarta_Sans'] font-[800] text-[28px] text-[#F0EDE8] tracking-tight">Rep Log</h1>
+</header>
+<main class="pt-[88px] px-6 space-y-8 max-w-2xl mx-auto">
+<!-- Header Section -->
+<section>
+<h2 class="text-[36px] font-headline font-extrabold leading-tight tracking-tight text-on-surface">Rep Log</h2>
+<p class="text-on-surface-variant font-body text-lg mt-1">Your biomechanical history</p>
+</section>
+<!-- Filter Pills -->
+<section class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+<button class="px-6 py-2.5 rounded-full primary-gradient text-on-primary-fixed font-label font-bold text-xs uppercase tracking-widest transition-transform active:scale-95">THIS WEEK</button>
+<button class="px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest hover:bg-surface-container-highest transition-colors">LAST WEEK</button>
+<button class="px-6 py-2.5 rounded-full bg-surface-container-high text-on-surface-variant font-label font-bold text-xs uppercase tracking-widest hover:bg-surface-container-highest transition-colors">MONTHLY</button>
+</section>
+<!-- Peak Form Bento Card -->
+<section class="bg-[#222019] rounded-lg p-8 flex flex-col items-center justify-center space-y-4 shadow-[0px_20px_40px_rgba(0,0,0,0.2)] relative overflow-hidden">
+<div class="absolute -top-10 -right-10 w-40 h-40 bg-primary-container/5 rounded-full blur-3xl"></div>
+<span class="font-label text-on-surface-variant text-sm tracking-[0.2em] font-medium">PEAK FORM SCORE</span>
+<div class="flex items-baseline gap-2">
+<span class="font-mono text-[84px] leading-none text-primary-container font-medium tracking-tighter">98</span>
+<span class="font-label text-primary text-xl font-bold">%</span>
+</div>
+<div class="w-full h-1.5 bg-surface/40 rounded-full overflow-hidden">
+<div class="h-full w-[98%] primary-gradient rounded-full"></div>
+</div>
+</section>
+<!-- Weekly Volume Chart -->
+<section class="bg-surface-container rounded-md p-6">
+<div class="flex justify-between items-end h-32 gap-3">
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[40%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">M</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[65%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">T</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[55%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">W</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full primary-gradient rounded-t-full h-[90%] shadow-[0px_4px_12px_rgba(240,128,48,0.3)]"></div>
+<span class="font-label text-[10px] text-primary font-bold">T</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[75%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">F</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[30%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">S</span>
+</div>
+<div class="flex-1 flex flex-col items-center gap-3">
+<div class="w-full bg-surface-container-highest rounded-t-full h-[15%]"></div>
+<span class="font-label text-[10px] text-on-surface-variant">S</span>
+</div>
+</div>
+</section>
+<!-- Session Cards -->
+<section class="space-y-4">
+<h3 class="font-headline font-bold text-xl px-2">Recent Sessions</h3>
+<!-- Card 1 -->
+<div class="bg-[#1A1917] rounded-[20px] p-5 border-l-4 border-primary-container flex justify-between items-center group transition-all hover:translate-x-1">
+<div class="space-y-1">
+<p class="font-label text-xs text-on-surface-variant tracking-widest">OCT 24</p>
+<div class="flex gap-4 items-baseline">
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">4</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Sets</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">8</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Reps</span>
+</div>
+</div>
+</div>
+<div class="bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+<span class="font-mono text-primary font-bold text-lg">98%</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-[#1A1917] rounded-[20px] p-5 border-l-4 border-error flex justify-between items-center group transition-all hover:translate-x-1">
+<div class="space-y-1">
+<p class="font-label text-xs text-on-surface-variant tracking-widest">OCT 22</p>
+<div class="flex gap-4 items-baseline">
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">4</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Sets</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">8</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Reps</span>
+</div>
+</div>
+</div>
+<div class="bg-error/10 px-4 py-2 rounded-full border border-error/20">
+<span class="font-mono text-error font-bold text-lg">48%</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-[#1A1917] rounded-[20px] p-5 border-l-4 border-primary-container flex justify-between items-center group transition-all hover:translate-x-1">
+<div class="space-y-1">
+<p class="font-label text-xs text-on-surface-variant tracking-widest">OCT 20</p>
+<div class="flex gap-4 items-baseline">
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">3</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Sets</span>
+</div>
+<div class="flex items-baseline gap-1">
+<span class="font-mono text-2xl text-on-surface">5</span>
+<span class="font-label text-[10px] text-on-surface-variant uppercase">Reps</span>
+</div>
+</div>
+</div>
+<div class="bg-primary/10 px-4 py-2 rounded-full border border-primary/20">
+<span class="font-mono text-primary font-bold text-lg">89%</span>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 w-full z-50 h-[88px] nav-bg rounded-t-[32px] flex justify-between items-end px-4 pb-4">
+<!-- Home -->
+<div class="flex flex-col items-center justify-center w-[72px] mb-1 text-[#666666] hover:text-[#f08030] transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[28px]">home</span>
+</div>
+<!-- Stats (Active) -->
+<div class="flex flex-col items-center justify-center w-[72px] mb-1 text-[#f08030] cursor-pointer">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">bar_chart</span>
+<span class="font-label text-[10px] font-bold mt-1 tracking-wider uppercase">STATS</span>
+</div>
+<!-- Center FAB -->
+<div class="relative flex justify-center w-[72px]">
+<div class="absolute -top-16 w-[76px] h-[76px] bg-[#f08030] rounded-full flex items-center justify-center fab-glow shadow-2xl active:scale-95 transition-transform cursor-pointer border-[6px] border-[#141313]">
+<span class="material-symbols-outlined text-[#141313] text-[34px]" style="font-variation-settings: 'wght' 600;">fitness_center</span>
+</div>
+</div>
+<!-- History -->
+<div class="flex flex-col items-center justify-center w-[72px] mb-1 text-[#666666] hover:text-[#f08030] transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[28px]">history</span>
+</div>
+<!-- Profile -->
+<div class="flex flex-col items-center justify-center w-[72px] mb-1 text-[#666666] hover:text-[#f08030] transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[28px]">person</span>
+</div>
+</nav>
+</body></html>

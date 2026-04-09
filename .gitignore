@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.yarn/cache
+.yarn/unplugged
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace
+ios/DerivedData/
+
+# Android
+android/build/
+android/app/build/
+android/.gradle/
+
+# TFLite model (large binary — Git LFS)
+assets/models/*.tflite
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# Claude project context (not for repo — kept in Claude Project only)
+.claude/
+CLAUDE.md

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RepRight | Design System</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "surface": "#0e0e0e",
+        "surface-container-low": "#131313",
+        "surface-container": "#1a1919",
+        "surface-container-high": "#201f1f",
+        "surface-container-highest": "#262626",
+        "on-surface": "#ffffff",
+        "on-surface-variant": "#adaaaa",
+        "primary": "#00FF87",
+        "primary-dim": "#00ed7d",
+        "error": "#FF4444",
+        "warning": "#FFB800",
+      },
+      fontFamily: {
+        "headline": ["Space Grotesk"],
+        "body": ["Inter"],
+        "label": ["Inter"]
+      }
+    }
+  }
+}
+</script>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  body { background-color: #0D0D0D; color: #fff; font-family: 'Inter', sans-serif; min-height: 100dvh; }
+</style>
+</head>
+<body class="p-8 max-w-4xl mx-auto">
+  <h1 class="font-['Space_Grotesk'] font-bold text-4xl text-[#00FF87] mb-2">RepRight Design System</h1>
+  <p class="text-[#888888] mb-12">Kinetic Monolith — Dark mode, data-forward, Whoop-inspired</p>
+
+  <!-- Colors -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Color Tokens</h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="rounded-xl p-4 bg-[#00FF87]"><p class="text-[#0D0D0D] font-bold text-xs">Accent Green</p><p class="text-[#0D0D0D] text-xs">#00FF87</p></div>
+      <div class="rounded-xl p-4 bg-[#FF4444]"><p class="text-white font-bold text-xs">Error / Critical</p><p class="text-white text-xs">#FF4444</p></div>
+      <div class="rounded-xl p-4 bg-[#FFB800]"><p class="text-[#0D0D0D] font-bold text-xs">Warning</p><p class="text-[#0D0D0D] text-xs">#FFB800</p></div>
+      <div class="rounded-xl p-4 bg-[#4A9EFF]"><p class="text-white font-bold text-xs">Info</p><p class="text-white text-xs">#4A9EFF</p></div>
+      <div class="rounded-xl p-4 bg-[#0D0D0D] border border-[#2A2A2A]"><p class="text-white font-bold text-xs">Background</p><p class="text-[#888888] text-xs">#0D0D0D</p></div>
+      <div class="rounded-xl p-4 bg-[#1A1A1A]"><p class="text-white font-bold text-xs">Surface</p><p class="text-[#888888] text-xs">#1A1A1A</p></div>
+      <div class="rounded-xl p-4 bg-[#131313]"><p class="text-white font-bold text-xs">Surface Low</p><p class="text-[#888888] text-xs">#131313</p></div>
+      <div class="rounded-xl p-4 bg-[#262626]"><p class="text-white font-bold text-xs">Surface High</p><p class="text-[#888888] text-xs">#262626</p></div>
+    </div>
+  </section>
+
+  <!-- Typography -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Typography</h2>
+    <div class="space-y-4">
+      <div><p class="font-['Space_Grotesk'] font-bold text-5xl tracking-tighter">Display / Headline</p><p class="text-[#888888] text-xs mt-1">Space Grotesk Bold — screen titles, score numbers</p></div>
+      <div><p class="font-['Space_Grotesk'] font-bold text-2xl">Section Title</p><p class="text-[#888888] text-xs mt-1">Space Grotesk Bold 24px</p></div>
+      <div><p class="font-['Inter'] text-base">Body text for descriptions and secondary content</p><p class="text-[#888888] text-xs mt-1">Inter Regular 16px</p></div>
+      <div><p class="font-['Space_Grotesk'] font-bold text-[10px] uppercase tracking-widest text-[#888888]">LABEL / METADATA</p><p class="text-[#888888] text-xs mt-1">Space Grotesk Bold 10px uppercase tracking-widest</p></div>
+    </div>
+  </section>
+
+  <!-- Buttons -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Buttons</h2>
+    <div class="flex flex-wrap gap-4">
+      <button class="bg-[#00FF87] text-[#0D0D0D] font-['Inter'] font-bold px-8 py-4 rounded-[10px] uppercase tracking-tight">Primary</button>
+      <button class="border border-[#00FF87] text-[#00FF87] font-['Inter'] font-bold px-8 py-4 rounded-[10px] uppercase tracking-tight">Outlined</button>
+      <button class="border border-[#2A2A2A] text-white font-['Inter'] font-medium px-8 py-4 rounded-[10px]">Ghost</button>
+      <button class="border border-[#FF4444]/30 text-[#FF4444] font-['Inter'] font-bold px-8 py-4 rounded-[10px] uppercase tracking-widest text-xs">Logout / Danger</button>
+    </div>
+  </section>
+
+  <!-- Score Badges -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Score Badges</h2>
+    <div class="flex flex-wrap gap-4">
+      <span class="bg-[#00FF87]/10 text-[#00FF87] text-xs font-bold tracking-widest px-4 py-2 rounded-full border border-[#00FF87]/20">EXCELLENT 90–100</span>
+      <span class="bg-[#7ED957]/10 text-[#7ED957] text-xs font-bold tracking-widest px-4 py-2 rounded-full border border-[#7ED957]/20">GOOD 70–89</span>
+      <span class="bg-[#FFB800]/10 text-[#FFB800] text-xs font-bold tracking-widest px-4 py-2 rounded-full border border-[#FFB800]/20">NEEDS WORK 50–69</span>
+      <span class="bg-[#FF4444]/10 text-[#FF4444] text-xs font-bold tracking-widest px-4 py-2 rounded-full border border-[#FF4444]/20">POOR FORM &lt;50</span>
+    </div>
+  </section>
+
+  <!-- Error Banners -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Error Banners (Live Session)</h2>
+    <div class="space-y-4">
+      <div class="bg-[#FF4444] text-white p-4 rounded-xl flex items-center gap-4">
+        <span class="material-symbols-outlined">warning</span>
+        <div><p class="text-[10px] font-black tracking-widest uppercase">AI LIVE FEEDBACK — CRITICAL</p><p class="font-['Space_Grotesk'] font-bold text-lg">Engage your lats. Drive chest up.</p></div>
+      </div>
+      <div class="bg-[#FFB800] text-[#0D0D0D] p-4 rounded-xl flex items-center gap-4">
+        <span class="material-symbols-outlined">warning</span>
+        <div><p class="text-[10px] font-black tracking-widest uppercase">AI LIVE FEEDBACK — WARNING</p><p class="font-['Space_Grotesk'] font-bold text-lg">Keep the bar close. Drag it up.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom Nav Preview -->
+  <section class="mb-16">
+    <h2 class="font-['Space_Grotesk'] font-bold text-xs uppercase tracking-widest text-[#888888] mb-6">Bottom Navigation</h2>
+    <div class="bg-[#131313] rounded-xl h-20 flex justify-around items-center px-4">
+      <div class="flex flex-col items-center text-[#00FF87]">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+        <span class="font-['Space_Grotesk'] font-bold text-[10px] uppercase tracking-widest mt-1">Home</span>
+      </div>
+      <div class="flex flex-col items-center text-[#888888]">
+        <span class="material-symbols-outlined">fitness_center</span>
+        <span class="font-['Space_Grotesk'] font-bold text-[10px] uppercase tracking-widest mt-1">Workout</span>
+      </div>
+      <div class="flex flex-col items-center text-[#888888]">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="font-['Space_Grotesk'] font-bold text-[10px] uppercase tracking-widest mt-1">Stats</span>
+      </div>
+      <div class="flex flex-col items-center text-[#888888]">
+        <span class="material-symbols-outlined">person</span>
+        <span class="font-['Space_Grotesk'] font-bold text-[10px] uppercase tracking-widest mt-1">Profile</span>
+      </div>
+    </div>
+    <p class="text-[#888888] text-xs mt-2">Active tab: #00FF87, filled icon. Inactive: #888888, outlined icon.</p>
+  </section>
+</body>
+</html>
