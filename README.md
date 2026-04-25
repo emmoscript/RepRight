@@ -59,6 +59,8 @@ Camera Feed (30fps)
     ↓
 Frame Processor (Vision Camera)
     ↓
+Live Session State Machine (7A → 7B → 7C → 7D)
+    ↓
 MoveNet Lightning (TFLite) → 17 keypoints
     ↓
 Biomechanical Analyzer (TypeScript)
@@ -70,34 +72,58 @@ Feedback Engine → audio + visual overlay
 Session Logger → AsyncStorage
 ```
 
+Full architecture: [`docs/architecture.md`](docs/architecture.md)
+
 ---
 
 ## App Screens
 
 | Screen | Description |
 |---|---|
+| Demo Mode / Onboarding | Scrollable app presentation, no login required |
+| Sign Up | Create account |
+| Login | Sign in |
+| Email Confirmation | OTP code verification |
 | Home | Dashboard — last session, streak, start CTA |
-| Workout (Configure) | Set up session: exercise + number of sets |
-| Live Session | Full-screen camera + skeleton overlay + live feedback |
+| Configure Session | Set up session: exercise + number of sets |
+| Live Session (7A–7D) | Full-screen camera + skeleton overlay + live feedback |
+| Stop Session Modal | Confirmation dialog before ending session |
 | Session Complete | Score ring, error breakdown, save |
-| Stats / Rep Log | Weekly chart + session history (used for study data) |
+| Stats / Rep Log | Weekly chart + session history (study data source) |
 | Profile | User info, participant ID, settings |
-| Demo Mode | Test the system without logging a real session |
 
-Full screen specs: [`docs/screens.md`](docs/screens.md)  
-Design system: [`docs/design-system/design-system.md`](docs/design-system/design-system.md)  
-HTML prototypes: [`docs/design-system/screens/`](docs/design-system/screens/)
+Full screen specs: [`docs/screens.md`](docs/screens.md)
 
 ---
 
 ## Design System
 
-- **Dark mode first** — background `#0D0D0D`, surfaces `#1A1A1A`
-- **Accent** — `#00FF87` (green) for success, CTAs, active states
-- **Error** — `#FF4444` (red) for critical biomechanical errors
-- **Warning** — `#FFB800` (amber) for warnings
-- **Fonts** — Space Grotesk (headlines) + Inter (body)
+- **Dark mode** — background `#0D0D0D`, surfaces `#1A1919` / `#201F1F`
+- **Primary** — `#27C34F` (green) for CTAs, active states, skeleton overlay
+- **Error** — `#FF4444` for critical errors and STOP SESSION button
+- **Warning** — `#FFB800` (amber) for warning-level errors
+- **Fonts** — Space Grotesk Bold (headlines) + Inter (body/labels)
 - **Icons** — Material Symbols Outlined
+
+Full design system: [`docs/design-system/design-system-v3.md`](docs/design-system/design-system-v3.md)  
+HTML prototypes: [`docs/design-system/screens-v3/`](docs/design-system/screens-v3/)
+
+---
+
+## Live Session Flow
+
+The app validates pose before starting analysis through 4 states:
+
+```
+7A Positioning → 7B Detected → 7C Countdown (3-2-1) → 7D Active Analysis
+```
+
+- Skeleton is muted gray `#484847` until pose is detected
+- Skeleton turns green `#27C34F` on detection
+- STOP SESSION button appears **only** in state 7D
+- If pose is lost mid-session: pauses without resetting rep count
+
+Full spec: [`docs/live-session-flow.md`](docs/live-session-flow.md)
 
 ---
 
@@ -128,10 +154,10 @@ HTML prototypes: [`docs/design-system/screens/`](docs/design-system/screens/)
 
 ## Success Metrics (Hypotheses)
 
-1. ≥ 80% agreement with certified trainer evaluations
+1. >= 80% agreement with certified trainer evaluations
 2. Statistically significant reduction in error frequency after 4 weeks
 3. < 100ms end-to-end processing latency on mid-high-end devices
-4. ≥ 60% of users complete 3+ sessions after onboarding
+4. >= 60% of users complete 3+ sessions after onboarding
 5. Significant improvement in biomechanical knowledge questionnaire
 
 ---
@@ -166,7 +192,7 @@ yarn ios
 yarn android
 ```
 
-> **Note:** The MoveNet Lightning `.tflite` model file (~3MB) is tracked via Git LFS.  
+> **Note:** The MoveNet Lightning `.tflite` model file (~3MB) is tracked via Git LFS.
 > Run `git lfs pull` after cloning to get it.
 
 ---
@@ -178,25 +204,27 @@ repright/
 ├── src/
 │   ├── screens/          # Screen-level components
 │   ├── components/       # Reusable UI components
-│   ├── modules/          # Core logic
+│   ├── modules/
 │   │   ├── movenet.ts    # TFLite inference wrapper
 │   │   ├── analyzer.ts   # 5-parameter biomechanical analyzer
-│   │   ├── scoring.ts    # Per-rep score 0–100
+│   │   ├── scoring.ts    # Per-rep score 0-100
 │   │   ├── feedback.ts   # Audio + visual feedback engine
 │   │   └── session.ts    # AsyncStorage session logger
-│   ├── theme/            # colors.ts, typography.ts
-│   ├── hooks/            # Custom React hooks
-│   ├── navigation/       # React Navigation setup
-│   └── utils/            # angles.ts math helpers
+│   ├── theme/
+│   │   ├── colors.ts     # Color tokens v3 (#27C34F primary)
+│   │   └── typography.ts # Space Grotesk + Inter
+│   ├── hooks/
+│   ├── navigation/
+│   └── utils/            # angles.ts geometric helpers
 ├── assets/
 │   └── models/           # movenet_lightning.tflite (Git LFS)
 └── docs/
-    ├── architecture.md   # Data flow diagram
-    ├── screens.md        # Full screen inventory + nav map
+    ├── architecture.md
+    ├── screens.md
+    ├── live-session-flow.md
     └── design-system/
-        ├── design-system.md   # Color, type, component specs
-        ├── index.html         # Design system reference (open in browser)
-        └── screens/           # HTML prototypes per screen
+        ├── design-system-v3.md
+        └── screens-v3/   # HTML prototypes (8 screens)
 ```
 
 ---
@@ -213,5 +241,4 @@ repright/
 
 ## License
 
-Academic use only. Not for commercial distribution.  
-© 2026 Emil Moquete, Jean Roque, Javier Jarp — UNIBE
+MIT License — © 2026 Emil Moquete, Jean Roque, Javier Jarp — UNIBE
