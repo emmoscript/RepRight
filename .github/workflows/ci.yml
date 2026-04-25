@@ -18,16 +18,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'yarn'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: TypeScript check
-        run: yarn tsc --noEmit
+        run: npm run tsc
 
       - name: ESLint
-        run: yarn lint
+        run: npm run lint
 
   test:
     name: Unit Tests
@@ -41,10 +41,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'yarn'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: npm ci
 
       - name: Run tests
-        run: yarn test --passWithNoTests
+        run: npm test -- --passWithNoTests

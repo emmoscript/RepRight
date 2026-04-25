@@ -12,7 +12,7 @@
  */
 
 import { PoseResult, KEYPOINTS, MIN_KEYPOINT_SCORE } from './movenet';
-import { angleBetween, distance } from '../utils/angles';
+import { angleBetween } from '../utils/angles';
 
 export type ErrorId = 'ERR_001' | 'ERR_002' | 'ERR_003' | 'ERR_004' | 'ERR_005';
 export type Severity = 'critical' | 'warning' | 'info';

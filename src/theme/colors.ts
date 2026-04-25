@@ -10,7 +10,14 @@ export const colors = {
   bg_high:       '#2A2825',
   bg_highest:    '#323029',
 
-  // Primary accent — orange
+  // v3 (README) + compatibility aliases used by feedback / live UI
+  primary_green: '#27C34F',
+  bg_v3: '#0D0D0D',
+  surface_v3: '#1A1919',
+  accent_red: '#FF4444',
+  accent_yellow: '#FFB800',
+  skeleton_muted_v3: '#484847',
+  // Primary accent — orange (v2)
   accent_orange:        '#F08030',
   accent_orange_light:  '#FFB68B',
   accent_orange_dim:    '#C4682A',

@@ -1,24 +1,23 @@
 /**
  * movenet.ts
- * MoveNet Lightning inference wrapper.
- * Loads the TFLite model and runs inference on Vision Camera frames.
+ * MoveNet Lightning — TFLite init, output parsing, and mock pose for development
+ * when the bundled .tflite is empty or failed to load.
  *
- * Keypoint indices:
- *  0: nose       5: left_shoulder   6: right_shoulder
- *  9: left_wrist 10: right_wrist   11: left_hip      12: right_hip
- * 13: left_knee 14: right_knee    15: left_ankle    16: right_ankle
+ * Keypoint indices match TensorFlow MoveNet 17-landmark layout.
  */
 
+import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
+
 export interface KeyPoint {
-  y: number;      // normalized 0–1
-  x: number;      // normalized 0–1
-  score: number;  // confidence 0–1
+  y: number;
+  x: number;
+  score: number;
 }
 
 export interface PoseResult {
-  keypoints: KeyPoint[];  // always 17 items
-  score: number;          // overall pose confidence
-  timestamp: number;      // ms since session start
+  keypoints: KeyPoint[];
+  score: number;
+  timestamp: number;
 }
 
 export const KEYPOINTS = {
@@ -43,28 +42,74 @@ export const KEYPOINTS = {
 
 export type KeypointName = keyof typeof KEYPOINTS;
 
-// Minimum confidence to trust a keypoint
 export const MIN_KEYPOINT_SCORE = 0.3;
 
-/**
- * Initialize TFLite model.
- * Call once at app startup before any inference.
- * Model file: assets/models/movenet_lightning.tflite
- */
-export async function initModel(): Promise<void> {
-  // TODO: Load model via react-native-fast-tflite
-  // const model = await loadTensorflowModel(require('../../assets/models/movenet_lightning.tflite'));
-  throw new Error('initModel: not yet implemented');
+let loadedModel: TensorflowModel | null = null;
+let modelLoadError: string | null = null;
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const MODEL_ASSET = require('../../assets/models/movenet_lightning.tflite') as number;
+
+export async function initModel(): Promise<boolean> {
+  if (loadedModel) return true;
+  modelLoadError = null;
+  try {
+    loadedModel = await loadTensorflowModel(MODEL_ASSET, 'default');
+    return true;
+  } catch (e) {
+    modelLoadError = e instanceof Error ? e.message : String(e);
+    loadedModel = null;
+    return false;
+  }
 }
 
-/**
- * Run MoveNet inference on a single camera frame.
- * @param frame - Vision Camera CameraFrame (passed from frame processor)
- * @returns PoseResult with 17 keypoints
- */
-export async function runInference(frame: unknown): Promise<PoseResult> {
-  // TODO: Implement via TFLite bindings
-  // Input: 192x192 RGB image tensor
-  // Output: [1, 1, 17, 3] tensor → reshape to 17 KeyPoints
-  throw new Error('runInference: not yet implemented');
+export function getModel(): TensorflowModel | null {
+  return loadedModel;
+}
+
+export function getModelLoadError(): string | null {
+  return modelLoadError;
+}
+
+/** MoveNet single-pose output: [1,1,17,3] (y, x, confidence) float32. */
+export function keypointsFromMovenetOutput(
+  out: ArrayBuffer | Float32Array,
+  frameTimestamp: number,
+): PoseResult {
+  const floats = out instanceof Float32Array ? out : new Float32Array(out);
+  const n = 17;
+  const keypoints: KeyPoint[] = [];
+  for (let i = 0; i < n; i += 1) {
+    keypoints.push({
+      y: floats[i * 3 + 0],
+      x: floats[i * 3 + 1],
+      score: floats[i * 3 + 2],
+    });
+  }
+  const score = keypoints.reduce((a, k) => a + k.score, 0) / n;
+  return { keypoints, score, timestamp: frameTimestamp };
+}
+
+/** Mock pose for dev when TFLite is unavailable. */
+export function getMockPose(frameTimestamp: number, phaseT: number): PoseResult {
+  const breath = 0.02 * Math.sin(phaseT * 0.006);
+  const y = (r: number) => r + breath;
+  const x = (c: number) => c + breath * 0.5;
+  const mk = (px: number, py: number, s = 0.92): KeyPoint => ({ x: x(px), y: y(py), score: s });
+  const keypoints: KeyPoint[] = new Array(17);
+  for (let i = 0; i < 17; i += 1) keypoints[i] = mk(0, 0, 0.1);
+  keypoints[0] = mk(0.38, 0.18);
+  keypoints[5] = mk(0.32, 0.3);
+  keypoints[6] = mk(0.3, 0.3);
+  keypoints[7] = mk(0.4, 0.4);
+  keypoints[8] = mk(0.4, 0.4);
+  keypoints[9] = mk(0.4, 0.5);
+  keypoints[10] = mk(0.4, 0.5);
+  keypoints[11] = mk(0.32, 0.6);
+  keypoints[12] = mk(0.3, 0.6);
+  keypoints[13] = mk(0.3, 0.8);
+  keypoints[14] = mk(0.3, 0.8);
+  keypoints[15] = mk(0.3, 0.95);
+  keypoints[16] = mk(0.3, 0.95);
+  return { keypoints, score: 0.88, timestamp: frameTimestamp };
 }

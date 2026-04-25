@@ -12,21 +12,21 @@ export interface RepLog {
   startTimestamp: number;
   endTimestamp: number;
   score: number;
-  errors: Array<{
+  errors: {
     errorId: string;
     frameCount: number;
     totalFrames: number;
-  }>;
+  }[];
 }
 
 export interface SessionLog {
   sessionId: string;      // uuid
   participantId: string;  // anonymized: 'P001', 'P002' …
   date: string;           // ISO 8601
-  sets: Array<{
+  sets: {
     setNumber: number;
     reps: RepLog[];
-  }>;
+  }[];
   summary: {
     totalReps: number;
     avgScore: number;

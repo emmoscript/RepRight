@@ -5,10 +5,11 @@
 
 export const typography = {
   fontFamily: {
-    regular:  'Inter-Regular',
-    medium:   'Inter-Medium',
-    semibold: 'Inter-SemiBold',
-    bold:     'Inter-Bold',
+    regular:  'Inter_400Regular',
+    medium:   'Inter_500Medium',
+    semibold: 'Inter_600SemiBold',
+    bold:     'Inter_700Bold',
+    display:  'SpaceGrotesk_700Bold',
   },
   fontSize: {
     xs:      11,
