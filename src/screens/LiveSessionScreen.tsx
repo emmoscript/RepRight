@@ -87,12 +87,13 @@ export function LiveSessionScreen() {
   const [poseRotationDeg, setPoseRotationDeg] = useState<PoseRotationDeg>(
     Platform.OS === 'android' ? 90 : 0,
   );
-  const [workletInferenceEnabled, setWorkletInferenceEnabled] = useState<boolean>(
-    Platform.OS === 'ios',
-  );
+  const [workletInferenceEnabled, setWorkletInferenceEnabled] = useState<boolean>(true);
   const [workletInferenceError, setWorkletInferenceError] = useState<string | null>(null);
   const isIosPlatform = Platform.OS === 'ios';
   const [perfMode, setPerfMode] = useState<PerfMode>('balanced');
+  const [effectiveInferFps, setEffectiveInferFps] = useState(0);
+  const [fallbackCount, setFallbackCount] = useState(0);
+  const inferTimestampsRef = useRef<number[]>([]);
 
   const handleEndSession = useCallback(() => {
     void Speech.stop();
@@ -206,74 +207,75 @@ export function LiveSessionScreen() {
     [cameraPreference, poseRotationDeg],
   );
 
-  const lastJsInferenceAt = useRef(0);
+  const unCropPoseToPreview = useCallback(
+    (pose: PoseResult, sourceWidth: number, sourceHeight: number): PoseResult => {
+      if (sourceWidth <= 0 || sourceHeight <= 0) return pose;
+      const srcAspect = sourceWidth / sourceHeight;
+      const targetAspect = 1; // 192x192 model input
+      const keypoints = pose.keypoints.map((k) => {
+        if (srcAspect > targetAspect) {
+          const cropW = sourceHeight * targetAspect;
+          const xOff = (sourceWidth - cropW) / 2;
+          const x = (k.x * cropW + xOff) / sourceWidth;
+          return { x, y: k.y, score: k.score };
+        }
+        if (srcAspect < targetAspect) {
+          const cropH = sourceWidth / targetAspect;
+          const yOff = (sourceHeight - cropH) / 2;
+          const y = (k.y * cropH + yOff) / sourceHeight;
+          return { x: k.x, y, score: k.score };
+        }
+        return k;
+      });
+      return { ...pose, keypoints };
+    },
+    [],
+  );
+
   const onWorkletInferenceResult = useCallback(
-    (values: number[], kind: WorkletOutputKind, ts: number) => {
+    (values: number[], kind: WorkletOutputKind, ts: number, sourceWidth: number, sourceHeight: number) => {
       try {
+        const toDisplayPose = (rawPose: PoseResult) =>
+          transformPoseForDisplay(unCropPoseToPreview(rawPose, sourceWidth, sourceHeight));
+        inferTimestampsRef.current.push(Date.now());
+        if (inferTimestampsRef.current.length > 80) inferTimestampsRef.current.shift();
         if (kind === 'f32') {
           const parsed = keypointsFromMovenetOutput(Float32Array.from(values), ts);
-          ingestPose(transformPoseForDisplay(parsed));
+          ingestPose(toDisplayPose(parsed));
           return;
         }
         if (kind === 'u8') {
           const parsed = keypointsFromMovenetOutput(Uint8Array.from(values), ts);
-          ingestPose(transformPoseForDisplay(parsed));
+          ingestPose(toDisplayPose(parsed));
           return;
         }
         const parsed = keypointsFromMovenetOutput(Int8Array.from(values), ts);
-        ingestPose(transformPoseForDisplay(parsed));
+        ingestPose(toDisplayPose(parsed));
       } catch (error) {
         setInferenceError(error instanceof Error ? error.message : String(error));
       }
     },
-    [ingestPose, transformPoseForDisplay],
+    [ingestPose, transformPoseForDisplay, unCropPoseToPreview],
   );
 
   const onWorkletInferenceFailure = useCallback((message: string) => {
     setWorkletInferenceEnabled(false);
     setWorkletInferenceError(message);
+    setFallbackCount((c) => c + 1);
   }, []);
 
-  const onNativeFrame = useCallback(
-    (pixels: number[]) => {
-      const now = Date.now();
-      const minInterval = isIosPlatform
-        ? perfMode === 'fast'
-          ? 80
-          : perfMode === 'balanced'
-            ? 110
-            : 170
-        : perfMode === 'fast'
-          ? 180
-          : perfMode === 'balanced'
-            ? 260
-            : 420;
-      if (now - lastJsInferenceAt.current < minInterval) return;
-      lastJsInferenceAt.current = now;
-      const m = getModel();
-      if (!m) return;
-      try {
-        const u8 = Uint8Array.from(pixels);
-        const outs = m.runSync([u8]);
-        const f = outs[0];
-        if (f instanceof ArrayBuffer || ArrayBuffer.isView(f)) {
-          const parsed = keypointsFromMovenetOutput(f, now);
-          ingestPose(transformPoseForDisplay(parsed));
-        } else {
-          setInferenceError('Unsupported MoveNet output tensor type');
-        }
-      } catch (error) {
-        setInferenceError(error instanceof Error ? error.message : String(error));
-        // Keep UI alive if one frame fails.
-      }
-    },
-    [ingestPose, isIosPlatform, perfMode, transformPoseForDisplay],
-  );
-
   const runJsWorkletInferenceResult = useCallback(
-    Worklets.createRunOnJS((values: number[], kind: WorkletOutputKind, ts: number) => {
-      onWorkletInferenceResult(values, kind, ts);
-    }),
+    Worklets.createRunOnJS(
+      (
+        values: number[],
+        kind: WorkletOutputKind,
+        ts: number,
+        sourceWidth: number,
+        sourceHeight: number,
+      ) => {
+        onWorkletInferenceResult(values, kind, ts, sourceWidth, sourceHeight);
+      },
+    ),
     [onWorkletInferenceResult],
   );
 
@@ -282,13 +284,6 @@ export function LiveSessionScreen() {
       onWorkletInferenceFailure(message);
     }),
     [onWorkletInferenceFailure],
-  );
-
-  const runJsFrame = useCallback(
-    Worklets.createRunOnJS((pixels: number[]) => {
-      onNativeFrame(pixels);
-    }),
-    [onNativeFrame],
   );
 
   const model = getModel();
@@ -302,10 +297,10 @@ export function LiveSessionScreen() {
             ? 120
             : 180
         : perfMode === 'fast'
-          ? 220
+          ? 120
           : perfMode === 'balanced'
-            ? 320
-            : 520;
+            ? 180
+            : 260;
       const window = isIosPlatform
         ? perfMode === 'fast'
           ? 55
@@ -313,10 +308,10 @@ export function LiveSessionScreen() {
             ? 60
             : 50
         : perfMode === 'fast'
-          ? 80
+          ? 100
           : perfMode === 'balanced'
-            ? 70
-            : 50;
+            ? 95
+            : 80;
       const gate = Date.now() % period;
       if (gate > window) return;
       const r = resize(frame, {
@@ -325,46 +320,55 @@ export function LiveSessionScreen() {
         dataType: 'uint8',
       });
       const u8 = new Uint8Array(r);
-      if (workletInferenceEnabled && model != null) {
-        try {
-          const outs = model.runSync([u8]);
-          const out = outs[0];
-          if (out instanceof Float32Array) {
-            runJsWorkletInferenceResult(Array.from(out), 'f32', Date.now());
-            return;
-          }
-          if (out instanceof Uint8Array) {
-            runJsWorkletInferenceResult(Array.from(out), 'u8', Date.now());
-            return;
-          }
-          if (out instanceof Int8Array) {
-            runJsWorkletInferenceResult(Array.from(out), 'i8', Date.now());
-            return;
-          }
-          if (out instanceof ArrayBuffer) {
-            runJsWorkletInferenceResult(Array.from(new Float32Array(out)), 'f32', Date.now());
-            return;
-          }
-          runJsWorkletInferenceFailure('Unsupported worklet output tensor type');
-          return;
-        } catch (error) {
-          runJsWorkletInferenceFailure(String(error));
+      if (!workletInferenceEnabled || model == null) return;
+      try {
+        const outs = model.runSync([u8]);
+        const out = outs[0];
+        const ts = Date.now();
+        const sw = frame.width;
+        const sh = frame.height;
+        if (out instanceof Float32Array) {
+          runJsWorkletInferenceResult(Array.from(out), 'f32', ts, sw, sh);
           return;
         }
+        if (out instanceof Uint8Array) {
+          runJsWorkletInferenceResult(Array.from(out), 'u8', ts, sw, sh);
+          return;
+        }
+        if (out instanceof Int8Array) {
+          runJsWorkletInferenceResult(Array.from(out), 'i8', ts, sw, sh);
+          return;
+        }
+        if (out instanceof ArrayBuffer) {
+          runJsWorkletInferenceResult(Array.from(new Float32Array(out)), 'f32', ts, sw, sh);
+          return;
+        }
+        runJsWorkletInferenceFailure('Unsupported worklet output tensor type');
+      } catch (error) {
+        runJsWorkletInferenceFailure(String(error));
       }
-      runJsFrame(Array.from(u8));
     },
     [
       isIosPlatform,
       model,
       perfMode,
       resize,
-      runJsFrame,
       runJsWorkletInferenceFailure,
       runJsWorkletInferenceResult,
       workletInferenceEnabled,
     ],
   );
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now();
+      const recent = inferTimestampsRef.current.filter((t) => now - t <= 2000);
+      inferTimestampsRef.current = recent;
+      const fps = recent.length / 2;
+      setEffectiveInferFps(Number.isFinite(fps) ? Number(fps.toFixed(1)) : 0);
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
 
   // 7A–7C–7D machine
   useEffect(() => {
@@ -531,6 +535,12 @@ export function LiveSessionScreen() {
             Pose stream: {lastPoseAt && Date.now() - lastPoseAt < 1000 ? 'live' : 'waiting'}
           </Text>
         )}
+        {!useMock && !modelError && (
+          <Text style={styles.dev4}>
+            Worklet: {workletInferenceEnabled ? 'on' : 'off'} | Fallbacks: {fallbackCount} | Infer FPS:{' '}
+            {effectiveInferFps}
+          </Text>
+        )}
         {inferenceError && <Text style={styles.dev3}>Inference error: {inferenceError}</Text>}
         {workletInferenceError && (
           <Text style={styles.dev3}>Worklet inference fallback: {workletInferenceError}</Text>
@@ -615,6 +625,7 @@ const styles = StyleSheet.create({
   warn: { color: colors.accent_yellow, fontSize: 18, marginTop: 24, fontFamily: typography.fontFamily.medium },
   dev: { color: colors.text_muted, fontSize: 12, position: 'absolute', bottom: 100 },
   dev2: { color: colors.text_muted, fontSize: 12, position: 'absolute', bottom: 82 },
+  dev4: { color: colors.text_muted, fontSize: 12, position: 'absolute', bottom: 46, paddingHorizontal: 8 },
   dev3: { color: colors.accent_red, fontSize: 12, position: 'absolute', bottom: 64, paddingHorizontal: 8 },
   banner: { position: 'absolute', bottom: 160, left: 16, right: 16, borderRadius: 10, padding: 12 },
   bannerText: { color: '#0A0A0A', fontFamily: typography.fontFamily.semibold, fontSize: 15, textAlign: 'center' },
