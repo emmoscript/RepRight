@@ -55,10 +55,12 @@ export async function initModel(): Promise<boolean> {
   modelLoadError = null;
   try {
     loadedModel = await loadTensorflowModel(MODEL_ASSET, 'default');
+    console.log('[MoveNet] model loaded');
     return true;
   } catch (e) {
     modelLoadError = e instanceof Error ? e.message : String(e);
     loadedModel = null;
+    console.warn('[MoveNet] model load failed:', modelLoadError);
     return false;
   }
 }
@@ -71,12 +73,38 @@ export function getModelLoadError(): string | null {
   return modelLoadError;
 }
 
-/** MoveNet single-pose output: [1,1,17,3] (y, x, confidence) float32. */
+function toMovenetFloatArray(out: ArrayBuffer | ArrayBufferView): Float32Array {
+  if (out instanceof ArrayBuffer) return new Float32Array(out);
+  if (out instanceof Float32Array) return out;
+  if (out instanceof Uint8Array) {
+    const floats = new Float32Array(out.length);
+    for (let i = 0; i < out.length; i += 1) floats[i] = out[i] / 255;
+    return floats;
+  }
+  if (out instanceof Int8Array) {
+    const floats = new Float32Array(out.length);
+    for (let i = 0; i < out.length; i += 1) floats[i] = (out[i] + 128) / 255;
+    return floats;
+  }
+  if (out instanceof Uint16Array) {
+    const floats = new Float32Array(out.length);
+    for (let i = 0; i < out.length; i += 1) floats[i] = out[i] / 65535;
+    return floats;
+  }
+  if (out instanceof Int16Array) {
+    const floats = new Float32Array(out.length);
+    for (let i = 0; i < out.length; i += 1) floats[i] = (out[i] + 32768) / 65535;
+    return floats;
+  }
+  return new Float32Array(out.buffer);
+}
+
+/** MoveNet single-pose output: [1,1,17,3] (y, x, confidence). */
 export function keypointsFromMovenetOutput(
-  out: ArrayBuffer | Float32Array,
+  out: ArrayBuffer | ArrayBufferView,
   frameTimestamp: number,
 ): PoseResult {
-  const floats = out instanceof Float32Array ? out : new Float32Array(out);
+  const floats = out instanceof ArrayBuffer ? new Float32Array(out) : toMovenetFloatArray(out);
   const n = 17;
   const keypoints: KeyPoint[] = [];
   for (let i = 0; i < n; i += 1) {

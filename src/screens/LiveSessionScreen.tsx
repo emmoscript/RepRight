@@ -2,9 +2,15 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
-import { runOnJS } from 'react-native-reanimated';
-import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
+import { LayoutChangeEvent, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Worklets } from 'react-native-worklets-core';
+import {
+  Camera,
+  useCameraDevice,
+  useCameraDevices,
+  useCameraPermission,
+  useFrameProcessor,
+} from 'react-native-vision-camera';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -13,6 +19,7 @@ import { analyzePose } from '@/modules/analyzer';
 import { generateFeedback } from '@/modules/feedback';
 import {
   getModel,
+  getModelLoadError,
   getMockPose,
   initModel,
   keypointsFromMovenetOutput,
@@ -26,6 +33,11 @@ import { isPoseValid } from '@/utils/poseValidation';
 const HOLD_MS = 800;
 
 type Flow = 'search' | 'countdown' | 'active' | 'pose_lost';
+type CameraPreference = 'back' | 'front';
+type PreviewOrientation = 'portrait' | 'portrait-upside-down' | 'landscape-left' | 'landscape-right';
+type PoseRotationDeg = 0 | 90 | 180 | 270;
+type WorkletOutputKind = 'f32' | 'u8' | 'i8';
+type PerfMode = 'safe' | 'balanced' | 'fast';
 
 export function LiveSessionScreen() {
   const navigation = useNavigation();
@@ -35,7 +47,14 @@ export function LiveSessionScreen() {
   const setStarted = useSessionResultStore((s) => s.setStartedAt);
 
   const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('back');
+  const backDevice = useCameraDevice('back');
+  const frontDevice = useCameraDevice('front');
+  const allDevices = useCameraDevices();
+  const [cameraPreference, setCameraPreference] = useState<CameraPreference>('front');
+  const device =
+    cameraPreference === 'back'
+      ? backDevice ?? frontDevice ?? allDevices[0]
+      : frontDevice ?? backDevice ?? allDevices[0];
   const { resize } = useResizePlugin();
 
   const [layout, setLayout] = useState({ w: 1, h: 1 });
@@ -60,11 +79,36 @@ export function LiveSessionScreen() {
   const [banner, setBanner] = useState<{ message: string; color: string } | null>(null);
   const [useMock, setUseMock] = useState(true);
   const [modelReady, setModelReady] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const [inferenceError, setInferenceError] = useState<string | null>(null);
+  const [lastPoseAt, setLastPoseAt] = useState<number | null>(null);
+  const [previewOrientation, setPreviewOrientation] = useState<PreviewOrientation>('portrait');
+  const [manualRotationDeg, setManualRotationDeg] = useState<number>(0);
+  const [poseRotationDeg, setPoseRotationDeg] = useState<PoseRotationDeg>(
+    Platform.OS === 'android' ? 90 : 0,
+  );
+  const [workletInferenceEnabled, setWorkletInferenceEnabled] = useState<boolean>(
+    Platform.OS === 'ios',
+  );
+  const [workletInferenceError, setWorkletInferenceError] = useState<string | null>(null);
+  const isIosPlatform = Platform.OS === 'ios';
+  const [perfMode, setPerfMode] = useState<PerfMode>('balanced');
+
+  const handleEndSession = useCallback(() => {
+    void Speech.stop();
+    navigation.navigate('SessionComplete' as never);
+  }, [navigation]);
 
   useEffect(() => {
     clearResults();
     setStarted(Date.now());
   }, [clearResults, setStarted]);
+
+  useEffect(() => {
+    return () => {
+      void Speech.stop();
+    };
+  }, []);
 
   useEffect(() => {
     if (!hasPermission) void requestPermission();
@@ -77,6 +121,7 @@ export function LiveSessionScreen() {
       const ready = ok && m != null;
       setModelReady(ready);
       setUseMock(!ready);
+      setModelError(getModelLoadError());
     })();
   }, []);
 
@@ -87,6 +132,8 @@ export function LiveSessionScreen() {
       h.push(pose);
       if (h.length > 8) h.shift();
       setUiPose(pose);
+      setLastPoseAt(Date.now());
+      if (inferenceError) setInferenceError(null);
 
       const stage = flowRef.current;
       if (stage !== 'active' && stage !== 'pose_lost') {
@@ -123,24 +170,7 @@ export function LiveSessionScreen() {
         setBanner(null);
       }
     },
-    [addErrors],
-  );
-
-  const onNativeFrame = useCallback(
-    (u8: Uint8Array, ts: number) => {
-      const m = getModel();
-      if (!m) return;
-      try {
-        const outs = m.runSync([u8]);
-        const f = outs[0];
-        if (f instanceof Float32Array) {
-          ingestPose(keypointsFromMovenetOutput(f, ts));
-        }
-      } catch {
-        // ignore single-frame errors (e.g. wrong tensor layout during dev)
-      }
-    },
-    [ingestPose],
+    [addErrors, inferenceError],
   );
 
   useEffect(() => {
@@ -152,26 +182,188 @@ export function LiveSessionScreen() {
     return () => clearInterval(id);
   }, [isFocused, useMock, ingestPose]);
 
-  const runJsFrame = useCallback(
-    (u8: Uint8Array, ts: number) => {
-      onNativeFrame(u8, ts);
+  const transformPoseForDisplay = useCallback(
+    (pose: PoseResult): PoseResult => {
+      const rotated = pose.keypoints.map((k) => {
+        if (poseRotationDeg === 90) {
+          return { x: 1 - k.y, y: k.x, score: k.score };
+        }
+        if (poseRotationDeg === 180) {
+          return { x: 1 - k.x, y: 1 - k.y, score: k.score };
+        }
+        if (poseRotationDeg === 270) {
+          return { x: k.y, y: 1 - k.x, score: k.score };
+        }
+        return k;
+      });
+      // Front preview is mirrored; mirror pose so overlay matches what user sees.
+      const mirrored =
+        cameraPreference === 'front'
+          ? rotated.map((k) => ({ x: 1 - k.x, y: k.y, score: k.score }))
+          : rotated;
+      return { ...pose, keypoints: mirrored };
     },
+    [cameraPreference, poseRotationDeg],
+  );
+
+  const lastJsInferenceAt = useRef(0);
+  const onWorkletInferenceResult = useCallback(
+    (values: number[], kind: WorkletOutputKind, ts: number) => {
+      try {
+        if (kind === 'f32') {
+          const parsed = keypointsFromMovenetOutput(Float32Array.from(values), ts);
+          ingestPose(transformPoseForDisplay(parsed));
+          return;
+        }
+        if (kind === 'u8') {
+          const parsed = keypointsFromMovenetOutput(Uint8Array.from(values), ts);
+          ingestPose(transformPoseForDisplay(parsed));
+          return;
+        }
+        const parsed = keypointsFromMovenetOutput(Int8Array.from(values), ts);
+        ingestPose(transformPoseForDisplay(parsed));
+      } catch (error) {
+        setInferenceError(error instanceof Error ? error.message : String(error));
+      }
+    },
+    [ingestPose, transformPoseForDisplay],
+  );
+
+  const onWorkletInferenceFailure = useCallback((message: string) => {
+    setWorkletInferenceEnabled(false);
+    setWorkletInferenceError(message);
+  }, []);
+
+  const onNativeFrame = useCallback(
+    (pixels: number[]) => {
+      const now = Date.now();
+      const minInterval = isIosPlatform
+        ? perfMode === 'fast'
+          ? 80
+          : perfMode === 'balanced'
+            ? 110
+            : 170
+        : perfMode === 'fast'
+          ? 180
+          : perfMode === 'balanced'
+            ? 260
+            : 420;
+      if (now - lastJsInferenceAt.current < minInterval) return;
+      lastJsInferenceAt.current = now;
+      const m = getModel();
+      if (!m) return;
+      try {
+        const u8 = Uint8Array.from(pixels);
+        const outs = m.runSync([u8]);
+        const f = outs[0];
+        if (f instanceof ArrayBuffer || ArrayBuffer.isView(f)) {
+          const parsed = keypointsFromMovenetOutput(f, now);
+          ingestPose(transformPoseForDisplay(parsed));
+        } else {
+          setInferenceError('Unsupported MoveNet output tensor type');
+        }
+      } catch (error) {
+        setInferenceError(error instanceof Error ? error.message : String(error));
+        // Keep UI alive if one frame fails.
+      }
+    },
+    [ingestPose, isIosPlatform, perfMode, transformPoseForDisplay],
+  );
+
+  const runJsWorkletInferenceResult = useCallback(
+    Worklets.createRunOnJS((values: number[], kind: WorkletOutputKind, ts: number) => {
+      onWorkletInferenceResult(values, kind, ts);
+    }),
+    [onWorkletInferenceResult],
+  );
+
+  const runJsWorkletInferenceFailure = useCallback(
+    Worklets.createRunOnJS((message: string) => {
+      onWorkletInferenceFailure(message);
+    }),
+    [onWorkletInferenceFailure],
+  );
+
+  const runJsFrame = useCallback(
+    Worklets.createRunOnJS((pixels: number[]) => {
+      onNativeFrame(pixels);
+    }),
     [onNativeFrame],
   );
 
+  const model = getModel();
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
+      const period = isIosPlatform
+        ? perfMode === 'fast'
+          ? 90
+          : perfMode === 'balanced'
+            ? 120
+            : 180
+        : perfMode === 'fast'
+          ? 220
+          : perfMode === 'balanced'
+            ? 320
+            : 520;
+      const window = isIosPlatform
+        ? perfMode === 'fast'
+          ? 55
+          : perfMode === 'balanced'
+            ? 60
+            : 50
+        : perfMode === 'fast'
+          ? 80
+          : perfMode === 'balanced'
+            ? 70
+            : 50;
+      const gate = Date.now() % period;
+      if (gate > window) return;
       const r = resize(frame, {
         scale: { width: 192, height: 192 },
         pixelFormat: 'rgb',
         dataType: 'uint8',
       });
       const u8 = new Uint8Array(r);
-      const ts = Date.now();
-      runOnJS(runJsFrame)(u8, ts);
+      if (workletInferenceEnabled && model != null) {
+        try {
+          const outs = model.runSync([u8]);
+          const out = outs[0];
+          if (out instanceof Float32Array) {
+            runJsWorkletInferenceResult(Array.from(out), 'f32', Date.now());
+            return;
+          }
+          if (out instanceof Uint8Array) {
+            runJsWorkletInferenceResult(Array.from(out), 'u8', Date.now());
+            return;
+          }
+          if (out instanceof Int8Array) {
+            runJsWorkletInferenceResult(Array.from(out), 'i8', Date.now());
+            return;
+          }
+          if (out instanceof ArrayBuffer) {
+            runJsWorkletInferenceResult(Array.from(new Float32Array(out)), 'f32', Date.now());
+            return;
+          }
+          runJsWorkletInferenceFailure('Unsupported worklet output tensor type');
+          return;
+        } catch (error) {
+          runJsWorkletInferenceFailure(String(error));
+          return;
+        }
+      }
+      runJsFrame(Array.from(u8));
     },
-    [resize, runJsFrame],
+    [
+      isIosPlatform,
+      model,
+      perfMode,
+      resize,
+      runJsFrame,
+      runJsWorkletInferenceFailure,
+      runJsWorkletInferenceResult,
+      workletInferenceEnabled,
+    ],
   );
 
   // 7A–7C–7D machine
@@ -230,47 +422,119 @@ export function LiveSessionScreen() {
   const showStop = flow === 'active' || flow === 'pose_lost';
   const runAnalysis = flow === 'active' || flow === 'pose_lost';
   const showSkeleton = uiPose && (flow === 'search' || flow === 'countdown' || runAnalysis);
+  const basePreviewRotationDeg =
+    previewOrientation === 'landscape-left'
+      ? 90
+      : previewOrientation === 'landscape-right'
+        ? -90
+        : 0;
+  const finalPreviewRotationDeg =
+    Platform.OS === 'android' ? basePreviewRotationDeg + manualRotationDeg : manualRotationDeg;
 
   const useFrame = modelReady && !useMock;
+  const cameraLabel = cameraPreference === 'back' ? 'Back' : 'Front';
+  const cycleCameraPreference = () => {
+    setCameraPreference((prev) => (prev === 'back' ? 'front' : 'back'));
+  };
+  const cycleRotation = () => {
+    setManualRotationDeg((prev) => {
+      const next = prev + 90;
+      return next >= 360 ? 0 : next;
+    });
+  };
+  const cyclePoseRotation = () => {
+    setPoseRotationDeg((prev) => {
+      if (prev === 0) return 90;
+      if (prev === 90) return 180;
+      if (prev === 180) return 270;
+      return 0;
+    });
+  };
+  const cyclePerfMode = () => {
+    setPerfMode((prev) => {
+      if (prev === 'safe') return 'balanced';
+      if (prev === 'balanced') return 'fast';
+      return 'safe';
+    });
+  };
 
   return (
     <View style={styles.root} onLayout={onLayout}>
       {hasPermission && device ? (
         <View style={styles.cameraBox}>
-          <Camera
-            style={StyleSheet.absoluteFill}
-            device={device}
-            isActive={isFocused}
-            frameProcessor={useFrame ? frameProcessor : undefined}
-            pixelFormat="yuv"
-            fps={30}
-          />
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              finalPreviewRotationDeg !== 0 && {
+                transform: [{ rotate: `${finalPreviewRotationDeg}deg` }],
+              },
+            ]}
+          >
+            <Camera
+              style={StyleSheet.absoluteFill}
+              device={device}
+              isActive={isFocused}
+              frameProcessor={useFrame ? frameProcessor : undefined}
+              androidPreviewViewType="texture-view"
+              outputOrientation="preview"
+              onPreviewOrientationChanged={(o) =>
+                setPreviewOrientation(o as PreviewOrientation)
+              }
+              pixelFormat="yuv"
+            />
+            {showSkeleton && (
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <SkeletonOverlay
+                  width={layout.w}
+                  height={layout.h}
+                  keypoints={uiPose!.keypoints}
+                  lineColor={skColor}
+                  pointColor={skColor}
+                  dynamicColors
+                />
+              </View>
+            )}
+          </View>
         </View>
       ) : (
         <View style={[styles.cameraBox, styles.cameraPlaceholder]}>
           <Text style={styles.caption}>
-            {hasPermission ? 'No camera device.' : 'Camera permission required for live analysis.'}
+            {!hasPermission
+              ? 'Camera permission required for live analysis.'
+              : allDevices.length === 0
+                ? 'Searching camera device...'
+                : 'No camera device available. Verify AVD camera mapping (front/back).'}
           </Text>
         </View>
       )}
 
-      {showSkeleton && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <SkeletonOverlay
-            width={layout.w}
-            height={layout.h * 0.6}
-            keypoints={uiPose!.keypoints}
-            lineColor={skColor}
-            pointColor={skColor}
-          />
-        </View>
-      )}
-
       <View style={styles.hud} pointerEvents="box-none">
+        <Pressable onPress={cycleCameraPreference} style={styles.cameraSwitch}>
+          <Text style={styles.cameraSwitchText}>Camera: {cameraLabel}</Text>
+        </Pressable>
+        <Pressable onPress={cycleRotation} style={styles.rotateSwitch}>
+          <Text style={styles.cameraSwitchText}>Rotate: {manualRotationDeg}°</Text>
+        </Pressable>
+        <Pressable onPress={cyclePoseRotation} style={styles.poseSwitch}>
+          <Text style={styles.cameraSwitchText}>Pose: {poseRotationDeg}°</Text>
+        </Pressable>
+        <Pressable onPress={cyclePerfMode} style={styles.perfSwitch}>
+          <Text style={styles.cameraSwitchText}>Speed: {perfMode}</Text>
+        </Pressable>
         {flow === 'search' && <Text style={styles.hudTitle}>Side view — get full body in frame</Text>}
         {flow === 'countdown' && <Text style={styles.countText}>{String(count || 0)}</Text>}
         {flow === 'pose_lost' && <Text style={styles.warn}>Pose lost</Text>}
         {useMock && <Text style={styles.dev}>Mock pose — add real movenet .tflite for inference</Text>}
+        {modelError && <Text style={styles.dev}>MoveNet error: {modelError}</Text>}
+        {!useMock && !modelError && (
+          <Text style={styles.dev2}>
+            Pose stream: {lastPoseAt && Date.now() - lastPoseAt < 1000 ? 'live' : 'waiting'}
+          </Text>
+        )}
+        {inferenceError && <Text style={styles.dev3}>Inference error: {inferenceError}</Text>}
+        {workletInferenceError && (
+          <Text style={styles.dev3}>Worklet inference fallback: {workletInferenceError}</Text>
+        )}
       </View>
 
       {banner && runAnalysis && (
@@ -284,7 +548,7 @@ export function LiveSessionScreen() {
           <PrimaryButton
             title="End session"
             variant="danger"
-            onPress={() => navigation.navigate('SessionComplete' as never)}
+            onPress={handleEndSession}
           />
         </View>
       )}
@@ -297,10 +561,61 @@ const styles = StyleSheet.create({
   cameraBox: { flex: 1, backgroundColor: '#000' },
   cameraPlaceholder: { justifyContent: 'center', alignItems: 'center' },
   hud: { ...StyleSheet.absoluteFillObject, alignItems: 'center', paddingTop: 60 },
+  cameraSwitch: {
+    position: 'absolute',
+    top: 44,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  rotateSwitch: {
+    position: 'absolute',
+    top: 80,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  poseSwitch: {
+    position: 'absolute',
+    top: 116,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  perfSwitch: {
+    position: 'absolute',
+    top: 152,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cameraSwitchText: {
+    color: colors.text_primary,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 12,
+  },
   hudTitle: { color: colors.text_primary, fontFamily: typography.fontFamily.semibold, fontSize: 18 },
   countText: { color: colors.primary_green, fontSize: 80, fontFamily: typography.fontFamily.bold, marginTop: 40 },
   warn: { color: colors.accent_yellow, fontSize: 18, marginTop: 24, fontFamily: typography.fontFamily.medium },
   dev: { color: colors.text_muted, fontSize: 12, position: 'absolute', bottom: 100 },
+  dev2: { color: colors.text_muted, fontSize: 12, position: 'absolute', bottom: 82 },
+  dev3: { color: colors.accent_red, fontSize: 12, position: 'absolute', bottom: 64, paddingHorizontal: 8 },
   banner: { position: 'absolute', bottom: 160, left: 16, right: 16, borderRadius: 10, padding: 12 },
   bannerText: { color: '#0A0A0A', fontFamily: typography.fontFamily.semibold, fontSize: 15, textAlign: 'center' },
   caption: { color: colors.text_secondary, textAlign: 'center', padding: 16, fontSize: 14 },
