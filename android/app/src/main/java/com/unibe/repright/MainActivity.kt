@@ -3,6 +3,7 @@ import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -61,5 +62,15 @@ class MainActivity : ReactActivity() {
       // Use the default back button implementation on Android S
       // because it's doing more than [Activity.moveTaskToBack] in fact.
       super.invokeDefaultOnBackPressed()
+  }
+
+  override fun onResume() {
+      super.onResume()
+      window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+  }
+
+  override fun onPause() {
+      super.onPause()
+      window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
   }
 }

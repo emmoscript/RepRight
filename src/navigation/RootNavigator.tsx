@@ -1,32 +1,26 @@
 import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { colors } from '@/theme/colors';
+import { MainTabNavigator } from '@/navigation/MainTabNavigator';
+import type { RootStackParamList, MainTabParamList } from '@/navigation/routeTypes';
+import { DemoScreen } from '@/screens/DemoScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { SignupScreen } from '@/screens/SignupScreen';
 import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
-import { DemoScreen } from '@/screens/DemoScreen';
-import { HomeScreen } from '@/screens/HomeScreen';
-import { ProfileScreen } from '@/screens/ProfileScreen';
-import { StatsScreen } from '@/screens/StatsScreen';
-import { ConfigureSessionScreen } from '@/screens/ConfigureSessionScreen';
 import { LiveSessionScreen } from '@/screens/LiveSessionScreen';
 import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
+import { colors } from '@/theme/colors';
 
-export type RootStackParamList = {
-  Demo: undefined;
-  Home: undefined;
-  Login: undefined;
-  Signup: undefined;
-  EmailConfirm: undefined;
-  MainTabs: undefined;
-  HomeMain: undefined;
-  Stats: undefined;
-  Profile: undefined;
-  ConfigureSession: undefined;
-  LiveSession: undefined;
-  SessionComplete: undefined;
-};
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- RN recommended typing bridge
+  namespace ReactNavigation {
+    // Merge root stack routes for `useNavigation()` typing site-wide (React Navigation convention).
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+    interface RootParamList extends RootStackParamList {}
+  }
+}
+
+export type { RootStackParamList, MainTabParamList };
 
 const theme: Theme = {
   ...DarkTheme,
@@ -53,34 +47,16 @@ export function RootNavigator() {
           headerTintColor: colors.text_primary,
           headerTitleStyle: { fontWeight: '600' },
           contentStyle: { backgroundColor: colors.bg_v3 },
+          headerShown: false,
         }}
       >
-        <Stack.Screen name="Demo" component={DemoScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'RepRight' }} />
-        <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Log in' }} />
-        <Stack.Screen name="Signup" component={SignupScreen} options={{ title: 'Sign up' }} />
-        <Stack.Screen
-          name="EmailConfirm"
-          component={EmailConfirmScreen}
-          options={{ title: 'Confirm email' }}
-        />
-        <Stack.Screen name="Stats" component={StatsScreen} options={{ title: 'Stats' }} />
-        <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
-        <Stack.Screen
-          name="ConfigureSession"
-          component={ConfigureSessionScreen}
-          options={{ title: 'Configure session' }}
-        />
-        <Stack.Screen
-          name="LiveSession"
-          component={LiveSessionScreen}
-          options={{ title: 'Live', headerShown: false }}
-        />
-        <Stack.Screen
-          name="SessionComplete"
-          component={SessionCompleteScreen}
-          options={{ title: 'Session complete', headerBackVisible: false }}
-        />
+        <Stack.Screen name="Demo" component={DemoScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
+        <Stack.Screen name="EmailConfirm" component={EmailConfirmScreen} />
+        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen name="LiveSession" component={LiveSessionScreen} options={{ gestureEnabled: false }} />
+        <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ gestureEnabled: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

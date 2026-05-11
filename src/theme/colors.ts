@@ -1,57 +1,72 @@
 /**
- * RepRight color tokens — v2 (Orange warm dark theme)
- * Matches the final Stitch design system.
+ * RepRight color tokens — Design System v3 FINAL
+ * @see docs/design-system/design-system-v3.md
  */
 export const colors = {
-  // Backgrounds
-  bg_primary:    '#111010',   // warm dark gray base
-  bg_surface:    '#1A1917',   // surface cards
-  bg_elevated:   '#222019',   // elevated cards
-  bg_high:       '#2A2825',
-  bg_highest:    '#323029',
-
-  // v3 (README) + compatibility aliases used by feedback / live UI
+  // Primary green
   primary_green: '#27C34F',
+  accent_green_light: '#5FF075',
+  accent_green_dim: '#1FBF4B',
+  green_subtle_bg: '#002F0B',
+  green_glow: 'rgba(39,195,79,0.2)',
+
+  // Backgrounds
   bg_v3: '#0D0D0D',
+  bg_surface_alt: '#0E0E0E',
   surface_v3: '#1A1919',
-  accent_red: '#FF4444',
-  accent_yellow: '#FFB800',
-  skeleton_muted_v3: '#484847',
-  // Primary accent — orange (v2)
-  accent_orange:        '#F08030',
-  accent_orange_light:  '#FFB68B',
-  accent_orange_dim:    '#C4682A',
-  accent_orange_subtle: '#2D1E0F',
-  accent_orange_glow:   'rgba(240,128,48,0.15)',
+  bg_elevated: '#201F1F',
+  bg_high: '#262626',
+  bg_highest: '#262626',
+  nav_bar_bg: '#131313',
+  surface_low: '#131313',
 
   // Semantic
-  error:           '#E84040',
-  error_subtle:    '#3D0F0F',
-  warning:         '#F0C040',   // yellow — NOT orange
-  warning_subtle:  '#3D2800',
+  accent_red: '#FF4444',
+  error_alt: '#FF716C',
+  error_container: '#9F0519',
+  accent_yellow: '#FFB800',
 
   // Score
-  score_excellent: '#27C34F',   // 90–100
-  score_good:      '#5CB85C',   // 70–89
-  score_needswork: '#F0C040',   // 50–69
-  score_poor:      '#E84040',   // <50
+  score_excellent: '#27C34F',
+  score_good: '#5FF075',
+  score_needswork: '#FFB800',
+  score_poor: '#FF4444',
 
-  // Text
-  text_primary:   '#F0EDE8',
-  text_secondary: '#9A9590',
-  text_muted:     '#5A5550',
-  text_on_orange: '#FFFFFF',
-  text_on_white:  '#111010',
+  // Text (v3)
+  text_primary: '#FFFFFF',
+  text_secondary: '#ADAAAA',
+  text_muted: '#767575',
+  text_on_green: '#000000',
+  text_on_error: '#FFFFFF',
 
-  // Skeleton overlay
-  skeleton_active: '#F08030',   // detected / tracking
-  skeleton_error:  '#E84040',   // error keypoint
-  skeleton_muted:  '#5A5550',   // positioning (not detected)
+  // Skeleton (v3)
+  skeleton_active: '#27C34F',
+  skeleton_error: '#FF4444',
+  skeleton_muted_v3: '#484847',
 
   // Borders
-  border_subtle: '#222019',
-  border_medium: '#2A2825',
-  border_active: '#F08030',
+  border_subtle: '#484847',
+  border_medium: '#484847',
+  border_active: '#27C34F',
+
+  // Legacy aliases — map to v3 so existing imports stay valid
+  bg_primary: '#0D0D0D',
+  bg_surface: '#1A1919',
+  bg_highest_compat: '#262626',
+  error: '#FF4444',
+  error_subtle: '#9F0519',
+  warning: '#FFB800',
+  skeleton_muted: '#484847',
+  accent_orange: '#27C34F',
+  accent_orange_light: '#5FF075',
+  accent_orange_dim: '#1FBF4B',
+  accent_orange_subtle: '#002F0B',
+  accent_orange_glow: 'rgba(39,195,79,0.15)',
+  text_on_orange: '#000000',
+  text_on_white: '#FFFFFF',
+  warning_subtle: '#331E00',
+
+  tab_inactive: '#888888',
 } as const;
 
 export type ColorKey = keyof typeof colors;

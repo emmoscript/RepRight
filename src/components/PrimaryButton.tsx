@@ -14,7 +14,11 @@ type Props = {
 
 export function PrimaryButton({ title, onPress, disabled, variant = 'primary', style }: Props) {
   const bg =
-    variant === 'danger' ? colors.accent_red : variant === 'ghost' ? 'transparent' : colors.primary_green;
+    variant === 'danger'
+      ? colors.error_container
+      : variant === 'ghost'
+        ? 'transparent'
+        : colors.primary_green;
   const borderColor = variant === 'ghost' ? colors.border_medium : 'transparent';
   return (
     <Pressable
@@ -31,7 +35,14 @@ export function PrimaryButton({ title, onPress, disabled, variant = 'primary', s
       <Text
         style={[
           styles.label,
-          { color: variant === 'ghost' ? colors.text_primary : '#0A0A0A' },
+          {
+            color:
+              variant === 'ghost'
+                ? colors.text_primary
+                : variant === 'danger'
+                  ? colors.text_on_error
+                  : colors.text_on_green,
+          },
         ]}
       >
         {title}
@@ -43,12 +54,16 @@ export function PrimaryButton({ title, onPress, disabled, variant = 'primary', s
 const styles = StyleSheet.create({
   base: {
     borderRadius: 12,
-    paddingVertical: 14,
+    minHeight: 56,
+    justifyContent: 'center',
+    paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
   label: {
-    fontFamily: typography.fontFamily.semibold,
-    fontSize: typography.fontSize.lg,
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.bodySm,
+    textTransform: 'uppercase',
+    letterSpacing: typography.letterSpacing.capsWide,
   },
 });

@@ -23,7 +23,16 @@ const config: ExpoConfig = {
       backgroundColor: '#0D0D0D',
     },
   },
+  /** Linked EAS project (see https://expo.dev/accounts/emilmr/projects/repright). */
+  extra: {
+    eas: {
+      projectId: '5a281dc2-c068-46fa-b9c5-abf5eaa5498b',
+    },
+  },
+  // Native modules (e.g. expo-screen-orientation, new Expo packages) require a rebuilt binary.
+  // After adding/changing them: npm run android:rebuild or npm run ios:rebuild (or prebuild:clean + run:*).
   plugins: [
+    './plugins/withAndroidKeepScreenOn.cjs',
     'expo-dev-client',
     'expo-asset',
     [

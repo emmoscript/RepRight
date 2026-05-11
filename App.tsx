@@ -6,6 +6,8 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -18,12 +20,17 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [loaded, fontError] = useFonts({
+    ...Ionicons.font,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
     SpaceGrotesk_700Bold,
   });
+
+  useEffect(() => {
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  }, []);
 
   useEffect(() => {
     if (loaded || fontError) {
