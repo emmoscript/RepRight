@@ -1,7 +1,7 @@
-import { useIsFocused, useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
   LayoutChangeEvent,
@@ -54,7 +54,10 @@ import {
   keypointsFromMovenetOutput,
   type PoseResult,
 } from '@/modules/movenet';
+import { analyzePose } from '@/modules/analyzer';
+import { generateFeedback } from '@/modules/feedback';
 import type { RootStackParamList } from '@/navigation/routeTypes';
+import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { useSessionResultStore } from '@/store/sessionResultStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
@@ -90,12 +93,16 @@ const DETECTED_INVALID_STREAK_TO_LEAVE = 5;
 const HEADER_TITLE_SIDE_GUTTER = 70;
 /** `left` / `right` for title strip inside padded header (`HEADER_TITLE_SIDE_GUTTER − header horizontal padding`). */
 const HEADER_TITLE_RAIL_H_INSET = HEADER_TITLE_SIDE_GUTTER - 16;
-/** Mute FAB `bottom` when stats strip visible (approx stats panel height + internal padding). */
-const MUTE_FAB_ABOVE_STATS = 296;
+/** Fallback strip height before first `onLayout` (pill + cards + STOP + padding). */
+const STATS_PANEL_HEIGHT_EST = 226;
+/** Mute FAB height — keep in sync with `styles.muteFab`. */
+const MUTE_FAB_HEIGHT = 52;
+/** Gap between tracking panel top edge and mute FAB bottom (anchored to modal). */
+const MUTE_GAP_ABOVE_TRACKING_PANEL = 10;
+/** Gap between FAB top and bottom edge of form-feedback banner. */
+const FORM_FEEDBACK_GAP_ABOVE_FAB = 8;
 /** Push header controls down from status bar to clear camera letterboxing. */
 const HEADER_CONTROLS_EXTRA_DOWN = 14;
-/** Raise mute FAB slightly from bottom edge. */
-const MUTE_FAB_RAISE = 22;
 /** Extra offset when stats strip is hidden — keeps FAB off search / countdown overlays. */
 const MUTE_FAB_CLEAR_HUD = 40;
 /**
@@ -111,11 +118,19 @@ type WorkletKind = 'f32' | 'u8' | 'i8';
 
 export function LiveSessionScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'LiveSession'>>();
+  const continuedWorkout = route.params?.continuedWorkout === true;
   const isFocused = useIsFocused();
   const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const clearResults = useSessionResultStore((s) => s.clear);
   const setStarted = useSessionResultStore((s) => s.setStartedAt);
+  const setLastSetSummary = useSessionResultStore((s) => s.setLastSetSummary);
+  const addErrors = useSessionResultStore((s) => s.addErrors);
+  const currentSetNumber = useSessionResultStore((s) => s.currentSetNumber);
+  const plannedSetCount = useSessionConfigStore((s) => s.setCount);
+  const weightAmount = useSessionConfigStore((s) => s.weightAmount);
+  const weightUnit = useSessionConfigStore((s) => s.weightUnit);
 
   // ── Camera ─────────────────────────────────────────────────────────────────
   const { requestPermission } = useCameraPermission();
@@ -170,7 +185,14 @@ export function LiveSessionScreen() {
   const audioOnRef = useRef(true);
   const [reps, setReps] = useState(0);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [showStopModal, setShowStopModal] = useState(false);
+  /** Full-workout quit (discard in-progress); not used for finishing the current set. */
+  const [showQuitWorkoutModal, setShowQuitWorkoutModal] = useState(false);
+  /** Measured height of bottom tracking strip — mute FAB anchors just above panel top. */
+  const [trackingStripHeight, setTrackingStripHeight] = useState(0);
+
+  const onTrackingStripLayout = useCallback((e: LayoutChangeEvent) => {
+    setTrackingStripHeight(e.nativeEvent.layout.height);
+  }, []);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const flowRef = useRef<Flow>('search');
@@ -185,9 +207,9 @@ export function LiveSessionScreen() {
   const poseRef = useRef<PoseResult | null>(null);
   const historyRef = useRef<PoseResult[]>([]);
   const sessionStartRef = useRef(0);
-  /** Dev: log raw tensor output once (avoid 10/s spam in Metro). */
+  /** Dev: log raw tensor landmark sample once after countdown (avoid spam before lift starts). */
   const didLogOnce = useRef(false);
-  /** Dev: log VisionCamera `frame.orientation` only when it changes (avoid console spam). */
+  /** Dev: log VisionCamera orientation after countdown only when it changes. */
   const lastLoggedOrientation = useRef<string>('');
   /** Wrist-proxy “floor” at end of setup (max Y near shins)—not latched when standing tall at session start. */
   const barFloorBaselineRef = useRef<number | null>(null);
@@ -198,11 +220,24 @@ export function LiveSessionScreen() {
   /** Snapshot of deepest hip Y when switching to need_lockout (ascent requires this floor). */
   const armedDeepHipYRef = useRef(0);
   const coachCueRef = useRef<DeadliftFormCue>('UNKNOWN');
+  /** Biomechanical cue streak → banner after stable detection (with modal gate). */
+  const formErrStreakRef = useRef(0);
+  /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
+  const lastFormAudioAtRef = useRef(0);
+  /** One `addErrors` per `errorId` per session (summary / Session Complete). */
+  const recordedFormErrIdsRef = useRef<Set<string>>(new Set());
+  const showQuitModalRef = useRef(false);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [uiPose, setUiPose] = useState<PoseResult | null>(null);
   const [useMock, setUseMock] = useState(false);
   const [modelReady, setModelReady] = useState(false);
+  const [liveFormBanner, setLiveFormBanner] = useState<{
+    message: string;
+    backgroundColor: string;
+    textColor: string;
+    severity: 'critical' | 'warning';
+  } | null>(null);
 
   // ── Shared value for frame-processor throttle (accessible from worklet) ────
   const lastInferAt = useSharedValue(0);
@@ -215,7 +250,8 @@ export function LiveSessionScreen() {
   const d2Style = useAnimatedStyle(() => ({ opacity: d2.value }));
   const d3Style = useAnimatedStyle(() => ({ opacity: d3.value }));
 
-  useEffect(() => {
+  /** Keep flowRef in sync before paint — infer callbacks shouldn’t lag one frame behind `active`. */
+  useLayoutEffect(() => {
     flowRef.current = flow;
   }, [flow]);
 
@@ -223,6 +259,7 @@ export function LiveSessionScreen() {
   useEffect(() => {
     if (isFocused) return;
     didLogOnce.current = false;
+    lastLoggedOrientation.current = '';
   }, [isFocused]);
 
   useEffect(() => {
@@ -230,8 +267,25 @@ export function LiveSessionScreen() {
   }, [audioOn]);
 
   useEffect(() => {
+    showQuitModalRef.current = showQuitWorkoutModal;
+  }, [showQuitWorkoutModal]);
+
+  useEffect(() => {
     if (!audioOn) void Speech.stop();
   }, [audioOn]);
+
+  useEffect(() => {
+    if (showQuitWorkoutModal) setLiveFormBanner(null);
+  }, [showQuitWorkoutModal]);
+
+  useEffect(() => {
+    if (flow === 'pose_lost') setLiveFormBanner(null);
+  }, [flow]);
+
+  useEffect(() => {
+    const tracking = flow === 'active' || flow === 'pose_lost';
+    if (!tracking) setTrackingStripHeight(0);
+  }, [flow]);
 
   useEffect(() => {
     if (flow !== 'search') {
@@ -252,10 +306,15 @@ export function LiveSessionScreen() {
 
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => {
-    clearResults();
-    setStarted(Date.now());
+    if (!continuedWorkout) {
+      clearResults();
+      setStarted(Date.now());
+    }
     setReps(0);
-  }, [clearResults, setStarted]);
+    setElapsedSec(0);
+    recordedFormErrIdsRef.current = new Set();
+    lastFormAudioAtRef.current = 0;
+  }, [continuedWorkout, clearResults, setStarted]);
 
   useEffect(() => () => { void Speech.stop(); }, []);
 
@@ -294,7 +353,7 @@ export function LiveSessionScreen() {
     return () => clearInterval(id);
   }, [flow]);
 
-  // ── Pose ingestion (simple mode: no form analyzer; reps via hip Y in active) ─
+  // ── Pose ingestion: reps via hip Y + optional biomechanical banner (active only). ─
   const ingestPose = useCallback((pose: PoseResult) => {
     poseRef.current = pose;
     const h = historyRef.current;
@@ -376,7 +435,49 @@ export function LiveSessionScreen() {
         lockoutStreakRef.current = 0;
       }
     }
-  }, []);
+
+      if (stage === 'active' && !showQuitModalRef.current) {
+      const analysis = analyzePose(pose, historyRef.current.slice(-16));
+      if (analysis.errors.length > 0) formErrStreakRef.current += 1;
+      else formErrStreakRef.current = 0;
+
+      const fb = generateFeedback(analysis, lastFormAudioAtRef.current);
+      const showBn =
+        formErrStreakRef.current >= 3 && fb.activeBanner != null && !showQuitModalRef.current;
+
+      if (showBn && fb.topError && !recordedFormErrIdsRef.current.has(fb.topError.errorId)) {
+        recordedFormErrIdsRef.current.add(fb.topError.errorId);
+        addErrors([fb.topError]);
+        if (fb.topError.severity === 'critical') {
+          void impactAsync(ImpactFeedbackStyle.Medium);
+        }
+      }
+
+      if (showBn && fb.audioMessage && audioOnRef.current) {
+        Speech.speak(fb.audioMessage);
+        lastFormAudioAtRef.current = Date.now();
+      }
+
+      setLiveFormBanner((prev) => {
+        if (formErrStreakRef.current === 0) return null;
+        if (!showBn || !fb.activeBanner) return prev;
+        const next = {
+          message: fb.activeBanner.message,
+          backgroundColor: fb.activeBanner.backgroundColor,
+          textColor: fb.activeBanner.textColor,
+          severity: fb.activeBanner.severity,
+        };
+        if (
+          prev?.message === next.message &&
+          prev?.backgroundColor === next.backgroundColor &&
+          prev?.severity === next.severity
+        ) {
+          return prev;
+        }
+        return next;
+      });
+    }
+  }, [addErrors]);
 
   // ── Mock pose loop (dev only, only if TFLite failed) ───────────────────────
   useEffect(() => {
@@ -396,7 +497,11 @@ export function LiveSessionScreen() {
   // ── Worklet result handler ─────────────────────────────────────────────────
   const onWorkletResult = useCallback(
     (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation) => {
-      if (__DEV__ && !didLogOnce.current) {
+      // Tensor + RAW logs: once per visit, only after countdown → `active` (see blur reset).
+      const shouldLogInferenceBundle =
+        __DEV__ && flowRef.current === 'active' && !didLogOnce.current;
+
+      if (shouldLogInferenceBundle) {
         didLogOnce.current = true;
         console.log('[output] kind:', kind, 'length:', values.length);
         console.log(
@@ -416,7 +521,9 @@ export function LiveSessionScreen() {
         }
       }
       try {
-        if (__DEV__) {
+        const liftRunning =
+          flowRef.current === 'active' || flowRef.current === 'pose_lost';
+        if (__DEV__ && liftRunning) {
           const o = String(frameOrientation);
           if (lastLoggedOrientation.current !== o) {
             lastLoggedOrientation.current = o;
@@ -616,14 +723,42 @@ export function LiveSessionScreen() {
   const arcDash = `${(countdown / 3) * RING_C} ${RING_C}`;
   /** Minutes without leading-zero padding (“0:05” instead of “00:05”). */
   const elapsedClock = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}`;
+
+  const finishCurrentSet = useCallback(() => {
+    void Speech.stop();
+    setLastSetSummary(reps, elapsedSec);
+    navigation.navigate('SessionComplete');
+  }, [reps, elapsedSec, navigation, setLastSetSummary]);
+
+  const onConfirmQuitWholeWorkout = useCallback(() => {
+    void Speech.stop();
+    setShowQuitWorkoutModal(false);
+    clearResults();
+    navigation.navigate('MainTabs', { screen: 'HomeMain' });
+  }, [navigation, clearResults]);
+
   const topPad = insets.top + 8;
   /** Full-width banners (POSE LOST, dev chip): below scrim + header so they never cover controls. */
   const belowHeaderBannerTop =
     topPad + HEADER_SCRIM_BODY_PX + HEADER_CONTROLS_EXTRA_DOWN + 12;
+
+  /** Distance from root bottom to top of tracking strip — drives FAB so it tracks modal height. */
+  const stripAnchorPx = showStop
+    ? trackingStripHeight > 0
+      ? trackingStripHeight
+      : STATS_PANEL_HEIGHT_EST
+    : 0;
+
   const muteFabBottom =
     showStop
-      ? insets.bottom + MUTE_FAB_ABOVE_STATS + MUTE_FAB_RAISE
-      : Math.max(insets.bottom, 8) + 24 + MUTE_FAB_RAISE + MUTE_FAB_CLEAR_HUD;
+      ? stripAnchorPx + MUTE_GAP_ABOVE_TRACKING_PANEL
+      : Math.max(insets.bottom, 8) + 24 + MUTE_FAB_CLEAR_HUD;
+
+  const formFeedbackDockBottom =
+    stripAnchorPx +
+    MUTE_GAP_ABOVE_TRACKING_PANEL +
+    MUTE_FAB_HEIGHT +
+    FORM_FEEDBACK_GAP_ABOVE_FAB;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -702,7 +837,8 @@ export function LiveSessionScreen() {
           ]}
         >
           <Text style={styles.topTitle} numberOfLines={2}>
-            DEADLIFT · SET 1
+            DEADLIFT · SET {currentSetNumber}/{plannedSetCount} · {weightAmount}{' '}
+            {weightUnit === 'kg' ? 'KG' : 'LB'}
           </Text>
         </View>
         <View style={[styles.headerRow, { marginTop: topPad + HEADER_CONTROLS_EXTRA_DOWN }]}>
@@ -790,8 +926,8 @@ export function LiveSessionScreen() {
         </View>
       )}
 
-      {/* ── 7D — Pose lost banner (below header scrim; was overlapping back / title) ── */}
-      {flow === 'pose_lost' && (
+      {/* ── 7D — Pose lost banner (hidden while quit modal open — avoids stacking above dialog). ── */}
+      {flow === 'pose_lost' && !showQuitWorkoutModal && (
         <View style={[styles.topBannerAbs, { top: belowHeaderBannerTop, zIndex: 12 }]} pointerEvents="none">
           <View style={[styles.infoBanner, styles.infoBannerAmber]}>
             <SvgHudWarnTriangle color={colors.accent_yellow} size={22} />
@@ -802,9 +938,34 @@ export function LiveSessionScreen() {
         </View>
       )}
 
-      {/* ── Stats panel + STOP SESSION ── */}
+      {/* ── Live form cues (analyzer) above strip — cleared during pose_lost / modal. ── */}
+      {liveFormBanner && showStop && !showQuitWorkoutModal && flow !== 'pose_lost' && (
+        <View
+          pointerEvents="none"
+          style={[styles.formFeedbackDock, { bottom: formFeedbackDockBottom }]}
+        >
+          <View
+            style={[styles.formFeedbackInner, { backgroundColor: liveFormBanner.backgroundColor }]}
+          >
+            <SvgHudWarnTriangle color={liveFormBanner.textColor} size={22} />
+            <View style={styles.formFeedbackTextCol}>
+              <Text style={[styles.formFeedbackKicker, { color: liveFormBanner.textColor }]}>
+                AI LIVE FEEDBACK
+              </Text>
+              <Text style={[styles.formFeedbackTxt, { color: liveFormBanner.textColor }]}>
+                {liveFormBanner.message}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ── Stats panel: finish this set vs quit whole workout ── */}
       {showStop && (
-        <View style={styles.statsPanel}>
+        <View
+          style={[styles.statsPanel, { paddingBottom: Math.max(32, insets.bottom + 14) }]}
+          onLayout={onTrackingStripLayout}
+        >
           {/* Status pill */}
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
@@ -814,70 +975,42 @@ export function LiveSessionScreen() {
           {/* Stat cards */}
           <View style={styles.statsRow}>
             <StatCard label="REP" value={String(reps)} />
-            <StatCard label="SERIES" value="1" />
+            <StatCard label="SERIES" value={`${currentSetNumber}/${plannedSetCount}`} />
             <StatCard label="TIME" value={elapsedClock} green />
           </View>
 
           <PrimaryButton
-            title="STOP SESSION"
-            variant="danger"
-            onPress={() => setShowStopModal(true)}
-            style={styles.stopBtn}
+            title="FINISH SET"
+            variant="primary"
+            onPress={finishCurrentSet}
+            style={styles.finishSetBtn}
+          />
+
+          <PrimaryButton
+            title="QUIT WORKOUT"
+            variant="ghost"
+            onPress={() => setShowQuitWorkoutModal(true)}
+            style={styles.quitWorkoutBtn}
           />
         </View>
       )}
 
-      {/* ── Voice mute (bottom‑right FAB) ── */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={audioOn ? 'Mute voice feedback' : 'Unmute voice feedback'}
-        onPress={() => setAudioOn((v) => !v)}
-        style={[
-          styles.muteFab,
-          { bottom: muteFabBottom, right: Math.max(insets.right, 12) + 6 },
-        ]}
-      >
-        {audioOn ? (
-          <SvgVolumeOn key="vol-on" color={colors.text_primary} size={22} />
-        ) : (
-          <SvgVolumeMuted key="vol-mute" color={colors.text_primary} size={22} />
-        )}
-      </Pressable>
-
-      {/* ── Stop session modal ── */}
-      {showStopModal && (
+      {/* ── Voice mute (bottom‑right FAB) — hidden while quit modal is open. ── */}
+      {!showQuitWorkoutModal && (
         <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowStopModal(false)}
+          accessibilityRole="button"
+          accessibilityLabel={audioOn ? 'Mute voice feedback' : 'Unmute voice feedback'}
+          onPress={() => setAudioOn((v) => !v)}
+          style={[
+            styles.muteFab,
+            { bottom: muteFabBottom, right: Math.max(insets.right, 12) + 6 },
+          ]}
         >
-          <Pressable onPress={() => {}} style={styles.modalCard}>
-            <Text style={styles.modalWarnIcon}>⚠️</Text>
-            <Text style={styles.modalTitle}>End Session?</Text>
-            <Text style={styles.modalBody}>
-              Your progress will be saved up to this point, but the current set will not be recorded.
-            </Text>
-            <View style={styles.modalSummaryBox}>
-              <Text style={styles.modalSummaryMain}>
-                SET 1 · {reps} REPS · {elapsedClock}
-              </Text>
-              <Text style={styles.modalSummaryGreen}>Completed sets are safe.</Text>
-            </View>
-            <Pressable
-              style={styles.modalKeepBtn}
-              onPress={() => setShowStopModal(false)}
-            >
-              <Text style={styles.modalKeepTxt}>KEEP GOING</Text>
-            </Pressable>
-            <Pressable
-              style={styles.modalEndBtn}
-              onPress={() => {
-                void Speech.stop();
-                navigation.navigate('SessionComplete');
-              }}
-            >
-              <Text style={styles.modalEndTxt}>END SESSION</Text>
-            </Pressable>
-          </Pressable>
+          {audioOn ? (
+            <SvgVolumeOn key="vol-on" color={colors.text_primary} size={22} />
+          ) : (
+            <SvgVolumeMuted key="vol-mute" color={colors.text_primary} size={22} />
+          )}
         </Pressable>
       )}
 
@@ -886,6 +1019,39 @@ export function LiveSessionScreen() {
         <View style={[styles.devChip, { top: belowHeaderBannerTop }]} pointerEvents="none">
           <Text style={styles.devChipTxt}>MOCK</Text>
         </View>
+      )}
+
+      {/* ── Quit whole workout modal (discard in-progress session). ── */}
+      {showQuitWorkoutModal && (
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowQuitWorkoutModal(false)}
+        >
+          <Pressable onPress={() => {}} style={styles.modalCard}>
+            <Text style={styles.modalWarnIcon}>⚠️</Text>
+            <Text style={styles.modalTitle}>Quit workout?</Text>
+            <Text style={styles.modalBody}>
+              {
+                "You'll lose timers and reps for this workout draft. Stats entries you already saved are unchanged. Use FINISH SET to save the current set. Quitting resets this workout draft, including notes from prior sets you haven't exported yet."
+              }
+            </Text>
+            <View style={styles.modalSummaryBox}>
+              <Text style={styles.modalSummaryMain}>
+                SET {currentSetNumber} · {weightAmount} {weightUnit === 'kg' ? 'KG' : 'LB'} · {reps}{' '}
+                REPS · {elapsedClock}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.modalKeepBtn}
+              onPress={() => setShowQuitWorkoutModal(false)}
+            >
+              <Text style={styles.modalKeepTxt}>KEEP LIFTING</Text>
+            </Pressable>
+            <Pressable style={styles.modalEndBtn} onPress={onConfirmQuitWholeWorkout}>
+              <Text style={styles.modalEndTxt}>QUIT WORKOUT</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
       )}
     </View>
   );
@@ -1000,8 +1166,8 @@ const styles = StyleSheet.create({
   },
   muteFab: {
     position: 'absolute',
-    zIndex: 20,
-    elevation: 14,
+    zIndex: 14,
+    elevation: 12,
     width: 52,
     height: 52,
     borderRadius: 26,
@@ -1157,6 +1323,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 16,
+    elevation: 18,
     backgroundColor: colors.nav_bar_bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -1193,21 +1361,57 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   statsRow: { flexDirection: 'row', gap: 10 },
-  stopBtn: { marginTop: 14 },
+  finishSetBtn: { marginTop: 14 },
+  quitWorkoutBtn: { marginTop: 10 },
 
-  // Stop session modal
+  formFeedbackDock: {
+    position: 'absolute',
+    left: 16,
+    right: 72,
+    zIndex: 15,
+    elevation: 14,
+  },
+  formFeedbackInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  formFeedbackTextCol: { flex: 1, minWidth: 0 },
+  formFeedbackKicker: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 10,
+    letterSpacing: typography.letterSpacing.capsWide,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    opacity: 0.92,
+  },
+  formFeedbackTxt: {
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.bodySm,
+    lineHeight: 20,
+  },
+
+  // Quit workout modal
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.82)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 100,
+    elevation: 28,
   },
   modalCard: {
     width: '88%',
+    maxWidth: 400,
     backgroundColor: colors.surface_v3,
     borderRadius: 24,
     padding: 24,
     alignItems: 'center',
+    zIndex: 101,
+    elevation: 30,
   },
   modalWarnIcon: { fontSize: 38, marginBottom: 10 },
   modalTitle: {
@@ -1237,12 +1441,6 @@ const styles = StyleSheet.create({
     color: colors.text_primary,
     fontSize: 14,
     letterSpacing: 1,
-  },
-  modalSummaryGreen: {
-    marginTop: 4,
-    fontFamily: typography.fontFamily.medium,
-    color: colors.primary_green,
-    fontSize: 12,
   },
   modalKeepBtn: {
     backgroundColor: colors.bg_high,

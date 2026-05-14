@@ -5,7 +5,7 @@
  *
  * The 5 parameters:
  *  ERR_001 — Lumbar rounding (angle < 150°)
- *  ERR_002 — Hips too high at initiation
+ *  ERR_002 — Hips too high at initiation (pull_initiation only)
  *  ERR_003 — Bar drift away from body
  *  ERR_004 — Hyperextension at lockout (angle < 160°)
  *  ERR_005 — Shoulder behind bar at setup (> 5% frame width)
@@ -112,7 +112,8 @@ function checkLumbarRounding(pose: PoseResult, phase: Phase): BiomechanicalError
 }
 
 function checkHipsTooHigh(pose: PoseResult, phase: Phase): BiomechanicalError | null {
-  if (phase !== 'setup' && phase !== 'pull_initiation') return null;
+  /** “Initiation” only — avoids firing while standing/resting (`setup`), where hip/shoulder Y heuristics misfire. */
+  if (phase !== 'pull_initiation') return null;
 
   const shoulder = pose.keypoints[KEYPOINTS.LEFT_SHOULDER];
   const hip = pose.keypoints[KEYPOINTS.LEFT_HIP];

@@ -8,14 +8,20 @@
  *  - Trigger only if error persists for ≥ 3 consecutive frames (enforced by caller)
  */
 
-import { AnalysisResult, ErrorId } from './analyzer';
+import { AnalysisResult, ErrorId, type BiomechanicalError } from './analyzer';
 import { colors } from '../theme/colors';
 
 export interface FeedbackOutput {
+  /** Highest-priority error this frame (same ordering as banner / audio). */
+  topError: BiomechanicalError | null;
   activeBanner: {
     errorId: string;
     message: string;
-    color: string;
+    /** Solid banner background (live-session doc). */
+    backgroundColor: string;
+    /** Primary text on banner (live-session doc). */
+    textColor: string;
+    severity: 'critical' | 'warning';
   } | null;
   keypointColors: Record<number, string>;  // keypoint index → hex
   triggerHaptic: boolean;
@@ -24,37 +30,37 @@ export interface FeedbackOutput {
 
 interface ErrorMeta {
   message: string;
-  color: string;
   severity: 'critical' | 'warning';
 }
 
 const ERROR_META: Record<ErrorId, ErrorMeta> = {
   ERR_001: {
     message: 'Engage your lats. Drive chest up.',
-    color: colors.accent_red,
     severity: 'critical',
   },
   ERR_002: {
     message: 'Lower your hips. Set your back angle first.',
-    color: colors.accent_red,
     severity: 'critical',
   },
   ERR_003: {
     message: 'Keep the bar close. Drag it up your legs.',
-    color: colors.accent_yellow,
     severity: 'warning',
   },
   ERR_004: {
     message: "Stand tall. Don't lean back at the top.",
-    color: colors.accent_yellow,
     severity: 'warning',
   },
   ERR_005: {
     message: 'Shoulders over the bar. Shift weight forward.',
-    color: colors.accent_yellow,
     severity: 'warning',
   },
 };
+
+/** Live-session doc: critical = red bg + white text; warning = amber + dark text. */
+const BANNER_CRITICAL_BG = colors.accent_red;
+const BANNER_CRITICAL_TXT = '#FFFFFF';
+const BANNER_WARNING_BG = colors.accent_yellow;
+const BANNER_WARNING_TXT = colors.bg_v3;
 
 const AUDIO_THROTTLE_MS = 2000;
 
@@ -64,6 +70,7 @@ export function generateFeedback(
 ): FeedbackOutput {
   if (analysis.errors.length === 0) {
     return {
+      topError: null,
       activeBanner: null,
       keypointColors: {},
       triggerHaptic: false,
@@ -80,15 +87,19 @@ export function generateFeedback(
 
   const meta = ERROR_META[topError.errorId];
   const canPlayAudio = Date.now() - lastFeedbackTimestamp > AUDIO_THROTTLE_MS;
+  const isCritical = meta.severity === 'critical';
 
   return {
+    topError,
     activeBanner: {
       errorId: topError.errorId,
       message: meta.message,
-      color: meta.color,
+      backgroundColor: isCritical ? BANNER_CRITICAL_BG : BANNER_WARNING_BG,
+      textColor: isCritical ? BANNER_CRITICAL_TXT : BANNER_WARNING_TXT,
+      severity: meta.severity,
     },
     keypointColors: {},  // TODO: Map affected keypoints to error color
-    triggerHaptic: meta.severity === 'critical',
+    triggerHaptic: isCritical,
     audioMessage: canPlayAudio ? meta.message : null,
   };
 }

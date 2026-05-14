@@ -17,7 +17,8 @@ export type RootStackParamList = {
   Signup: undefined;
   EmailConfirm: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList>;
-  LiveSession: undefined;
+  /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
+  LiveSession: { continuedWorkout?: boolean } | undefined;
   SessionComplete: undefined;
 };
 

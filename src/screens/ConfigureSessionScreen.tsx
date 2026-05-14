@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -10,13 +10,39 @@ import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
+import { clampMass, convertMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
 
 const SET_OPTS = [2, 3, 4, 5] as const;
 
 export function ConfigureSessionScreen() {
   const nav = useNavigation<MainTabCompositeNav>();
   const numSets = useSessionConfigStore((s) => s.setCount);
+  const weightUnit = useSessionConfigStore((s) => s.weightUnit);
+  const weightAmount = useSessionConfigStore((s) => s.weightAmount);
   const patch = useSessionConfigStore((s) => s.patch);
+
+  const [weightDraft, setWeightDraft] = useState(() => String(weightAmount));
+
+  useEffect(() => {
+    setWeightDraft(String(weightAmount));
+  }, [weightAmount, weightUnit]);
+
+  const commitWeightDraft = useCallback(() => {
+    const n = parseMassDraft(weightDraft);
+    if (n == null) {
+      setWeightDraft(String(weightAmount));
+      return;
+    }
+    patch({ weightAmount: clampMass(n, weightUnit) });
+  }, [weightDraft, weightAmount, weightUnit, patch]);
+
+  const setUnit = (next: WeightUnit) => {
+    if (next === weightUnit) return;
+    const converted = convertMass(weightAmount, weightUnit, next);
+    patch({ weightUnit: next, weightAmount: converted });
+  };
+
+  const unitLabel = weightUnit === 'kg' ? 'kg' : 'lb';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -71,6 +97,43 @@ export function ConfigureSessionScreen() {
           })}
         </View>
 
+        <Text style={[styles.lab, { marginTop: 26 }]}>Working weight</Text>
+        <View style={styles.weightBlock}>
+          <View style={styles.unitToggleRow}>
+            <Pressable
+              onPress={() => setUnit('kg')}
+              style={[styles.unitSeg, weightUnit === 'kg' ? styles.unitSegOn : styles.unitSegOff]}
+            >
+              <Text style={[styles.unitSegTxt, weightUnit === 'kg' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
+                Kilograms
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setUnit('lb')}
+              style={[styles.unitSeg, weightUnit === 'lb' ? styles.unitSegOn : styles.unitSegOff]}
+            >
+              <Text style={[styles.unitSegTxt, weightUnit === 'lb' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
+                Pounds
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.weightFieldHint}>{`Weight (${unitLabel})`}</Text>
+          <View style={styles.weightInputShell}>
+            <TextInput
+              placeholder={weightUnit === 'kg' ? '100' : '225'}
+              placeholderTextColor={colors.text_muted}
+              value={weightDraft}
+              onChangeText={setWeightDraft}
+              onBlur={() => commitWeightDraft()}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={() => commitWeightDraft()}
+              selectTextOnFocus
+              style={styles.weightInput}
+            />
+          </View>
+        </View>
+
         <View style={styles.infoRow}>
           <Ionicons name="information-circle-outline" color={colors.primary_green} size={26} />
           <Text style={styles.infoTxt}>Reps will be counted automatically during the lift.</Text>
@@ -79,7 +142,9 @@ export function ConfigureSessionScreen() {
         <View style={styles.miniGrid}>
           <View style={styles.miniCard}>
             <Text style={styles.miniLab}>LAST PERFORMANCE</Text>
-            <Text style={styles.miniVal}>— kg</Text>
+            <Text style={styles.miniVal}>
+              {weightAmount} {unitLabel}
+            </Text>
           </View>
           <View style={styles.miniCard}>
             <Text style={styles.miniLab}>Recovery</Text>
@@ -164,6 +229,53 @@ const styles = StyleSheet.create({
   pillTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodyLg },
   pillTxtOn: { color: colors.text_on_green },
   pillTxtOff: { color: colors.text_secondary },
+  /** Unit toggle + rounded field — extra vertical rhythm so pills don’t touch the TextInput. */
+  weightBlock: {
+    marginTop: 12,
+  },
+  unitToggleRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 2,
+  },
+  weightFieldHint: {
+    marginTop: 20,
+    marginBottom: 10,
+    color: colors.text_muted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.captionCaps + 2,
+    letterSpacing: typography.letterSpacing.capsWide,
+    textTransform: 'uppercase',
+  },
+  weightInputShell: {
+    backgroundColor: colors.bg_elevated,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border_subtle,
+    minHeight: 52,
+    paddingHorizontal: 22,
+    justifyContent: 'center',
+  },
+  weightInput: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.bodyLg,
+    color: colors.text_primary,
+    paddingVertical: 14,
+    margin: 0,
+  },
+  unitSeg: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  unitSegOn: { backgroundColor: colors.primary_green },
+  unitSegOff: { backgroundColor: colors.bg_elevated },
+  unitSegTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodySm },
+  unitSegTxtOn: { color: colors.text_on_green },
+  unitSegTxtOff: { color: colors.text_secondary },
   infoRow: {
     marginTop: 22,
     flexDirection: 'row',

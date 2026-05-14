@@ -1,7 +1,7 @@
 import { KEYPOINTS, type PoseResult } from '@/modules/movenet';
 
-/** Min score so a hip is considered for vertical rep tracking (slightly loose for occluded sides). */
-const HIP_SCORE_MIN = 0.14;
+/** Min score so a hip is considered for vertical rep tracking (shirt / side view — keep permissive). */
+const HIP_SCORE_MIN = 0.1;
 
 /**
  * Lateral deadlift: use hips as primary vertical signal (average when both visible).
@@ -24,18 +24,14 @@ export function primaryHipY(pose: PoseResult): number | null {
  */
 export const DEADLIFT_REP_THRESH = {
   /**
-   * Hips deeper than this (higher normalized Y — portrait, origin top) qualify setup streak.
-   * Slightly forgiving so moderate hinge depth still arms; pair with {@link minHipAscentNorm}.
+   * “Bottom” gate — nearer early builds that reliably counted reps (camisa / lado / encuadre).
+   * Shallower hinge still arms; pair with modest {@link minHipAscentNorm}.
    */
-  setupMinY: 0.49,
-  /** Hips clearly high (small Y): stricter than before to trim “ghost” reps from borderline jitter. */
-  lockoutMaxY: 0.425,
-  consecutiveSetupFrames: 5,
-  /** Extra frames at lockout blunt single-frame dips from latency / noisy hips. */
-  consecutiveLockoutFrames: 7,
-  /**
-   * Must rise this much vs deepest hip Y seen while arming setup (same units as keypoint Y).
-   * Stops noisy brief “bottom→top” bursts without real travel.
-   */
-  minHipAscentNorm: 0.05,
+  setupMinY: 0.41,
+  /** Lockout: hips high on screen ⇒ small Y; slightly relaxed vs setup so finish registers reliably. */
+  lockoutMaxY: 0.468,
+  consecutiveSetupFrames: 3,
+  consecutiveLockoutFrames: 4,
+  /** Enough travel to kill ghosts; low so partial ROM deadlifts still complete. */
+  minHipAscentNorm: 0.024,
 } as const;
