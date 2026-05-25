@@ -1,9 +1,11 @@
 import React from 'react';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+
+import { SvgDumbbellIcon } from '@/components/icons/SvgUiIcons';
 
 type Props = { color: string; size?: number };
 
-/** Vector tab icons — avoids Ionicon fonts that stayed blank on some Android builds (Samsung). */
+/** Vector tab icons — avoids icon fonts that stay blank on some Android builds (Samsung). */
 
 export function TabHomeIcon({ color, size = 24 }: Props) {
   return (
@@ -14,13 +16,7 @@ export function TabHomeIcon({ color, size = 24 }: Props) {
 }
 
 export function TabWorkoutIcon({ color, size = 24 }: Props) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Circle cx={6} cy={12} r={3} />
-      <Rect x={9} y={10} width={6} height={4} rx={1} />
-      <Circle cx={18} cy={12} r={3} />
-    </Svg>
-  );
+  return <SvgDumbbellIcon color={color} size={size} />;
 }
 
 export function TabStatsIcon({ color, size = 24 }: Props) {

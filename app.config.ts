@@ -34,6 +34,8 @@ const config: ExpoConfig = {
   plugins: [
     './plugins/withAndroidKeepScreenOn.cjs',
     'expo-dev-client',
+    // expo-font / expo-asset need expo-file-system native filesystem bindings at runtime (e.g. AppDirectories).
+    'expo-file-system',
     'expo-asset',
     [
       'react-native-vision-camera',

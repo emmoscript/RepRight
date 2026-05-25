@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { MainTabNavigator } from '@/navigation/MainTabNavigator';
 import type { RootStackParamList, MainTabParamList } from '@/navigation/routeTypes';
 import { DemoScreen } from '@/screens/DemoScreen';
+import { AuthGatewayScreen } from '@/screens/AuthGatewayScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { SignupScreen } from '@/screens/SignupScreen';
 import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
@@ -51,6 +52,7 @@ export function RootNavigator() {
         }}
       >
         <Stack.Screen name="Demo" component={DemoScreen} />
+        <Stack.Screen name="AuthGateway" component={AuthGatewayScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="EmailConfirm" component={EmailConfirmScreen} />

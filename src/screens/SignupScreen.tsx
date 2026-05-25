@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -40,7 +41,7 @@ export function SignupScreen() {
         <RepRightHeader
           variant="auth"
           showBack
-          rightSlot={<Ionicons name="fitness" size={22} color={colors.primary_green} />}
+          rightSlot={<MaterialIcons name="fitness-center" size={22} color={colors.primary_green} />}
         />
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
           <Text style={styles.title}>Create account</Text>

@@ -13,6 +13,7 @@ export type MainTabParamList = {
 /** Root native stack — auth flows + overlay screens */
 export type RootStackParamList = {
   Demo: undefined;
+  AuthGateway: undefined;
   Login: undefined;
   Signup: undefined;
   EmailConfirm: undefined;

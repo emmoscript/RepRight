@@ -1,5 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { randomUUID } from 'expo-crypto';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Platform, TextInput } from 'react-native';
@@ -35,19 +36,50 @@ const RING_CONTAINER = 228;
 const R = 74;
 const C = 2 * Math.PI * R;
 
-const ERROR_NAMES: Record<string, { name: string; severity: 'critical' | 'warning' }> = {
-  ERR_001: { name: 'Lumbar rounding', severity: 'critical' },
-  ERR_002: { name: 'Hips too high at initiation', severity: 'critical' },
-  ERR_003: { name: 'Bar drift away from body', severity: 'warning' },
-  ERR_004: { name: 'Hyperextension at lockout', severity: 'warning' },
-  ERR_005: { name: 'Shoulder behind bar at setup', severity: 'warning' },
-};
-
 function ringColor(sc: number) {
   if (sc >= 90) return colors.primary_green;
   if (sc >= 70) return colors.accent_green_light;
   if (sc >= 50) return colors.accent_yellow;
   return colors.accent_red;
+}
+
+function precisionTitle(scoreRounded: number) {
+  if (scoreRounded >= 90) return 'ELITE PRECISION';
+  if (scoreRounded >= 80) return 'STRONG PRECISION';
+  if (scoreRounded >= 70) return 'SOLID CONTROL';
+  if (scoreRounded >= 50) return 'NEEDS CLEANUP';
+  return 'HIGH ALERT FORM';
+}
+
+type FormBand = 'critical' | 'warning' | 'good';
+
+function bandLabel(band: FormBand) {
+  if (band === 'critical') return 'CRITICAL';
+  if (band === 'warning') return 'WARNING';
+  return 'GOOD';
+}
+
+function bandDotColor(band: FormBand) {
+  if (band === 'critical') return colors.accent_red;
+  if (band === 'warning') return '#FF9100';
+  return colors.primary_green;
+}
+
+function badgeColors(band: FormBand) {
+  const dot = bandDotColor(band);
+  if (band === 'good') return { fg: dot, bg: `${dot}14`, bd: `${dot}33` };
+  if (band === 'critical') return { fg: dot, bg: `${dot}1A`, bd: `${dot}33` };
+  return { fg: dot, bg: `${dot}22`, bd: `${dot}40` };
+}
+
+function buildFormInsights(errorIds: Set<string>): Array<{ key: string; label: string; band: FormBand }> {
+  const hipCrit = errorIds.has('ERR_001') || errorIds.has('ERR_002');
+  const romWarn = errorIds.has('ERR_003') || errorIds.has('ERR_004') || errorIds.has('ERR_005');
+  return [
+    { key: 'hip-sway', label: 'Hip Sway', band: hipCrit ? 'critical' : 'good' },
+    { key: 'rom', label: 'Range of Motion', band: romWarn ? 'warning' : 'good' },
+    { key: 'tempo', label: 'Tempo Consistency', band: 'good' },
+  ];
 }
 
 export function SessionCompleteScreen() {
@@ -89,7 +121,8 @@ export function SessionCompleteScreen() {
     return `${body} ${weightUnit === 'kg' ? 'kg' : 'lb'}`;
   }, [lastSetReps, weightAmount, weightUnit]);
 
-  const { score, label } = useMemo(() => calculateRepScore(errors), [errors]);
+  const repScore = useMemo(() => calculateRepScore(errors), [errors]);
+  const score = repScore.score;
   const sc = Math.round(score);
   const rc = ringColor(sc);
   const arc = `${(sc / 100) * C} ${C}`;
@@ -103,6 +136,10 @@ export function SessionCompleteScreen() {
     });
   }, [errors]);
 
+  const insightRows = useMemo(() => {
+    const ids = new Set(uniqueErrors.map((e) => e.errorId));
+    return buildFormInsights(ids);
+  }, [uniqueErrors]);
   const goHome = () => nav.navigate('MainTabs', { screen: 'HomeMain' });
 
   const onNextSet = () => {
@@ -166,7 +203,7 @@ export function SessionCompleteScreen() {
       <RepRightHeader />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.h1}>SESSION COMPLETE</Text>
+        <Text style={styles.h1}>Session Complete</Text>
 
         {/* Score ring */}
         <View style={styles.ringOuter}>
@@ -184,67 +221,55 @@ export function SessionCompleteScreen() {
             </G>
           </Svg>
           <View style={styles.ringInnerOverlay} pointerEvents="none">
-            <View style={styles.ringTextColumn}>
-              <Text
-                style={[styles.scoreNumHero, { color: rc }]}
-                adjustsFontSizeToFit
-                numberOfLines={1}
-                minimumFontScale={0.75}
-              >
-                {sc}
-              </Text>
-              <Text style={styles.scoreDenomBelow}>/100</Text>
+            <View style={styles.ringCenterStack}>
+              <View style={styles.ringScoreInline}>
+                <Text style={styles.ringScoreBig}>{sc}</Text>
+                <Text style={styles.ringScoreFrac}>/100</Text>
+              </View>
+              <Text style={styles.ringRecoveryLbl}>Recovery Index</Text>
             </View>
           </View>
         </View>
 
-        {/* Score label */}
-        <View style={[styles.labelBadge, { borderColor: rc + '40', backgroundColor: rc + '12' }]}>
-          <Text style={[styles.labelBadgeTxt, { color: rc }]}>{label.toUpperCase()}</Text>
+        <View style={styles.eliteBadge}>
+          <MaterialIcons name="verified" size={16} color={colors.primary_green} />
+          <Text style={styles.eliteBadgeTxt}>{precisionTitle(sc)}</Text>
         </View>
 
         {/* Stats grid */}
         <View style={styles.grid}>
-          <MiniCard label="Volume" value={volumeDisplay} />
-          <MiniCard label="Sets" value={setsProgressDisplay} highlight />
-          <MiniCard label="Time" value={elapsedClock} highlight />
-          <MiniCard label="Avg score" value={`${sc}`} />
+          <MiniCard label="Volume" value={volumeDisplay} accentBorder />
+          <MiniCard label="Sets" value={setsProgressDisplay} accentBorder />
+          <MiniCard label="Time" value={elapsedClock} accentBorder />
+          <MiniCard label="Avg score" value={`${sc}%`} accentBorder />
         </View>
 
-        {/* Form adjustments */}
-        {uniqueErrors.length > 0 && (
-          <>
-            <Text style={styles.adjTitle}>Form Adjustments Detected</Text>
-            {uniqueErrors.map((e) => {
-              const meta = ERROR_NAMES[e.errorId];
-              const isCritical = meta?.severity === 'critical';
-              const accent = isCritical ? colors.accent_red : colors.accent_yellow;
+        {/* Form adjustments — canonical summary rows */}
+        <View style={styles.formCard}>
+          <View style={styles.formCardTitleRow}>
+            <MaterialIcons name="analytics" size={22} color={colors.primary_green} />
+            <Text style={styles.formCardTitle}>Form Adjustments Detected</Text>
+          </View>
+          <View style={styles.formCardBody}>
+            {insightRows.map((row, idx) => {
+              const b = badgeColors(row.band);
               return (
                 <View
-                  key={e.errorId}
-                  style={[styles.errRow, { borderLeftColor: accent }]}
+                  key={row.key}
+                  style={[styles.insightRow, idx < insightRows.length - 1 && styles.insightRowSep]}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.errName}>{meta?.name ?? e.errorId}</Text>
-                    <Text style={styles.errId}>{e.errorId}</Text>
+                  <View style={styles.insightLeft}>
+                    <View style={[styles.insightDot, { backgroundColor: bandDotColor(row.band) }]} />
+                    <Text style={styles.insightName}>{row.label}</Text>
                   </View>
-                  <View style={[styles.sevBadge, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
-                    <Text style={[styles.sevTxt, { color: accent }]}>
-                      {isCritical ? 'CRITICAL' : 'WARNING'}
-                    </Text>
+                  <View style={[styles.bandBadge, { backgroundColor: b.bg, borderColor: b.bd }]}>
+                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>{bandLabel(row.band)}</Text>
                   </View>
                 </View>
               );
             })}
-          </>
-        )}
-
-        {uniqueErrors.length === 0 && (
-          <View style={styles.perfectRow}>
-            <Text style={styles.perfectIcon}>✓</Text>
-            <Text style={styles.perfectTxt}>No form issues detected. Great lift!</Text>
           </View>
-        )}
+        </View>
 
         {canAdvanceToNextSet && (
           <View style={styles.nextSetBlock}>
@@ -297,13 +322,19 @@ export function SessionCompleteScreen() {
   );
 }
 
-function MiniCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function MiniCard({
+  label,
+  value,
+  accentBorder,
+}: {
+  label: string;
+  value: string;
+  accentBorder?: boolean;
+}) {
   return (
-    <View style={[miniStyles.card, highlight && miniStyles.cardHi]}>
+    <View style={[miniStyles.card, accentBorder && miniStyles.cardAccent]}>
       <Text style={miniStyles.label}>{label.toUpperCase()}</Text>
-      <Text style={[miniStyles.value, highlight && { color: colors.primary_green }]}>
-        {value}
-      </Text>
+      <Text style={miniStyles.value}>{value}</Text>
     </View>
   );
 }
@@ -311,17 +342,20 @@ function MiniCard({ label, value, highlight }: { label: string; value: string; h
 const miniStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.bg_elevated,
-    width: '47%',
-    padding: 16,
+    width: '48%',
+    padding: 18,
     borderRadius: 14,
     minHeight: 84,
     justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border_subtle,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: 'transparent',
   },
-  cardHi: { borderBottomColor: colors.primary_green },
+  cardAccent: {
+    borderLeftColor: colors.primary_green,
+  },
   label: {
     color: colors.text_secondary,
     letterSpacing: 1.5,
@@ -345,10 +379,11 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
     color: colors.text_primary,
-    fontSize: typography.fontSize.captionCaps + 4,
+    fontSize: typography.fontSize.screenTitle - 10,
     fontFamily: typography.fontFamily.display,
-    letterSpacing: typography.letterSpacing.capsWider,
+    letterSpacing: -1.8,
     textTransform: 'uppercase',
+    fontWeight: '700',
   },
 
   ringOuter: {
@@ -363,110 +398,99 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 38,
-    paddingVertical: 42,
+    paddingHorizontal: 32,
+    paddingVertical: 40,
   },
-  ringTextColumn: {
+  ringCenterStack: {
     alignItems: 'center',
     justifyContent: 'center',
-    maxWidth: RING_SZ - 28,
+    width: '100%',
   },
-  scoreNumHero: {
+  ringScoreInline: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+  },
+  ringScoreBig: {
     fontFamily: typography.fontFamily.display,
-    fontSize: 48,
-    lineHeight: 54,
-    textAlign: 'center',
+    fontSize: 60,
+    lineHeight: 64,
+    color: colors.text_primary,
+    fontWeight: '700',
+    letterSpacing: -2,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
-  scoreDenomBelow: {
-    marginTop: 6,
-    fontFamily: typography.fontFamily.medium,
-    fontSize: 16,
-    lineHeight: 22,
-    letterSpacing: 0.5,
-    color: colors.text_muted,
-    textAlign: 'center',
+  ringScoreFrac: {
+    marginLeft: 4,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 26,
+    color: colors.text_secondary,
+    fontWeight: '400',
+    letterSpacing: 0,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+  },
+  ringRecoveryLbl: {
+    marginTop: 10,
+    color: colors.primary_green,
+    fontFamily: typography.fontFamily.bold,
+    letterSpacing: 4,
+    fontSize: 10,
+    textTransform: 'uppercase',
   },
 
-  labelBadge: {
+  eliteBadge: {
+    marginTop: 16,
     alignSelf: 'center',
-    marginTop: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
+    borderColor: 'rgba(39,195,79,0.25)',
+    backgroundColor: 'rgba(39,195,79,0.10)',
   },
-  labelBadgeTxt: {
+  eliteBadgeTxt: {
+    marginLeft: 8,
+    color: colors.primary_green,
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.captions,
+    fontSize: typography.fontSize.captions - 2,
     letterSpacing: typography.letterSpacing.capsWide,
+    textTransform: 'uppercase',
   },
 
   grid: {
     marginTop: 28,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
     justifyContent: 'space-between',
   },
 
-  adjTitle: {
-    marginTop: 30,
-    marginBottom: 12,
-    fontFamily: typography.fontFamily.display,
-    color: colors.text_primary,
-    fontSize: typography.fontSize.bodySm,
-    letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
-  },
-  errRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: colors.surface_v3,
-    marginBottom: 8,
-    borderLeftWidth: 4,
+  formCard: {
+    marginTop: 28,
+    backgroundColor: colors.surface_low,
+    borderRadius: 14,
+    padding: 22,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
   },
-  errName: {
-    fontFamily: typography.fontFamily.bold,
+  formCardTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  formCardTitle: {
+    marginLeft: 10,
     color: colors.text_primary,
-    fontSize: typography.fontSize.bodySm,
+    fontFamily: typography.fontFamily.display,
+    fontWeight: '700',
+    fontSize: typography.fontSize.bodyLg,
+    letterSpacing: -0.2,
   },
-  errId: {
-    marginTop: 3,
-    color: colors.text_muted,
-    fontSize: 11,
-    fontFamily: typography.fontFamily.regular,
-  },
-  sevBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  sevTxt: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-
-  perfectRow: {
-    marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.green_subtle_bg,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.primary_green + '40',
-  },
-  perfectIcon: { color: colors.primary_green, fontSize: 22, fontFamily: typography.fontFamily.bold },
-  perfectTxt: { color: colors.primary_green, fontFamily: typography.fontFamily.medium, fontSize: 14, flex: 1 },
+  formCardBody: {},
+  insightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
+  insightRowSep: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border_subtle },
+  insightLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  insightDot: { width: 6, height: 6, borderRadius: 3, marginRight: 14 },
+  insightName: { color: colors.text_primary, fontFamily: typography.fontFamily.medium, fontSize: typography.fontSize.body },
+  bandBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
+  bandBadgeTxt: { fontFamily: typography.fontFamily.bold, fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase' },
 
   nextSetBlock: {
     marginTop: 26,
