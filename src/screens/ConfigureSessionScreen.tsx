@@ -1,290 +1,73 @@
-import { useNavigation } from '@react-navigation/native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from "@react-navigation/native";
+import React, { useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { RepRightHeader } from '@/components/RepRightHeader';
-import type { MainTabCompositeNav } from '@/navigation/routeTypes';
-import { useSessionConfigStore } from '@/store/sessionConfigStore';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { clampMass, convertMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
-
-const SET_OPTS = [2, 3, 4, 5] as const;
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { useSessionConfigStore } from "@/store/sessionConfigStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
 
 export function ConfigureSessionScreen() {
-  const nav = useNavigation<MainTabCompositeNav>();
+  const nav = useNavigation();
   const numSets = useSessionConfigStore((s) => s.setCount);
-  const weightUnit = useSessionConfigStore((s) => s.weightUnit);
-  const weightAmount = useSessionConfigStore((s) => s.weightAmount);
+  const currentWeight = useSessionConfigStore((s) => s.weight);
   const patch = useSessionConfigStore((s) => s.patch);
-
-  const [weightDraft, setWeightDraft] = useState(() => String(weightAmount));
-
-  useEffect(() => {
-    setWeightDraft(String(weightAmount));
-  }, [weightAmount, weightUnit]);
-
-  const commitWeightDraft = useCallback(() => {
-    const n = parseMassDraft(weightDraft);
-    if (n == null) {
-      setWeightDraft(String(weightAmount));
-      return;
-    }
-    patch({ weightAmount: clampMass(n, weightUnit) });
-  }, [weightDraft, weightAmount, weightUnit, patch]);
-
-  const setUnit = (next: WeightUnit) => {
-    if (next === weightUnit) return;
-    const converted = convertMass(weightAmount, weightUnit, next);
-    patch({ weightUnit: next, weightAmount: converted });
-  };
-
-  const unitLabel = weightUnit === 'kg' ? 'kg' : 'lb';
+  const [sets, setSets] = useState(String(numSets));
+  const [weight, setWeight] = useState(
+    currentWeight ? String(currentWeight) : "",
+  );
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <RepRightHeader />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Configure</Text>
-        <Text style={styles.meta}>Performance session · v2.4</Text>
+    <View style={styles.root}>
+      <Text style={styles.label}>Conventional deadlift</Text>
 
-        <Text style={styles.lab}>Select exercise</Text>
-        <View style={styles.exActive}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ color: colors.text_primary, fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodyLg }}>
-              Deadlift
-            </Text>
-            <Ionicons name="checkmark-circle" color={colors.primary_green} size={26} />
-          </View>
-          <Text style={styles.trackLab}>HIGH INTENSITY TRACKING</Text>
-          <Text style={{ color: colors.text_secondary, marginTop: 8, fontSize: typography.fontSize.captions, lineHeight: 18 }}>
-            Conventional barbell · full ROM logging
-          </Text>
-        </View>
+      <Text style={styles.muted}>Number of sets (study template)</Text>
+      <TextInput
+        value={sets}
+        onChangeText={setSets}
+        keyboardType="number-pad"
+        style={styles.input}
+      />
 
-        <View style={[styles.exLock, styles.exMuted]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[styles.lockTitle]}>Squat</Text>
-            <Ionicons name="lock-closed-outline" color={colors.text_muted} size={22} />
-          </View>
-          <Text style={styles.lockSub}>Coming soon</Text>
-        </View>
+      <Text style={[styles.muted, { marginTop: 24 }]}>Weight (kg)</Text>
+      <TextInput
+        value={weight}
+        onChangeText={setWeight}
+        keyboardType="decimal-pad"
+        placeholder="e.g., 70.5"
+        placeholderTextColor={colors.text_muted}
+        style={styles.input}
+      />
 
-        <View style={[styles.exLock, styles.exMuted]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[styles.lockTitle]}>Romanian Deadlift</Text>
-            <Ionicons name="lock-closed-outline" color={colors.text_muted} size={22} />
-          </View>
-          <Text style={styles.lockSub}>Coming soon</Text>
-        </View>
-
-        <Text style={[styles.lab, { marginTop: 26 }]}>Number of sets</Text>
-        <View style={styles.pillRow}>
-          {SET_OPTS.map((n) => {
-            const on = numSets === n;
-            return (
-              <Pressable
-                key={n}
-                onPress={() => patch({ setCount: n })}
-                style={[styles.pill, on ? styles.pillOn : styles.pillOff]}
-              >
-                <Text style={[styles.pillTxt, on ? styles.pillTxtOn : styles.pillTxtOff]}>{n}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Text style={[styles.lab, { marginTop: 26 }]}>Working weight</Text>
-        <View style={styles.weightBlock}>
-          <View style={styles.unitToggleRow}>
-            <Pressable
-              onPress={() => setUnit('kg')}
-              style={[styles.unitSeg, weightUnit === 'kg' ? styles.unitSegOn : styles.unitSegOff]}
-            >
-              <Text style={[styles.unitSegTxt, weightUnit === 'kg' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
-                Kilograms
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setUnit('lb')}
-              style={[styles.unitSeg, weightUnit === 'lb' ? styles.unitSegOn : styles.unitSegOff]}
-            >
-              <Text style={[styles.unitSegTxt, weightUnit === 'lb' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
-                Pounds
-              </Text>
-            </Pressable>
-          </View>
-          <Text style={styles.weightFieldHint}>{`Weight (${unitLabel})`}</Text>
-          <View style={styles.weightInputShell}>
-            <TextInput
-              placeholder={weightUnit === 'kg' ? '100' : '225'}
-              placeholderTextColor={colors.text_muted}
-              value={weightDraft}
-              onChangeText={setWeightDraft}
-              onBlur={() => commitWeightDraft()}
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              onSubmitEditing={() => commitWeightDraft()}
-              selectTextOnFocus
-              style={styles.weightInput}
-            />
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Ionicons name="information-circle-outline" color={colors.primary_green} size={26} />
-          <Text style={styles.infoTxt}>Reps will be counted automatically during the lift.</Text>
-        </View>
-
-        <View style={styles.miniGrid}>
-          <View style={styles.miniCard}>
-            <Text style={styles.miniLab}>LAST PERFORMANCE</Text>
-            <Text style={styles.miniVal}>
-              {weightAmount} {unitLabel}
-            </Text>
-          </View>
-          <View style={styles.miniCard}>
-            <Text style={styles.miniLab}>Recovery</Text>
-            <Text style={[styles.miniVal, { color: colors.primary_green }]}>—%</Text>
-          </View>
-        </View>
-
-        <PrimaryButton title="START SESSION →" onPress={() => nav.navigate('LiveSession')} style={{ marginTop: 28 }} />
-        <View style={{ height: 104 }} />
-      </ScrollView>
-    </SafeAreaView>
+      <PrimaryButton
+        title="Start live session"
+        onPress={() => {
+          const n = Math.max(1, Math.min(10, parseInt(sets, 10) || 3));
+          const w = weight.trim() ? parseFloat(weight) : null;
+          patch({ setCount: n, weight: w });
+          nav.navigate("LiveSession" as never);
+        }}
+        style={{ marginTop: 24 }}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg_v3 },
-  scroll: { paddingHorizontal: 24, paddingBottom: 32 },
-  title: {
-    marginTop: 8,
+  root: { flex: 1, backgroundColor: colors.bg_v3, padding: 24 },
+  label: {
     color: colors.text_primary,
-    fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.screenTitle,
-    letterSpacing: -2,
-    textTransform: 'uppercase',
-  },
-  meta: {
-    marginTop: 8,
-    color: colors.text_secondary,
-    letterSpacing: typography.letterSpacing.capsWide,
-    fontFamily: typography.fontFamily.medium,
-    fontSize: typography.fontSize.captionCaps + 2,
-    textTransform: 'uppercase',
-  },
-  lab: {
-    marginTop: 22,
-    color: colors.text_muted,
-    fontFamily: typography.fontFamily.medium,
-    fontSize: typography.fontSize.captionCaps + 2,
-    letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
-  },
-  exActive: {
-    marginTop: 12,
-    backgroundColor: colors.bg_elevated,
-    borderRadius: 14,
-    padding: 18,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary_green,
-  },
-  trackLab: {
-    marginTop: 10,
-    color: colors.primary_green,
-    letterSpacing: typography.letterSpacing.capsWide,
+    fontSize: 20,
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.captionCaps + 1,
-    textTransform: 'uppercase',
+    marginBottom: 4,
   },
-  exLock: {
-    marginTop: 12,
-    backgroundColor: colors.bg_elevated,
-    borderRadius: 14,
-    padding: 16,
-  },
-  exMuted: { opacity: 0.45 },
-  lockTitle: { color: colors.text_primary, fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.body },
-  lockSub: { color: colors.text_muted, fontSize: 12, marginTop: 10 },
-  pillRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-    justifyContent: 'space-between',
-  },
-  pill: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pillOn: { backgroundColor: colors.primary_green },
-  pillOff: { backgroundColor: colors.bg_elevated },
-  pillTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodyLg },
-  pillTxtOn: { color: colors.text_on_green },
-  pillTxtOff: { color: colors.text_secondary },
-  /** Unit toggle + rounded field — extra vertical rhythm so pills don’t touch the TextInput. */
-  weightBlock: {
-    marginTop: 12,
-  },
-  unitToggleRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 2,
-  },
-  weightFieldHint: {
-    marginTop: 20,
-    marginBottom: 10,
-    color: colors.text_muted,
-    fontFamily: typography.fontFamily.medium,
-    fontSize: typography.fontSize.captionCaps + 2,
-    letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
-  },
-  weightInputShell: {
-    backgroundColor: colors.bg_elevated,
-    borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border_subtle,
-    minHeight: 52,
-    paddingHorizontal: 22,
-    justifyContent: 'center',
-  },
-  weightInput: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.bodyLg,
+  muted: { color: colors.text_muted, fontSize: 14, marginBottom: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 10,
+    padding: 14,
     color: colors.text_primary,
-    paddingVertical: 14,
-    margin: 0,
+    fontSize: 18,
   },
-  unitSeg: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
-  unitSegOn: { backgroundColor: colors.primary_green },
-  unitSegOff: { backgroundColor: colors.bg_elevated },
-  unitSegTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodySm },
-  unitSegTxtOn: { color: colors.text_on_green },
-  unitSegTxtOff: { color: colors.text_secondary },
-  infoRow: {
-    marginTop: 22,
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  infoTxt: { flex: 1, color: colors.text_secondary, fontSize: typography.fontSize.bodySm, lineHeight: 21 },
-  miniGrid: { flexDirection: 'row', gap: 14, marginTop: 26 },
-  miniCard: { flex: 1, borderRadius: 14, padding: 16, backgroundColor: colors.surface_v3 },
-  miniLab: { color: colors.text_muted, fontSize: typography.fontSize.captionCaps + 1, letterSpacing: 1 },
-  miniVal: { marginTop: 10, fontFamily: typography.fontFamily.display, fontSize: typography.fontSize.titleSm + 6, color: colors.text_primary },
 });

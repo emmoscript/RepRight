@@ -1,29 +1,42 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useMemo, useState } from 'react';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
   Text,
   View,
   type ViewStyle,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { RepRightHeader } from '@/components/RepRightHeader';
-import type { MainTabCompositeNav } from '@/navigation/routeTypes';
-import { getAllSessions } from '@/modules/session';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { useAuthStore } from '@/store/authStore';
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { RepRightHeader } from "@/components/RepRightHeader";
+import { getAllSessions } from "@/modules/session";
+import type { MainTabCompositeNav } from "@/navigation/routeTypes";
+import { useAuthStore } from "@/store/authStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
 
-const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
+const DAYS = ["M", "T", "W", "T", "F", "S", "S"] as const;
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+  const months = [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+  ];
+  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function scoreBadgeColor(score: number) {
@@ -35,13 +48,15 @@ function scoreBadgeColor(score: number) {
 
 export function HomeScreen() {
   const nav = useNavigation<MainTabCompositeNav>();
-  const { participantId, email } = useAuthStore();
+  const { participantId, user } = useAuthStore();
+  const email = user?.email;
 
   const [sessionCount, setSessionCount] = useState(0);
   const [lastIso, setLastIso] = useState<string | null>(null);
   const [lastScore, setLastScore] = useState<number | null>(null);
+  const [currentStreak, setCurrentStreak] = useState(0);
   const [recentSessions, setRecentSessions] = useState<
-    Array<{ date: string; score: number }>
+    { date: string; score: number }[]
   >([]);
 
   useFocusEffect(
@@ -65,22 +80,40 @@ export function HomeScreen() {
             score: Math.round(s.summary.avgScore),
           })),
         );
+
+        // Calculate current streak (consecutive days with sessions)
+        const sessionDates = new Set(
+          sorted.map((s) => new Date(s.date).toDateString()),
+        );
+        let streak = 0;
+        let checkDate = new Date();
+        checkDate.setHours(0, 0, 0, 0);
+
+        while (sessionDates.has(checkDate.toDateString())) {
+          streak++;
+          checkDate.setDate(checkDate.getDate() - 1);
+        }
+        setCurrentStreak(streak);
       })();
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }, []),
   );
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
+    if (h < 12) return "Good morning";
+    if (h < 18) return "Good afternoon";
+    return "Good evening";
   }, []);
 
   const displayName = useMemo(
     () =>
       email
-        ? email.split('@')[0]?.replace(/\b\w/g, (c) => c.toUpperCase()) ?? 'Athlete'
+        ? (email
+            .split("@")[0]
+            ?.replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? "Athlete")
         : participantId,
     [email, participantId],
   );
@@ -88,16 +121,15 @@ export function HomeScreen() {
   const todayIdx = (new Date().getDay() + 6) % 7; // Mon=0
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <RepRightHeader />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+        showsVerticalScrollIndicator={false}>
         {/* Greeting */}
         <Text style={styles.greeting}>
-          {greeting},{'\n'}
+          {greeting},{"\n"}
           <Text style={styles.greetingName}>{displayName}</Text>
         </Text>
         <Text style={styles.subGreeting}>READY FOR YOUR MORNING LIFT?</Text>
@@ -105,7 +137,7 @@ export function HomeScreen() {
         {/* CTA */}
         <PrimaryButton
           title="START DEADLIFT SESSION ▶"
-          onPress={() => nav.navigate('Workout')}
+          onPress={() => nav.navigate("Workout")}
           style={styles.heroCta as ViewStyle}
         />
 
@@ -113,14 +145,30 @@ export function HomeScreen() {
         <View style={styles.lastCard}>
           {/* Decorative icon */}
           <View style={styles.lastDecor} pointerEvents="none">
-            <Ionicons name="fitness-outline" size={100} color={colors.primary_green} style={{ opacity: 0.08 }} />
+            <Ionicons
+              name="fitness-outline"
+              size={100}
+              color={colors.primary_green}
+              style={{ opacity: 0.08 }}
+            />
           </View>
 
           <View style={styles.lastCardHeader}>
             <Text style={styles.lastCardLabel}>LAST SESSION</Text>
             {lastScore != null ? (
-              <View style={[styles.scorePill, { backgroundColor: scoreBadgeColor(lastScore) + '18', borderColor: scoreBadgeColor(lastScore) + '30' }]}>
-                <Text style={[styles.scorePillTxt, { color: scoreBadgeColor(lastScore) }]}>
+              <View
+                style={[
+                  styles.scorePill,
+                  {
+                    backgroundColor: scoreBadgeColor(lastScore) + "18",
+                    borderColor: scoreBadgeColor(lastScore) + "30",
+                  },
+                ]}>
+                <Text
+                  style={[
+                    styles.scorePillTxt,
+                    { color: scoreBadgeColor(lastScore) },
+                  ]}>
                   {lastScore}%
                 </Text>
               </View>
@@ -128,12 +176,12 @@ export function HomeScreen() {
           </View>
 
           <Text style={styles.lastCardTitle}>
-            {lastIso ? `${formatDate(lastIso)} SUMMARY` : 'NO SESSION YET'}
+            {lastIso ? `${formatDate(lastIso)} SUMMARY` : "NO SESSION YET"}
           </Text>
           <Text style={styles.lastCardMeta}>
             {lastIso
-              ? `Score: ${lastScore ?? '—'}%  ·  Latest deadlift session`
-              : 'Start a lift to build your history'}
+              ? `Score: ${lastScore ?? "—"}%  ·  Latest deadlift session`
+              : "Start a lift to build your history"}
           </Text>
         </View>
 
@@ -143,15 +191,15 @@ export function HomeScreen() {
             <Text style={[styles.statVal, { color: colors.primary_green }]}>
               {sessionCount}
             </Text>
-            <Text style={styles.statLabel}>TOTAL{'\n'}SESSIONS</Text>
+            <Text style={styles.statLabel}>TOTAL{"\n"}SESSIONS</Text>
           </View>
           <View style={styles.statTile}>
             <Text style={styles.statVal}>
-              <Text style={{ color: colors.accent_yellow }}>12</Text>
+              <Text style={{ color: colors.accent_yellow }}>
+                {currentStreak}
+              </Text>
             </Text>
-            <Text style={styles.statLabel}>
-              CURRENT{'\n'}STREAK 🔥
-            </Text>
+            <Text style={styles.statLabel}>CURRENT{"\n"}STREAK 🔥</Text>
           </View>
         </View>
 
@@ -163,30 +211,41 @@ export function HomeScreen() {
               key={`${s.date}-${i}`}
               style={[
                 styles.activityRow,
-                { borderLeftColor: s.score >= 70 ? colors.primary_green : colors.accent_red },
-              ]}
-            >
+                {
+                  borderLeftColor:
+                    s.score >= 70 ? colors.primary_green : colors.accent_red,
+                },
+              ]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.activityTitle}>Deadlift · Form session</Text>
+                <Text style={styles.activityTitle}>
+                  Deadlift · Form session
+                </Text>
                 <Text style={styles.activityDate}>{formatDate(s.date)}</Text>
               </View>
               <Text
                 style={[
                   styles.activityScore,
                   { color: scoreBadgeColor(s.score) },
-                ]}
-              >
+                ]}>
                 {s.score}%
               </Text>
             </View>
           ))
         ) : (
-          <View style={[styles.activityRow, { borderLeftColor: colors.border_subtle }]}>
+          <View
+            style={[
+              styles.activityRow,
+              { borderLeftColor: colors.border_subtle },
+            ]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.activityTitle}>Deadlift · Form drill</Text>
-              <Text style={styles.activityDate}>Awaiting logged session data</Text>
+              <Text style={styles.activityDate}>
+                Awaiting logged session data
+              </Text>
             </View>
-            <Text style={[styles.activityScore, { color: colors.text_muted }]}>—</Text>
+            <Text style={[styles.activityScore, { color: colors.text_muted }]}>
+              —
+            </Text>
           </View>
         )}
 
@@ -201,7 +260,11 @@ export function HomeScreen() {
                   i === todayIdx ? styles.barActive : styles.barInactive,
                 ]}
               />
-              <Text style={[styles.barLabel, i === todayIdx && { color: colors.primary_green }]}>
+              <Text
+                style={[
+                  styles.barLabel,
+                  i === todayIdx && { color: colors.primary_green },
+                ]}>
                 {label}
               </Text>
             </View>
@@ -236,7 +299,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.captionCaps + 3,
     fontFamily: typography.fontFamily.medium,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   heroCta: { marginTop: 24, borderRadius: 16, minHeight: 72 },
@@ -246,15 +309,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg_elevated,
     borderRadius: 16,
     padding: 22,
-    overflow: 'hidden',
+    overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
   },
-  lastDecor: { position: 'absolute', bottom: -10, right: -10 },
+  lastDecor: { position: "absolute", bottom: -10, right: -10 },
   lastCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   lastCardLabel: {
@@ -262,7 +325,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.captionCaps + 2,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   scorePill: {
     paddingHorizontal: 12,
@@ -287,7 +350,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
   },
 
-  statsRow: { flexDirection: 'row', gap: 14, marginTop: 22 },
+  statsRow: { flexDirection: "row", gap: 14, marginTop: 22 },
   statTile: {
     flex: 1,
     backgroundColor: colors.surface_v3,
@@ -307,7 +370,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.medium,
     fontSize: typography.fontSize.captionCaps + 1,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   sectionTitle: {
@@ -317,11 +380,11 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.bodySm,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.bg_elevated,
     borderRadius: 12,
     padding: 16,
@@ -335,12 +398,17 @@ const styles = StyleSheet.create({
     color: colors.text_primary,
     fontSize: typography.fontSize.bodySm,
   },
-  activityDate: { color: colors.text_muted, fontSize: 12, marginTop: 4, fontFamily: typography.fontFamily.regular },
+  activityDate: {
+    color: colors.text_muted,
+    fontSize: 12,
+    marginTop: 4,
+    fontFamily: typography.fontFamily.regular,
+  },
   activityScore: { fontFamily: typography.fontFamily.bold, fontSize: 17 },
 
-  barsWrap: { flexDirection: 'row', gap: 6, alignItems: 'flex-end' },
-  barCol: { alignItems: 'center', flex: 1 },
-  bar: { width: '100%', maxWidth: 32, borderRadius: 999, height: 52 },
+  barsWrap: { flexDirection: "row", gap: 6, alignItems: "flex-end" },
+  barCol: { alignItems: "center", flex: 1 },
+  bar: { width: "100%", maxWidth: 32, borderRadius: 999, height: 52 },
   barActive: { backgroundColor: colors.primary_green },
   barInactive: { backgroundColor: colors.bg_high },
   barLabel: {

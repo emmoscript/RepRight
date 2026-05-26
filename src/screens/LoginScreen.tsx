@@ -1,166 +1,141 @@
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useState } from 'react';
+import { useNavigation } from "@react-navigation/native";
+import React, { useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
+  ActivityIndicator,
   StyleSheet,
   Text,
+  TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
 
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { RepRightHeader } from '@/components/RepRightHeader';
-import { UnderlineField } from '@/components/UnderlineField';
-import type { RootStackParamList } from '@/navigation/routeTypes';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { useAuthStore } from '@/store/authStore';
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { useAuthStore } from "@/store/authStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
 
 export function LoginScreen() {
-  const nav = useNavigation<Nav>();
-  const setSession = useAuthStore((s) => s.setSession);
-  const participantId = useAuthStore((s) => s.participantId);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const nav = useNavigation();
+  const { signIn, isLoading, error } = useAuthStore();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const handleLogin = async () => {
+    console.log("\n=== LOGIN BUTTON PRESSED ===");
+    console.log("Email:", email);
+    console.log("Email trimmed length:", email.trim().length);
+    console.log("Password length:", password.length);
+
+    if (!email.trim() || !password.trim()) {
+      console.error("ERROR: Email or password is empty");
+      return;
+    }
+
+    try {
+      console.log("Calling signIn from auth store...");
+      console.log("Current isLoading state:", isLoading);
+      console.log("Current error state:", error);
+
+      await signIn(email, password);
+
+      console.log("Sign in successful, navigating to MainTabs");
+      nav.navigate("MainTabs" as never);
+    } catch (err) {
+      console.error("Exception caught in handleLogin:", err);
+      console.error(
+        "Error type:",
+        err instanceof Error ? err.constructor.name : typeof err,
+      );
+      console.error(
+        "Error message:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flex}
-    >
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
-        <RepRightHeader variant="auth" showBack />
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.sub}>Log in to track your progress and hit your goals.</Text>
+    <View style={styles.root}>
+      <Text style={styles.title}>Log in</Text>
 
-          <View style={{ height: 20 }} />
+      <Text style={styles.label}>Email</Text>
+      <TextInput
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@university.edu"
+        placeholderTextColor={colors.text_muted}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        editable={!isLoading}
+        style={styles.input}
+      />
 
-          <UnderlineField
-            label="Email address"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@university.edu"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+      <Text style={[styles.label, { marginTop: 16 }]}>Password</Text>
+      <TextInput
+        value={password}
+        onChangeText={setPassword}
+        placeholder="••••••••"
+        placeholderTextColor={colors.text_muted}
+        secureTextEntry
+        editable={!isLoading}
+        style={styles.input}
+      />
 
-          <View style={{ marginBottom: 4 }}>
-            <UnderlineField
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter password"
-              secureTextEntry
-              autoCapitalize="none"
-            />
-          </View>
-          <Pressable style={styles.forgotWrap} accessibilityRole="button">
-            <Text style={styles.forgotTxt}>Forgot password?</Text>
-          </Pressable>
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
-          <PrimaryButton
-            title="Log In →"
-            style={{ marginTop: 28 }}
-            onPress={() => {
-              if (email.trim()) setSession(email.trim(), participantId);
-              nav.navigate('MainTabs', { screen: 'HomeMain' });
-            }}
-          />
+      <PrimaryButton
+        title={isLoading ? "Logging in..." : "Log in"}
+        onPress={handleLogin}
+        disabled={isLoading || !email.trim() || !password.trim()}
+        style={{ marginTop: 24 }}
+      />
 
-          <View style={styles.divWrap}>
-            <View style={styles.divLine} />
-            <Text style={styles.divTxt}>Or continue with</Text>
-            <View style={styles.divLine} />
-          </View>
-
-          <View style={styles.socialRow}>
-            <Pressable style={styles.socialChip} accessibilityRole="button">
-              <Ionicons name="logo-google" size={20} color={colors.text_primary} />
-              <Text style={styles.socialLab}>Google</Text>
-            </Pressable>
-            <Pressable style={styles.socialChip} accessibilityRole="button">
-              <Ionicons name="logo-apple" size={22} color={colors.text_primary} />
-              <Text style={styles.socialLab}>Apple</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.foot}>
-            <Text style={styles.footMuted}>{`Don't have an account? `}</Text>
-            <Pressable onPress={() => nav.navigate('Signup')} accessibilityRole="link">
-              <Text style={styles.footLink}>Sign up</Text>
-            </Pressable>
-          </View>
-          <View style={{ height: 24 }} />
-        </ScrollView>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      <Text style={styles.signupPrompt}>
+        Don't have an account?{" "}
+        <Text
+          onPress={() => nav.navigate("Signup" as never)}
+          style={styles.signupLink}>
+          Sign up
+        </Text>
+      </Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg_surface_alt },
-  safeTop: { flex: 1 },
-  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 32 },
-  title: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.screenTitle - 8,
-    color: colors.text_primary,
-    letterSpacing: -0.8,
-    textTransform: 'capitalize',
-  },
-  sub: {
-    marginTop: 12,
-    color: colors.text_secondary,
-    fontSize: typography.fontSize.body,
-    fontFamily: typography.fontFamily.regular,
-    lineHeight: 24,
-  },
-  forgotWrap: { alignSelf: 'flex-end', marginBottom: -6 },
-  forgotTxt: { color: colors.primary_green, fontFamily: typography.fontFamily.semibold, fontSize: typography.fontSize.captions },
-  divWrap: { flexDirection: 'row', alignItems: 'center', marginVertical: 28 },
-  divLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border_subtle },
-  divTxt: {
-    color: colors.text_muted,
-    marginHorizontal: 12,
-    fontSize: typography.fontSize.captions,
-    fontFamily: typography.fontFamily.medium,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  socialRow: { flexDirection: 'row', gap: 12 },
-  socialChip: {
+  root: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    minHeight: 52,
-    borderRadius: 14,
-    backgroundColor: colors.surface_low,
-    borderWidth: 1,
-    borderColor: colors.border_subtle,
+    backgroundColor: colors.bg_v3,
+    padding: 24,
+    justifyContent: "center",
   },
-  socialLab: { fontFamily: typography.fontFamily.semibold, color: colors.text_primary, fontSize: 14 },
-  foot: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginTop: 28,
-    alignItems: 'center',
-  },
-  footMuted: { color: colors.text_muted, fontSize: typography.fontSize.bodySm },
-  footLink: {
+  title: {
+    fontSize: 28,
     fontFamily: typography.fontFamily.bold,
+    color: colors.text_primary,
+    marginBottom: 32,
+  },
+  label: {
+    color: colors.text_secondary,
+    fontSize: 14,
+    fontFamily: typography.fontFamily.medium,
+  },
+  input: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: colors.border_medium,
+    borderRadius: 10,
+    padding: 14,
+    color: colors.text_primary,
+    fontSize: 16,
+  },
+  errorText: { color: colors.accent_red, fontSize: 13, marginTop: 8 },
+  signupPrompt: {
+    marginTop: 24,
+    textAlign: "center",
+    color: colors.text_secondary,
+    fontSize: 14,
+  },
+  signupLink: {
     color: colors.primary_green,
-    fontSize: typography.fontSize.bodySm,
+    fontFamily: typography.fontFamily.semibold,
   },
 });
