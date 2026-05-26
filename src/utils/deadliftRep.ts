@@ -38,10 +38,10 @@ export const DEADLIFT_REP_THRESH = {
   returnGlitchMaxAboveStanding: 0.12,
   /** Do not re-arm lockout below a depth above this (same glitches). */
   lockoutRearmMaxAboveStanding: 0.16,
-  /** Abandon need_lockout after this long without a count (prevents walk-to-camera false lockouts). */
-  maxLockoutWaitMs: 4000,
+  /** Abandon need_lockout only when stuck at bottom this long (slow reps get 12s+). */
+  maxLockoutWaitMs: 12000,
   /** Reject lockout count if bottom was armed longer ago than this. */
-  maxArmAgeForCount: 4000,
+  maxArmAgeForCount: 12000,
   /** Min hip keypoint confidence to allow a rep COUNT. */
   minHipScoreForCount: 0.22,
   /** Armed bottom must clear bottomGate by at least this (blocks shallow false-arms). */
@@ -54,11 +54,17 @@ export const DEADLIFT_REP_THRESH = {
   /** Min ascent from armed bottom to lockout (full rep ROM — primary count gate). */
   repRomCompleteNorm: 0.062,
   /** Ignore back-to-back counts within this window. */
-  minMsBetweenReps: 1200,
+  minMsBetweenReps: 900,
   /** Min time from bottom-arm to lockout count (blocks flicker double-counts). */
   minMsFromArmToCount: 700,
   /** After a COUNT, block shallow setup-arms for this window (walk-off / rack false reps). */
-  postCountShallowArmBlockMs: 2800,
+  postCountShallowArmBlockMs: 2200,
+  /** Min frames with hips below bottom gate while armed (blocks walk-to-camera false reps). */
+  minDeepHoldFrames: 4,
+  /** stale_reset only when peak ascent is below this fraction of full ROM. */
+  staleResetMaxAscentFrac: 0.22,
+  /** Do not re-arm lockout when hips are above this offset from lockout line. */
+  lockoutRearmUpperRomSlack: 0.038,
   /** During post-count window, armed depth must reach at least bottomGate + this. */
   postCountMinArmDepthBeyondGate: 0.040,
   /** EMA alpha for hip Y used by rep FSM (raw keypoints flicker in side view). */
