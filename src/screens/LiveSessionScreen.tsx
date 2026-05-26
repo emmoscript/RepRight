@@ -51,11 +51,13 @@ import {
   getModel,
   getMockPose,
   initModel,
+  KEYPOINTS,
   keypointsFromMovenetOutput,
   type PoseResult,
 } from '@/modules/movenet';
 import { analyzePose } from '@/modules/analyzer';
 import { generateFeedback } from '@/modules/feedback';
+import { sessionTrace } from '@/modules/sessionTrace';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { useSessionResultStore } from '@/store/sessionResultStore';
@@ -64,7 +66,12 @@ import { typography } from '@/theme/typography';
 import { barbellProxyFromWrists } from '@/utils/barbellProxy';
 import type { DeadliftFormCue } from '@/utils/deadliftPhase';
 import { inferDeadliftFormCue, lateralHipHingeDegrees } from '@/utils/deadliftPhase';
-import { DEADLIFT_REP_THRESH, primaryHipY } from '@/utils/deadliftRep';
+import {
+  DEADLIFT_REP_THRESH,
+  primaryHipY,
+  smoothHipY,
+  standingHipYFromBaseline,
+} from '@/utils/deadliftRep';
 import { alignPoseToPortraitOverlay } from '@/utils/orientPose';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
 import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
@@ -184,6 +191,7 @@ export function LiveSessionScreen() {
   const [audioOn, setAudioOn] = useState(true);
   const audioOnRef = useRef(true);
   const [reps, setReps] = useState(0);
+  const repsRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
   /** Full-workout quit (discard in-progress); not used for finishing the current set. */
   const [showQuitWorkoutModal, setShowQuitWorkoutModal] = useState(false);
@@ -200,9 +208,10 @@ export function LiveSessionScreen() {
   const detectedInvalidStreakRef = useRef(0);
   const poseInvalidStreakRef = useRef(0);
   const poseRecoverStreakRef = useRef(0);
-  const repPhaseRef = useRef<'need_setup' | 'need_lockout'>('need_setup');
+  const repPhaseRef = useRef<'need_return' | 'need_setup' | 'need_lockout'>('need_setup');
   const setupStreakRef = useRef(0);
   const lockoutStreakRef = useRef(0);
+  const returnStreakRef = useRef(0);
   const activeEnteredRef = useRef(false);
   const poseRef = useRef<PoseResult | null>(null);
   const historyRef = useRef<PoseResult[]>([]);
@@ -211,6 +220,9 @@ export function LiveSessionScreen() {
   const didLogOnce = useRef(false);
   /** Dev: log VisionCamera orientation after countdown only when it changes. */
   const lastLoggedOrientation = useRef<string>('');
+  const prevFlowTraceRef = useRef<Flow>('search');
+  const inferCountRef = useRef(0);
+  const inferWindowStartRef = useRef(0);
   /** Wrist-proxy “floor” at end of setup (max Y near shins)—not latched when standing tall at session start. */
   const barFloorBaselineRef = useRef<number | null>(null);
   /** Tracks deepest bar proxy (max Y) while arming setup for current rep cycle. */
@@ -220,6 +232,12 @@ export function LiveSessionScreen() {
   /** Snapshot of deepest hip Y when switching to need_lockout (ascent requires this floor). */
   const armedDeepHipYRef = useRef(0);
   const coachCueRef = useRef<DeadliftFormCue>('UNKNOWN');
+  /** Standing hip Y (median) sampled right after countdown — rep gates are relative to this. */
+  const standingHipYRef = useRef<number | null>(null);
+  const baselineHipSamplesRef = useRef<number[]>([]);
+  const lastRepAtRef = useRef(0);
+  const armedAtRef = useRef(0);
+  const hipSmoothRef = useRef<number | null>(null);
   /** Biomechanical cue streak → banner after stable detection (with modal gate). */
   const formErrStreakRef = useRef(0);
   /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
@@ -255,12 +273,30 @@ export function LiveSessionScreen() {
     flowRef.current = flow;
   }, [flow]);
 
+  useEffect(() => {
+    if (prevFlowTraceRef.current !== flow) {
+      sessionTrace.flow(prevFlowTraceRef.current, flow);
+      prevFlowTraceRef.current = flow;
+      if (flow === 'active' && activeEnteredRef.current) {
+        sessionTrace.session('lift_resumed', { mock: useMock });
+      } else if (flow === 'active') {
+        sessionTrace.session('lift_started', { mock: useMock, continued: continuedWorkout });
+        inferCountRef.current = 0;
+        inferWindowStartRef.current = Date.now();
+      }
+    }
+  }, [flow, useMock, continuedWorkout]);
+
   /** Dev: allow one-shot tensor log again after leaving this screen. */
   useEffect(() => {
     if (isFocused) return;
     didLogOnce.current = false;
     lastLoggedOrientation.current = '';
   }, [isFocused]);
+
+  useEffect(() => {
+    repsRef.current = reps;
+  }, [reps]);
 
   useEffect(() => {
     audioOnRef.current = audioOn;
@@ -339,6 +375,8 @@ export function LiveSessionScreen() {
       const ready = ok && getModel() != null;
       setModelReady(ready);
       setUseMock(__DEV__ && !ready);
+      sessionTrace.model(ready ? 'ready' : 'unavailable', { ok, ready });
+      if (__DEV__ && !ready) sessionTrace.model('mock_fallback');
     })();
   }, []);
 
@@ -362,14 +400,42 @@ export function LiveSessionScreen() {
     setUiPose(pose);
 
     const stage = flowRef.current;
+    const hipY = primaryHipY(pose);
+    const poseValidNow =
+      stage === 'search' || stage === 'detected' ? isPoseValid(pose) : isPoseStableForLiftTracking(pose);
+
+    if (stage === 'active' || stage === 'pose_lost') {
+      const lh = pose.keypoints[KEYPOINTS.LEFT_HIP]?.score;
+      const lk = pose.keypoints[KEYPOINTS.LEFT_KNEE]?.score;
+      const la = pose.keypoints[KEYPOINTS.LEFT_ANKLE]?.score;
+      sessionTrace.poseSample(stage, {
+        hipY,
+        repPhase: repPhaseRef.current,
+        reps: repsRef.current,
+        valid: poseValidNow,
+        lh,
+        lk,
+        la,
+      });
+    }
+
     if (stage === 'active') {
       const bar = barbellProxyFromWrists(pose);
 
       let displacement = 0;
-      const y = primaryHipY(pose);
+      const rawY = hipY;
+      const y =
+        rawY != null
+          ? (hipSmoothRef.current = smoothHipY(hipSmoothRef.current, rawY))
+          : null;
+      const repPhaseBefore = repPhaseRef.current;
 
       if (repPhaseRef.current === 'need_setup') {
-        if (bar != null && y != null && y > DEADLIFT_REP_THRESH.setupMinY * 0.92) {
+        const setupBarGate =
+          standingHipYRef.current != null
+            ? standingHipYRef.current + DEADLIFT_REP_THRESH.setupDropBelowStanding * 0.85
+            : null;
+        if (bar != null && y != null && (setupBarGate == null || y > setupBarGate)) {
           barPeakYSetupRef.current = Math.max(barPeakYSetupRef.current, bar.y);
         }
       }
@@ -382,20 +448,47 @@ export function LiveSessionScreen() {
         coachCueRef.current = inferDeadliftFormCue(hingeDeg, displacement, displacement < 0.06);
       }
 
-      if (y != null) {
-        if (repPhaseRef.current === 'need_setup') {
-          if (y > DEADLIFT_REP_THRESH.setupMinY) {
+      if (y != null && standingHipYRef.current != null) {
+        const stand = standingHipYRef.current;
+        const bottomGate = stand + DEADLIFT_REP_THRESH.setupDropBelowStanding;
+        const lockoutTopY = stand + DEADLIFT_REP_THRESH.lockoutStandingSlack;
+        const returnGate = stand + DEADLIFT_REP_THRESH.returnToStandingMargin;
+
+        if (repPhaseRef.current === 'need_return') {
+          setupStreakRef.current = 0;
+          lockoutStreakRef.current = 0;
+          if (y >= returnGate) {
+            returnStreakRef.current += 1;
+            if (returnStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveReturnFrames) {
+              repPhaseRef.current = 'need_setup';
+              returnStreakRef.current = 0;
+              sessionTrace.repPhase(repPhaseBefore, 'need_setup', {
+                hipY: y,
+                standing: stand,
+                returnGate,
+              });
+            }
+          } else {
+            returnStreakRef.current = 0;
+          }
+        } else if (repPhaseRef.current === 'need_setup') {
+          if (y > bottomGate) {
             deepestSetupHipYRef.current = Math.max(deepestSetupHipYRef.current, y);
             setupStreakRef.current += 1;
             lockoutStreakRef.current = 0;
             if (setupStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveSetupFrames) {
-              armedDeepHipYRef.current = Math.max(
-                deepestSetupHipYRef.current,
-                DEADLIFT_REP_THRESH.setupMinY,
-              );
+              armedDeepHipYRef.current = deepestSetupHipYRef.current;
               deepestSetupHipYRef.current = 0;
               repPhaseRef.current = 'need_lockout';
               setupStreakRef.current = 0;
+              armedAtRef.current = Date.now();
+              sessionTrace.repPhase(repPhaseBefore, 'need_lockout', {
+                hipY: y,
+                armed: armedDeepHipYRef.current,
+                standing: stand,
+                bottomGate,
+                lockoutTopY,
+              });
               const peak = barPeakYSetupRef.current;
               if (peak > 0) {
                 barFloorBaselineRef.current = peak;
@@ -405,31 +498,65 @@ export function LiveSessionScreen() {
               barPeakYSetupRef.current = 0;
             }
           } else {
-            setupStreakRef.current = 0;
-            barPeakYSetupRef.current = 0;
-            deepestSetupHipYRef.current = 0;
+            setupStreakRef.current = Math.max(0, setupStreakRef.current - 1);
+            if (setupStreakRef.current === 0) {
+              barPeakYSetupRef.current = 0;
+              deepestSetupHipYRef.current = 0;
+            }
           }
         } else {
           const deep = armedDeepHipYRef.current;
           const ascent = deep > 0 ? deep - y : 0;
-          const bottomOk = deep >= DEADLIFT_REP_THRESH.setupMinY;
+          const bottomOk = deep >= bottomGate;
+          const armAgeMs = Date.now() - armedAtRef.current;
+          const romComplete = ascent >= DEADLIFT_REP_THRESH.repRomCompleteNorm;
+          const atLockoutHeight = y <= lockoutTopY;
           if (
             bottomOk &&
-            y < DEADLIFT_REP_THRESH.lockoutMaxY &&
-            ascent >= DEADLIFT_REP_THRESH.minHipAscentNorm
+            romComplete &&
+            atLockoutHeight &&
+            armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount
           ) {
             lockoutStreakRef.current += 1;
             setupStreakRef.current = 0;
             if (lockoutStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveLockoutFrames) {
-              lockoutStreakRef.current = 0;
-              armedDeepHipYRef.current = 0;
-              repPhaseRef.current = 'need_setup';
-              setReps((r) => r + 1);
-              void impactAsync(ImpactFeedbackStyle.Medium);
+              const now = Date.now();
+              if (now - lastRepAtRef.current >= DEADLIFT_REP_THRESH.minMsBetweenReps) {
+                lastRepAtRef.current = now;
+                lockoutStreakRef.current = 0;
+                armedDeepHipYRef.current = 0;
+                armedAtRef.current = 0;
+                returnStreakRef.current = 0;
+                repPhaseRef.current = 'need_return';
+                setReps((r) => {
+                  const next = r + 1;
+                  sessionTrace.rep('COUNT', {
+                    reps: next,
+                    hipY: y,
+                    rawHipY: rawY,
+                    armedWas: deep,
+                    standing: stand,
+                    lockoutTopY,
+                    ascent,
+                    armAgeMs,
+                  });
+                  return next;
+                });
+                void impactAsync(ImpactFeedbackStyle.Medium);
+              } else {
+                lockoutStreakRef.current = 0;
+              }
             }
           } else {
             lockoutStreakRef.current = 0;
           }
+        }
+      } else if (y != null && standingHipYRef.current == null) {
+        hipSmoothRef.current = y;
+        baselineHipSamplesRef.current.push(y);
+        if (baselineHipSamplesRef.current.length >= DEADLIFT_REP_THRESH.baselineFrameCount) {
+          standingHipYRef.current = standingHipYFromBaseline(baselineHipSamplesRef.current);
+          sessionTrace.rep('baseline', { standing: standingHipYRef.current });
         }
       } else if (repPhaseRef.current === 'need_lockout') {
         lockoutStreakRef.current = 0;
@@ -438,8 +565,13 @@ export function LiveSessionScreen() {
 
       if (stage === 'active' && !showQuitModalRef.current) {
       const analysis = analyzePose(pose, historyRef.current.slice(-16));
-      if (analysis.errors.length > 0) formErrStreakRef.current += 1;
-      else formErrStreakRef.current = 0;
+      if (analysis.errors.length > 0) {
+        formErrStreakRef.current += 1;
+        sessionTrace.analyzer(
+          analysis.phase,
+          analysis.errors.map((e) => e.errorId),
+        );
+      } else formErrStreakRef.current = 0;
 
       const fb = generateFeedback(analysis, lastFormAudioAtRef.current);
       const showBn =
@@ -503,31 +635,25 @@ export function LiveSessionScreen() {
 
       if (shouldLogInferenceBundle) {
         didLogOnce.current = true;
-        console.log('[output] kind:', kind, 'length:', values.length);
-        console.log(
-          '[output] first 9 values:',
-          values.slice(0, 9).map((v) => v.toFixed(3)),
-        );
-        // Flat tensor: kp i → y @ 3i, x @ 3i+1, score @ 3i+2 (MoveNet). Before alignPose / parsing.
-        if (values.length >= 51) {
-          const nose = { y: values[0], x: values[1], s: values[2] };
-          const lShoulder = { y: values[15], x: values[16], s: values[17] };
-          const lHip = { y: values[33], x: values[34], s: values[35] };
-          const lAnkle = { y: values[45], x: values[46], s: values[47] };
-          console.log('[RAW] nose:', JSON.stringify(nose));
-          console.log('[RAW] lShoulder:', JSON.stringify(lShoulder));
-          console.log('[RAW] lHip:', JSON.stringify(lHip));
-          console.log('[RAW] lAnkle:', JSON.stringify(lAnkle));
-        }
+        sessionTrace.rawTensor(kind, values);
       }
       try {
         const liftRunning =
           flowRef.current === 'active' || flowRef.current === 'pose_lost';
+        if (liftRunning) {
+          inferCountRef.current += 1;
+          const winMs = Date.now() - inferWindowStartRef.current;
+          if (winMs >= 2500) {
+            sessionTrace.inferFps((inferCountRef.current * 1000) / winMs, kind);
+            inferCountRef.current = 0;
+            inferWindowStartRef.current = Date.now();
+          }
+        }
         if (__DEV__ && liftRunning) {
           const o = String(frameOrientation);
           if (lastLoggedOrientation.current !== o) {
             lastLoggedOrientation.current = o;
-            console.log('[LiveSession] frame.orientation →', o);
+            sessionTrace.infer('orientation', { orientation: o });
           }
         }
         const raw =
@@ -686,11 +812,17 @@ export function LiveSessionScreen() {
         repPhaseRef.current = 'need_setup';
         setupStreakRef.current = 0;
         lockoutStreakRef.current = 0;
+        returnStreakRef.current = 0;
         barFloorBaselineRef.current = null;
         coachCueRef.current = 'SETTING_UP';
         barPeakYSetupRef.current = 0;
         deepestSetupHipYRef.current = 0;
         armedDeepHipYRef.current = 0;
+        standingHipYRef.current = null;
+        baselineHipSamplesRef.current = [];
+        lastRepAtRef.current = 0;
+        armedAtRef.current = 0;
+        hipSmoothRef.current = null;
       }
     } else if (flow !== 'pose_lost') {
       activeEnteredRef.current = false;

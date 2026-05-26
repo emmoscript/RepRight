@@ -188,9 +188,36 @@ yarn ios
 
 ### Android
 
+Requires **Android Studio** (bundled **JBR**, typically JDK **17–23**) — **not** Oracle **Java 24+** alone on `PATH` (Gradle will fail). `npm run android` runs `scripts/run-expo-android.cjs`, which prefers `JAVA_HOME` / `REPRIGHT_ANDROID_JDK` when they point to JDK 17–23, otherwise scans Android Studio installs (including **JetBrains Toolbox** paths) and common **Temurin** / **Microsoft** JDK folders.
+
+To see which JDK the script picks: `node scripts/run-expo-android.cjs --dry-jdk`
+
+The launcher also sets **`ANDROID_HOME`** and writes **`android/local.properties`** (`sdk.dir=…`) from `%LOCALAPPDATA%\Android\Sdk` when Gradle cannot find the SDK.
+
+**USB phone (dev client install / native rebuild):**
+
 ```bash
-yarn android
+npm install
+npm run android:device
 ```
+
+Uses `JAVA_HOME` only if it points to JDK 17–23; otherwise scans Android Studio’s `jbr` (and similar). Override with **the real JDK root** (folder that contains `bin\java.exe`):
+
+```powershell
+setx REPRIGHT_ANDROID_JDK "C:\Program Files\Eclipse Adoptium\jdk-17.0.14.7-hotspot"
+```
+
+(Use your actual path — not the words `full\path` from examples.) `setx` applies to **new** terminals; this repo’s launcher also reads the User variable so `--dry-jdk` can work in the **same** window after `setx`.
+
+Then start JS as usual: `npm run start:lan` or `npx expo start` (port **8081**).
+
+**Emulator / default device selection:**
+
+```bash
+npm run android
+```
+
+> **Note:** Until `adb devices` shows your phone as `device` (not `offline`), USB install cannot proceed — enable USB debugging and authorize the PC.
 
 > **Note:** The MoveNet Lightning `.tflite` model file (~3MB) is tracked via Git LFS.
 > Run `git lfs pull` after cloning to get it.

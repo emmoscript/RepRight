@@ -30,10 +30,11 @@ function fmtElapsed(sec: number) {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 
-const RING_SZ = 200;
+const RING_SZ = 240;
 /** Outer hit area — larger than SVG ring so the score clears the stroke with padding. */
-const RING_CONTAINER = 228;
-const R = 74;
+const RING_CONTAINER = 268;
+const R = 88;
+const RING_STROKE = 12;
 const C = 2 * Math.PI * R;
 
 function ringColor(sc: number) {
@@ -200,7 +201,7 @@ export function SessionCompleteScreen() {
 
   return (
     <View style={styles.root}>
-      <RepRightHeader />
+      <RepRightHeader variant="sessionComplete" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         <Text style={styles.h1}>Session Complete</Text>
@@ -211,11 +212,11 @@ export function SessionCompleteScreen() {
             <G transform={`rotate(-90 ${RING_SZ / 2} ${RING_SZ / 2})`}>
               <Circle
                 cx={RING_SZ / 2} cy={RING_SZ / 2} r={R}
-                stroke={colors.surface_v3} strokeWidth={14} fill="none"
+                stroke={colors.surface_v3} strokeWidth={RING_STROKE} fill="none"
               />
               <Circle
                 cx={RING_SZ / 2} cy={RING_SZ / 2} r={R}
-                stroke={rc} strokeWidth={14} fill="none"
+                stroke={rc} strokeWidth={RING_STROKE} fill="none"
                 strokeLinecap="round" strokeDasharray={arc}
               />
             </G>
@@ -223,10 +224,31 @@ export function SessionCompleteScreen() {
           <View style={styles.ringInnerOverlay} pointerEvents="none">
             <View style={styles.ringCenterStack}>
               <View style={styles.ringScoreInline}>
-                <Text style={styles.ringScoreBig}>{sc}</Text>
-                <Text style={styles.ringScoreFrac}>/100</Text>
+                <Text
+                  style={styles.ringScoreBig}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                  minimumFontScale={0.65}
+                >
+                  {sc}
+                </Text>
+                <Text
+                  style={styles.ringScoreFrac}
+                  adjustsFontSizeToFit
+                  numberOfLines={1}
+                  minimumFontScale={0.7}
+                >
+                  /100
+                </Text>
               </View>
-              <Text style={styles.ringRecoveryLbl}>Recovery Index</Text>
+              <Text
+                style={styles.ringRecoveryLbl}
+                adjustsFontSizeToFit
+                numberOfLines={1}
+                minimumFontScale={0.75}
+              >
+                Recovery Index
+              </Text>
             </View>
           </View>
         </View>
@@ -373,10 +395,10 @@ const miniStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg_v3 },
-  scroll: { paddingHorizontal: 24, paddingBottom: 64 },
+  scroll: { paddingHorizontal: 24, paddingTop: 14, paddingBottom: 64 },
 
   h1: {
-    marginTop: 10,
+    marginTop: 6,
     textAlign: 'center',
     color: colors.text_primary,
     fontSize: typography.fontSize.screenTitle - 10,
@@ -387,7 +409,7 @@ const styles = StyleSheet.create({
   },
 
   ringOuter: {
-    marginTop: 28,
+    marginTop: 16,
     width: RING_CONTAINER,
     height: RING_CONTAINER,
     alignSelf: 'center',
@@ -398,48 +420,54 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 40,
+    paddingHorizontal: 28,
+    paddingVertical: 28,
   },
   ringCenterStack: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
+    maxWidth: RING_SZ - RING_STROKE * 2 - 36,
   },
   ringScoreInline: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
+    maxWidth: '100%',
   },
   ringScoreBig: {
     fontFamily: typography.fontFamily.display,
-    fontSize: 60,
-    lineHeight: 64,
+    fontSize: 52,
+    lineHeight: 56,
     color: colors.text_primary,
     fontWeight: '700',
-    letterSpacing: -2,
+    letterSpacing: -1.5,
+    flexShrink: 1,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   ringScoreFrac: {
-    marginLeft: 4,
+    marginLeft: 3,
     fontFamily: typography.fontFamily.display,
-    fontSize: 26,
+    fontSize: 22,
+    lineHeight: 28,
     color: colors.text_secondary,
     fontWeight: '400',
     letterSpacing: 0,
+    flexShrink: 1,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
   ringRecoveryLbl: {
-    marginTop: 10,
+    marginTop: 6,
     color: colors.primary_green,
     fontFamily: typography.fontFamily.bold,
-    letterSpacing: 4,
-    fontSize: 10,
+    letterSpacing: 2,
+    fontSize: 9,
     textTransform: 'uppercase',
+    textAlign: 'center',
+    maxWidth: '100%',
   },
 
   eliteBadge: {
-    marginTop: 16,
+    marginTop: 8,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

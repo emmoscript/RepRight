@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -13,6 +13,7 @@ import { typography } from '@/theme/typography';
 import { clampMass, convertMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
 
 const SET_OPTS = [2, 3, 4, 5] as const;
+const WORKOUT_BG = require('../../assets/images/man-deadlifting.jpg');
 
 export function ConfigureSessionScreen() {
   const nav = useNavigation<MainTabCompositeNav>();
@@ -45,9 +46,15 @@ export function ConfigureSessionScreen() {
   const unitLabel = weightUnit === 'kg' ? 'kg' : 'lb';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <RepRightHeader />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={styles.root}>
+      <View style={styles.bgLayer} pointerEvents="none">
+        <Image source={WORKOUT_BG} style={styles.bgImage} resizeMode="contain" accessibilityIgnoresInvertColors />
+      </View>
+      <View style={styles.bgScrim} pointerEvents="none" />
+
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <RepRightHeader />
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Configure</Text>
         <Text style={styles.meta}>Performance session · v2.4</Text>
 
@@ -154,13 +161,29 @@ export function ConfigureSessionScreen() {
 
         <PrimaryButton title="START SESSION →" onPress={() => nav.navigate('LiveSession')} style={{ marginTop: 28 }} />
         <View style={{ height: 104 }} />
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg_v3 },
+  root: { flex: 1, backgroundColor: colors.bg_v3 },
+  /** Full viewport; `contain` shows the whole photo instead of cropping/zooming with `cover`. */
+  bgLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.bg_v3,
+  },
+  bgImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.26,
+  },
+  bgScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13, 13, 13, 0.74)',
+  },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   scroll: { paddingHorizontal: 24, paddingBottom: 32 },
   title: {
     marginTop: 8,

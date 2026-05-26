@@ -3,9 +3,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Icon, ICONS } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
-import { SvgDumbbellIcon, SvgPlayIcon, SvgTrendingUpIcon } from '@/components/icons/SvgUiIcons';
+import { SvgPlayIcon, SvgTrendingUpIcon } from '@/components/icons/SvgUiIcons';
 import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
 import { colors } from '@/theme/colors';
@@ -135,10 +136,8 @@ export function HomeScreen() {
         {/* Bento: Last session + quick stats */}
         <View style={styles.bentoRow}>
           <View style={styles.lastCard}>
-            <View style={styles.lastDecor}>
-              <View style={{ opacity: 0.2 }}>
-                <SvgDumbbellIcon size={72} color={colors.text_secondary} />
-              </View>
+            <View style={styles.lastDecor} pointerEvents="none">
+              <Icon name={ICONS.barbellOutline} size={76} color={colors.text_muted} />
             </View>
 
             <View style={styles.lastTop}>
@@ -181,7 +180,7 @@ export function HomeScreen() {
                 </View>
               </View>
               <View style={styles.lastMiniIcon}>
-                <SvgDumbbellIcon size={44} color={colors.text_secondary} />
+                <Icon name={ICONS.barbell} size={36} color={colors.primary_green} />
               </View>
             </View>
           </View>
@@ -326,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   miniStatSpacing: { marginBottom: 16 },
-  lastDecor: { position: 'absolute', bottom: -16, right: -16 },
+  lastDecor: { position: 'absolute', bottom: -12, right: -8, opacity: 0.14 },
 
   lastTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   lastTopTxt: { flex: 1, paddingRight: 10 },
@@ -389,7 +388,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -1,
   },
-  lastMiniIcon: { opacity: 0.2, marginBottom: -4 },
+  lastMiniIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.green_subtle_bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: -2,
+  },
 
   miniStat: {
     flex: 1,

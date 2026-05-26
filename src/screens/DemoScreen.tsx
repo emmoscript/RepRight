@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Icon, ICONS } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { SvgArrowForwardIcon, SvgBoltIcon, SvgCameraIcon, SvgInfoOutlineIcon } from '@/components/icons/SvgUiIcons';
+import { SvgArrowForwardIcon, SvgBoltIcon, SvgInfoOutlineIcon } from '@/components/icons/SvgUiIcons';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
@@ -74,7 +75,7 @@ export function DemoScreen() {
           <View style={styles.featureBodyPad}>
             <View style={styles.featureRow}>
               <View style={styles.featureIconCirc} collapsable={false}>
-                <SvgCameraIcon color={colors.primary_green} size={28} />
+                <Icon name={ICONS.videocamOutline} size={26} color={colors.primary_green} />
               </View>
               <View style={styles.featureTextCol}>
                 <Text style={styles.featureTitle}>Real-time computer vision</Text>
