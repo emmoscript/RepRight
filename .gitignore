@@ -44,8 +44,24 @@ yarn-debug.log*
 yarn-error.log*
 
 # Editor
-.vscode/settings.json
+.vscode/
 .idea/
+.swiftpm/
+*.xcconfig
+
+# Caches
+.metro-cache/
+.eslintcache
+.turbo/
+.pnpm-store/
+.eas/
+
+# Test coverage
+coverage/
+
+# Lock files (optional — uncomment if not versioning)
+# yarn.lock
+# package-lock.json
 
 # Claude project context (not for repo — kept in Claude Project only)
 .claude/
