@@ -32,25 +32,49 @@ export const DEADLIFT_REP_THRESH = {
    * Side-view keypoints rarely exceed a large rise above baseline — ROM is the primary signal.
    */
   lockoutStandingSlack: 0.014,
-  /** After lockout, hips must descend near standing before the next rep can arm. */
-  returnToStandingMargin: 0.012,
+  /** After lockout: hips must clear lockout zone (y rises past this). **Below** bottomGate. */
+  returnToStandingMargin: 0.030,
+  /** Ignore return/re-arm samples above this (walk-to-camera glitches). */
+  returnGlitchMaxAboveStanding: 0.12,
+  /** Do not re-arm lockout below a depth above this (same glitches). */
+  lockoutRearmMaxAboveStanding: 0.16,
+  /** Abandon need_lockout after this long without a count (prevents walk-to-camera false lockouts). */
+  maxLockoutWaitMs: 4000,
+  /** Reject lockout count if bottom was armed longer ago than this. */
+  maxArmAgeForCount: 4000,
+  /** Min hip keypoint confidence to allow a rep COUNT. */
+  minHipScoreForCount: 0.22,
+  /** Armed bottom must clear bottomGate by at least this (blocks shallow false-arms). */
+  minBottomClearanceBeyondGate: 0.030,
+  /** While waiting for lockout, re-arm if hips drop this much below current armed bottom. */
+  lockoutRearmMinDrop: 0.028,
   consecutiveSetupFrames: 3,
-  consecutiveLockoutFrames: 3,
+  consecutiveLockoutFrames: 2,
   consecutiveReturnFrames: 2,
   /** Min ascent from armed bottom to lockout (full rep ROM — primary count gate). */
   repRomCompleteNorm: 0.062,
   /** Ignore back-to-back counts within this window. */
-  minMsBetweenReps: 1800,
+  minMsBetweenReps: 1200,
   /** Min time from bottom-arm to lockout count (blocks flicker double-counts). */
   minMsFromArmToCount: 700,
+  /** After a COUNT, block shallow setup-arms for this window (walk-off / rack false reps). */
+  postCountShallowArmBlockMs: 2800,
+  /** During post-count window, armed depth must reach at least bottomGate + this. */
+  postCountMinArmDepthBeyondGate: 0.040,
   /** EMA alpha for hip Y used by rep FSM (raw keypoints flicker in side view). */
   hipSmoothAlpha: 0.32,
 } as const;
 
-/** Tallest posture during calibration = minimum Y (hips highest on screen). */
-export function standingHipYFromBaseline(samples: number[]): number {
+/** Median hip Y — stable standing estimate (min skews low if athlete hinges during countdown). */
+export function medianHipY(samples: number[]): number {
   if (samples.length === 0) return 0;
-  return Math.min(...samples);
+  const sorted = [...samples].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] ?? sorted[0]!;
+}
+
+/** Standing reference from calibration window (median, not min). */
+export function standingHipYFromBaseline(samples: number[]): number {
+  return medianHipY(samples);
 }
 
 /** Exponential moving average — dampens single-frame hip spikes. */
@@ -58,4 +82,16 @@ export function smoothHipY(prev: number | null, sample: number): number {
   if (prev == null) return sample;
   const a = DEADLIFT_REP_THRESH.hipSmoothAlpha;
   return prev + a * (sample - prev);
+}
+
+/** Hips trustworthy enough to increment rep counter (blocks proximity glitches). */
+export function hipsReliableForRepCount(pose: PoseResult): boolean {
+  const kp = pose.keypoints;
+  if (!kp || kp.length < 17) return false;
+  const lh = kp[KEYPOINTS.LEFT_HIP];
+  const rh = kp[KEYPOINTS.RIGHT_HIP];
+  if (!lh || !rh) return false;
+  const min = DEADLIFT_REP_THRESH.minHipScoreForCount;
+  if (lh.score >= min && rh.score >= min) return true;
+  return lh.score >= 0.35 || rh.score >= 0.35;
 }

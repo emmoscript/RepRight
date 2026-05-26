@@ -5,7 +5,7 @@ import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MainTabParamList } from '@/navigation/routeTypes';
-import { ConfigureSessionScreen } from '@/screens/ConfigureSessionScreen';
+import { WorkoutStackNavigator } from '@/navigation/WorkoutStackNavigator';
 import { HomeScreen } from '@/screens/HomeScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { StatsScreen } from '@/screens/StatsScreen';
@@ -58,7 +58,7 @@ export function MainTabNavigator() {
       />
       <Tab.Screen
         name="Workout"
-        component={ConfigureSessionScreen}
+        component={WorkoutStackNavigator}
         options={{
           title: 'Workout',
           tabBarIcon: ({ color, focused, size }) => (

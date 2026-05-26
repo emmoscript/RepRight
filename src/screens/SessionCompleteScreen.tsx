@@ -3,20 +3,26 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { randomUUID } from 'expo-crypto';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, Platform, TextInput } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, Platform, TextInput } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { calculateRepScore } from '@/modules/scoring';
-import { saveSession, type SessionLog } from '@/modules/session';
+import { saveSession, type SessionLog, type SessionSetSummary } from '@/modules/session';
 import { useSessionResultStore } from '@/store/sessionResultStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { clampMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
+import { clampSetReps, getSetTarget } from '@/utils/setPlan';
+import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from '@/components/RepsSlider';
+import {
+  buildWorkoutScoreMetrics,
+  type WorkoutSetResult,
+} from '@/utils/sessionScore';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -95,36 +101,115 @@ export function SessionCompleteScreen() {
     workoutSetSnapshots,
     appendWorkoutSetSnapshot,
   } = useSessionResultStore();
-  const { setCount: plannedSetCount, weightAmount, weightUnit } = useSessionConfigStore();
-  const patchWeight = useSessionConfigStore((s) => s.patch);
+  const {
+    setCount: plannedSetCount,
+    weightAmount,
+    weightUnit,
+    customSetPlan,
+    repsPerSet,
+    setPlans,
+    exercise,
+  } = useSessionConfigStore();
+  const applyNextSetTarget = useSessionConfigStore((s) => s.applyNextSetTarget);
   const { participantId } = useAuthStore();
   const [saved, setSaved] = useState(false);
-  /** Working weight on the bar for the *next* set (defaults to weight just used). */
-  const [nextWeightDraft, setNextWeightDraft] = useState(() => String(weightAmount));
 
-  useEffect(() => {
-    setNextWeightDraft(String(weightAmount));
-  }, [weightAmount]);
-
-  const setsProgressDisplay = `${currentSetNumber}/${plannedSetCount}`;
   const canAdvanceToNextSet = currentSetNumber < plannedSetCount;
 
-  const elapsedClock =
-    lastSetElapsedSec > 0
-      ? `${Math.floor(lastSetElapsedSec / 60)}:${String(lastSetElapsedSec % 60).padStart(2, '0')}`
-      : '—';
+  const completedSetTarget = useMemo(
+    () =>
+      getSetTarget(
+        { customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans },
+        currentSetNumber,
+      ),
+    [customSetPlan, plannedSetCount, repsPerSet, weightAmount, setPlans, currentSetNumber],
+  );
+  const nextSetNumber = currentSetNumber + 1;
+  const nextSetTarget = useMemo(
+    () =>
+      canAdvanceToNextSet
+        ? getSetTarget(
+            { customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans },
+            nextSetNumber,
+          )
+        : null,
+    [
+      canAdvanceToNextSet,
+      customSetPlan,
+      plannedSetCount,
+      repsPerSet,
+      weightAmount,
+      setPlans,
+      nextSetNumber,
+    ],
+  );
+
+  /** Working weight on the bar for the *next* set (pre-filled from plan). */
+  const [nextWeightDraft, setNextWeightDraft] = useState(() => String(completedSetTarget.weightAmount));
+  const [nextRepsDraft, setNextRepsDraft] = useState(repsPerSet);
+
+  useEffect(() => {
+    if (nextSetTarget == null) return;
+    setNextWeightDraft(String(nextSetTarget.weightAmount));
+    setNextRepsDraft(nextSetTarget.reps);
+  }, [nextSetTarget]);
 
   const volumeDisplay = useMemo(() => {
     if (lastSetReps <= 0) return '—';
-    const v = weightAmount * lastSetReps;
+    const v = completedSetTarget.weightAmount * lastSetReps;
     const rounded = Math.round(v * 10) / 10;
     const body = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
     return `${body} ${weightUnit === 'kg' ? 'kg' : 'lb'}`;
-  }, [lastSetReps, weightAmount, weightUnit]);
+  }, [lastSetReps, completedSetTarget.weightAmount, weightUnit]);
 
-  const repScore = useMemo(() => calculateRepScore(errors), [errors]);
-  const score = repScore.score;
+  const planSlice = useMemo(
+    () => ({ customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans }),
+    [customSetPlan, plannedSetCount, repsPerSet, weightAmount, setPlans],
+  );
+
+  const workoutSetResults = useMemo((): WorkoutSetResult[] => {
+    const bySet = new Map<number, WorkoutSetResult>();
+    for (const row of workoutSetSnapshots) {
+      bySet.set(row.setNumber, {
+        setNumber: row.setNumber,
+        reps: row.reps,
+        repsPlanned: getSetTarget(planSlice, row.setNumber).reps,
+        weightAmount: row.weightAmount,
+        weightUnit: row.weightUnit,
+        elapsedSec: row.elapsedSec,
+        formScore: row.scoreRounded,
+      });
+    }
+    bySet.set(currentSetNumber, {
+      setNumber: currentSetNumber,
+      reps: lastSetReps,
+      repsPlanned: completedSetTarget.reps,
+      weightAmount: completedSetTarget.weightAmount,
+      weightUnit,
+      elapsedSec: lastSetElapsedSec,
+      formScore: Math.round(calculateRepScore(errors).score),
+    });
+    return [...bySet.values()].sort((a, b) => a.setNumber - b.setNumber);
+  }, [
+    workoutSetSnapshots,
+    currentSetNumber,
+    lastSetReps,
+    completedSetTarget,
+    weightUnit,
+    lastSetElapsedSec,
+    errors,
+    planSlice,
+  ]);
+
+  const metrics = useMemo(
+    () => buildWorkoutScoreMetrics(workoutSetResults, errors),
+    [workoutSetResults, errors],
+  );
+
+  const score = metrics.overallScore;
   const sc = Math.round(score);
+  const formSc = Math.round(metrics.formScore);
+  const completionSc = Math.round(metrics.completionPct);
   const rc = ringColor(sc);
   const arc = `${(sc / 100) * C} ${C}`;
 
@@ -146,15 +231,15 @@ export function SessionCompleteScreen() {
   const onNextSet = () => {
     appendWorkoutSetSnapshot({
       setNumber: currentSetNumber,
-      weightAmount,
+      weightAmount: completedSetTarget.weightAmount,
       weightUnit,
       reps: lastSetReps,
       elapsedSec: lastSetElapsedSec,
-      scoreRounded: sc,
+      scoreRounded: formSc,
     });
     const parsed = parseMassDraft(nextWeightDraft);
-    const nextMass = clampMass(parsed ?? weightAmount, weightUnit);
-    patchWeight({ weightAmount: nextMass });
+    const nextMass = clampMass(parsed ?? completedSetTarget.weightAmount, weightUnit);
+    applyNextSetTarget(nextSetNumber, nextMass, nextRepsDraft);
     advanceToNextSet();
     nav.replace('LiveSession', { continuedWorkout: true });
   };
@@ -162,34 +247,50 @@ export function SessionCompleteScreen() {
   const onSave = async () => {
     if (saved) { goHome(); return; }
     const sessionId = randomUUID();
+    const endedAt = Date.now();
+    const setSummaries: SessionSetSummary[] = workoutSetResults.map((row) => ({
+      setNumber: row.setNumber,
+      repsCompleted: row.reps,
+      repsPlanned: row.repsPlanned,
+      weightAmount: row.weightAmount,
+      weightUnit: row.weightUnit,
+      elapsedSec: row.elapsedSec,
+      formScore: row.formScore,
+    }));
     const log: SessionLog = {
       sessionId,
       participantId,
       date: new Date().toISOString(),
-      sets: [
-        {
-          setNumber: currentSetNumber,
-          reps: [
-            {
-              repNumber: 1,
-              startTimestamp: startedAt,
-              endTimestamp: Date.now(),
-              score,
-              errors: Array.from(
-                new Map(
-                  errors.map((e) => [
-                    e.errorId,
-                    { errorId: e.errorId, frameCount: 1, totalFrames: 1 },
-                  ]),
-                ).values(),
-              ),
-            },
-          ],
-        },
-      ],
+      exercise,
+      setSummaries,
+      sets: setSummaries.map((st) => ({
+        setNumber: st.setNumber,
+        reps: [
+          {
+            repNumber: 1,
+            startTimestamp: startedAt,
+            endTimestamp: endedAt,
+            score: st.formScore,
+            errors:
+              st.setNumber === currentSetNumber
+                ? Array.from(
+                    new Map(
+                      errors.map((e) => [
+                        e.errorId,
+                        { errorId: e.errorId, frameCount: 1, totalFrames: 1 },
+                      ]),
+                    ).values(),
+                  )
+                : [],
+          },
+        ],
+      })),
       summary: {
-        totalReps: Math.max(0, lastSetReps),
-        avgScore: score,
+        totalReps: metrics.totalReps,
+        plannedReps: metrics.plannedReps,
+        formScore: metrics.formScore,
+        completionPct: metrics.completionPct,
+        avgScore: metrics.overallScore,
         mostFrequentError: errors[0]?.errorId ?? null,
       },
     };
@@ -247,7 +348,7 @@ export function SessionCompleteScreen() {
                 numberOfLines={1}
                 minimumFontScale={0.75}
               >
-                Recovery Index
+                Performance
               </Text>
             </View>
           </View>
@@ -261,9 +362,13 @@ export function SessionCompleteScreen() {
         {/* Stats grid */}
         <View style={styles.grid}>
           <MiniCard label="Volume" value={volumeDisplay} accentBorder />
-          <MiniCard label="Sets" value={setsProgressDisplay} accentBorder />
-          <MiniCard label="Time" value={elapsedClock} accentBorder />
-          <MiniCard label="Avg score" value={`${sc}%`} accentBorder />
+          <MiniCard
+            label="Reps"
+            value={`${metrics.totalReps}/${metrics.plannedReps}`}
+            accentBorder
+          />
+          <MiniCard label="Form" value={`${formSc}%`} accentBorder />
+          <MiniCard label="Completion" value={`${completionSc}%`} accentBorder />
         </View>
 
         {/* Form adjustments — canonical summary rows */}
@@ -310,17 +415,35 @@ export function SessionCompleteScreen() {
               </>
             )}
 
-            <Text style={styles.nextSetSectionTitle}>NEXT: SET {currentSetNumber + 1}</Text>
+            <Text style={styles.nextSetSectionTitle}>NEXT: SET {nextSetNumber}</Text>
             <Text style={styles.nextSetHint}>
-              This set was {fmtWeight(weightAmount, weightUnit)}. Enter the weight you will use next.
+              Pre-filled from your plan. Adjust if the bar or target reps change.
             </Text>
+            <Text style={styles.weightFieldHint}>{`Target reps`}</Text>
+            <View style={styles.nextRepsRow}>
+              <Pressable
+                onPress={() => setNextRepsDraft((r) => clampSetReps(r - 1))}
+                disabled={nextRepsDraft <= REPS_PER_SET_MIN}
+                style={[styles.nextRepBtn, nextRepsDraft <= REPS_PER_SET_MIN && styles.nextRepBtnOff]}
+              >
+                <Text style={styles.nextRepBtnTxt}>−</Text>
+              </Pressable>
+              <Text style={styles.nextRepsVal}>{nextRepsDraft}</Text>
+              <Pressable
+                onPress={() => setNextRepsDraft((r) => clampSetReps(r + 1))}
+                disabled={nextRepsDraft >= REPS_PER_SET_MAX}
+                style={[styles.nextRepBtn, nextRepsDraft >= REPS_PER_SET_MAX && styles.nextRepBtnOff]}
+              >
+                <Text style={styles.nextRepBtnTxt}>+</Text>
+              </Pressable>
+            </View>
             <Text style={styles.weightFieldHint}>{`Weight (${weightUnit === 'kg' ? 'kg' : 'lb'})`}</Text>
             <TextInput
               value={nextWeightDraft}
               onChangeText={setNextWeightDraft}
               onBlur={() => {
                 const n = parseMassDraft(nextWeightDraft);
-                if (n == null) setNextWeightDraft(String(weightAmount));
+                if (n == null) setNextWeightDraft(String(nextSetTarget?.weightAmount ?? completedSetTarget.weightAmount));
                 else setNextWeightDraft(String(clampMass(n, weightUnit)));
               }}
               keyboardType="decimal-pad"
@@ -566,6 +689,33 @@ const styles = StyleSheet.create({
     color: colors.text_muted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+  },
+  nextRepsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 8,
+  },
+  nextRepBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.bg_elevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextRepBtnOff: { opacity: 0.35 },
+  nextRepBtnTxt: {
+    color: colors.text_primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 20,
+  },
+  nextRepsVal: {
+    minWidth: 48,
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.display,
+    fontSize: 28,
+    color: colors.primary_green,
   },
   nextWeightInput: {
     marginTop: 6,

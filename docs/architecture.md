@@ -24,10 +24,11 @@ PoseResult { keypoints[17], score, timestamp }
 Biomechanical Analyzer (phase-gated)
     │  - detectPhase()         hip Y relative to shoulder Y
     │  - checkLumbarRounding() ERR_001 (critical) — pull_initiation, mid_pull
-    │  - checkHipsTooHigh()    ERR_002 (critical) — setup, pull_initiation
+    │  - checkHipsTooHigh()    ERR_002 (critical) — pull_initiation only
     │  - checkBarDrift()       ERR_003 (warning)  — mid_pull
     │  - checkHyperextension() ERR_004 (warning)  — lockout
     │  - checkShoulderBar()    ERR_005 (warning)  — setup
+    │  Full catalog: docs/form-errors.md
     ▼
 AnalysisResult { phase, errors[], angles, repDetected }
     │

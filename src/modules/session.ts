@@ -7,6 +7,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { WeightUnit } from '@/utils/weightUnits';
+
 export interface RepLog {
   repNumber: number;
   startTimestamp: number;
@@ -19,16 +21,35 @@ export interface RepLog {
   }[];
 }
 
+export type SessionSetSummary = {
+  setNumber: number;
+  repsCompleted: number;
+  repsPlanned: number;
+  weightAmount: number;
+  weightUnit: WeightUnit;
+  elapsedSec: number;
+  formScore: number;
+};
+
 export interface SessionLog {
-  sessionId: string;      // uuid
-  participantId: string;  // anonymized: 'P001', 'P002' …
-  date: string;           // ISO 8601
+  sessionId: string;
+  participantId: string;
+  date: string;
+  /** e.g. conventional_deadlift — one log groups all sets from a workout. */
+  exercise: string;
+  setSummaries: SessionSetSummary[];
   sets: {
     setNumber: number;
     reps: RepLog[];
   }[];
   summary: {
     totalReps: number;
+    plannedReps: number;
+    /** Form-only score from biomechanical errors. */
+    formScore: number;
+    /** Reps completed ÷ planned (0–100). */
+    completionPct: number;
+    /** Composite performance score shown in UI (form × completion). */
     avgScore: number;
     mostFrequentError: string | null;
   };

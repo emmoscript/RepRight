@@ -125,6 +125,12 @@ The app validates pose before starting analysis through 4 states:
 
 Full spec: [`docs/live-session-flow.md`](docs/live-session-flow.md)
 
+**Form errors (ERR_001–ERR_005):** [`docs/form-errors.md`](docs/form-errors.md)  
+**Rep counting FSM:** [`docs/rep-counting.md`](docs/rep-counting.md)  
+**Evaluation protocol:** [`docs/effectiveness-evaluation.md`](docs/effectiveness-evaluation.md)  
+**Dev session logs:** [`docs/session-debug.md`](docs/session-debug.md)  
+**Doc index:** [`docs/README.md`](docs/README.md)
+
 ---
 
 ## Performance Targets

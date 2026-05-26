@@ -10,6 +10,7 @@ import { SignupScreen } from '@/screens/SignupScreen';
 import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
 import { LiveSessionScreen } from '@/screens/LiveSessionScreen';
 import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
+import { SessionDetailScreen } from '@/screens/SessionDetailScreen';
 import { colors } from '@/theme/colors';
 
 declare global {
@@ -59,6 +60,7 @@ export function RootNavigator() {
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="LiveSession" component={LiveSessionScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ gestureEnabled: false }} />
+        <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

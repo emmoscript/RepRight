@@ -142,16 +142,17 @@ Warning (ERR_003, ERR_004, ERR_005):
 
 ## Rep Detection Logic
 
-A rep is counted when a full deadlift cycle completes:
+Rep counting uses a **hip-Y state machine** (baseline at session start, bottom arm, ROM lockout, return gate) — **not** analyzer phase transitions.
+
+See [`rep-counting.md`](rep-counting.md) and evaluate with [`effectiveness-evaluation.md`](effectiveness-evaluation.md).
 
 ```
-setup → pull_initiation → mid_pull → lockout → descent → setup
+need_setup → need_lockout → COUNT → need_return → …
 ```
 
-- Hip Y-position relative to shoulder Y is the primary phase signal
-- Rep counter increments only at the transition: lockout → descent
-- Partial reps (abandoned before lockout) do not count
-- Between reps: skeleton stays green, error detection continues
+- Primary signal: smoothed average hip Y (both hips when visible)
+- Partial reps (no lockout ROM) do not increment the counter
+- `pose_lost` pauses tracking but does **not** reset rep FSM progress
 
 ---
 

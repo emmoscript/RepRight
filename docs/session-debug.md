@@ -62,6 +62,16 @@ npm run log:session:adb
 3. Agent reads `logs/session-live.log` or the log-server terminal.
 4. Agent patches rep logic / analyzer / LiveSession from evidence.
 
+## Rep count check
+
+After a set, compare your manual count to the log:
+
+```bash
+npm run eval:session -- --expected 5
+```
+
+See [`effectiveness-evaluation.md`](effectiveness-evaluation.md).
+
 ## Manual filter (Metro only)
 
 If you skip the log server, Metro still prints `RR|` lines in the terminal running `start:lan` — but the dedicated server + file is easier for the agent to read reliably.

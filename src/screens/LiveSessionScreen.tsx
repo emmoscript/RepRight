@@ -46,6 +46,7 @@ import {
   SvgVolumeOn,
 } from '@/components/liveSession/LiveHudIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { FramingGuideOverlay } from '@/components/FramingGuideOverlay';
 import { SkeletonOverlay } from '@/components/SkeletonOverlay';
 import {
   getModel,
@@ -68,11 +69,14 @@ import type { DeadliftFormCue } from '@/utils/deadliftPhase';
 import { inferDeadliftFormCue, lateralHipHingeDegrees } from '@/utils/deadliftPhase';
 import {
   DEADLIFT_REP_THRESH,
+  hipsReliableForRepCount,
   primaryHipY,
   smoothHipY,
   standingHipYFromBaseline,
 } from '@/utils/deadliftRep';
 import { alignPoseToPortraitOverlay } from '@/utils/orientPose';
+import { framingHintFromPose } from '@/utils/framingGuide';
+import { getSetTarget } from '@/utils/setPlan';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
 import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
 
@@ -88,6 +92,12 @@ const RING_C = 2 * Math.PI * RING_R;
  * ~14 fps cap; GPU delegate usually infers in 15–25 ms — 72 ms is a pragmatic balance vs UI latency.
  */
 const INFER_INTERVAL_MS = 72;
+/** Brief pause after last planned rep so the counter/UI updates before navigating away. */
+const AUTO_FINISH_TARGET_REPS_DELAY_MS = 900;
+/** Hold lockout (after a counted rep) this long to auto-finish without tapping FINISH SET. */
+const LOCKOUT_IDLE_FINISH_MS = 4500;
+/** Extra slack on lockoutTopY for idle detection (smoothed hip Y lags slightly). */
+const LOCKOUT_IDLE_SLACK = 0.012;
 
 /** State tick still 100ms; streak × tick ≈ min time “valid” before leaving search (~400–550 ms typical). */
 const SEARCH_VALID_STREAK = 5;
@@ -136,8 +146,21 @@ export function LiveSessionScreen() {
   const addErrors = useSessionResultStore((s) => s.addErrors);
   const currentSetNumber = useSessionResultStore((s) => s.currentSetNumber);
   const plannedSetCount = useSessionConfigStore((s) => s.setCount);
+  const customSetPlan = useSessionConfigStore((s) => s.customSetPlan);
+  const repsPerSet = useSessionConfigStore((s) => s.repsPerSet);
   const weightAmount = useSessionConfigStore((s) => s.weightAmount);
+  const setPlans = useSessionConfigStore((s) => s.setPlans);
   const weightUnit = useSessionConfigStore((s) => s.weightUnit);
+  const setTarget = useMemo(
+    () =>
+      getSetTarget(
+        { customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans },
+        currentSetNumber,
+      ),
+    [customSetPlan, plannedSetCount, repsPerSet, weightAmount, setPlans, currentSetNumber],
+  );
+  const targetRepsForSet = setTarget.reps;
+  const setWeightAmount = setTarget.weightAmount;
 
   // ── Camera ─────────────────────────────────────────────────────────────────
   const { requestPermission } = useCameraPermission();
@@ -238,6 +261,17 @@ export function LiveSessionScreen() {
   const lastRepAtRef = useRef(0);
   const armedAtRef = useRef(0);
   const hipSmoothRef = useRef<number | null>(null);
+  /** False after COUNT until hips descend past returnGate — blocks re-arm at lockout height. */
+  const setupArmingEnabledRef = useRef(true);
+  const lastCountAtRef = useRef(0);
+  const autoFinishScheduledRef = useRef(false);
+  const autoFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lockoutIdleStartRef = useRef<number | null>(null);
+  const plannedRepsPerSetRef = useRef(targetRepsForSet);
+  const finishCurrentSetRef = useRef<() => void>(() => {});
+  const scheduleAutoFinishRef = useRef<(reason: 'target_reps' | 'lockout_idle', delayMs: number) => void>(
+    () => {},
+  );
   /** Biomechanical cue streak → banner after stable detection (with modal gate). */
   const formErrStreakRef = useRef(0);
   /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
@@ -295,8 +329,51 @@ export function LiveSessionScreen() {
   }, [isFocused]);
 
   useEffect(() => {
+    plannedRepsPerSetRef.current = targetRepsForSet;
+  }, [targetRepsForSet]);
+
+  const clearAutoFinishTimers = useCallback(() => {
+    autoFinishScheduledRef.current = false;
+    lockoutIdleStartRef.current = null;
+    if (autoFinishTimeoutRef.current != null) {
+      clearTimeout(autoFinishTimeoutRef.current);
+      autoFinishTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAutoFinish = useCallback((reason: 'target_reps' | 'lockout_idle', delayMs: number) => {
+    if (autoFinishScheduledRef.current || showQuitModalRef.current) return;
+    autoFinishScheduledRef.current = true;
+    lockoutIdleStartRef.current = null;
+    sessionTrace.session('auto_finish_scheduled', { reason, delayMs, reps: repsRef.current });
+    if (autoFinishTimeoutRef.current != null) clearTimeout(autoFinishTimeoutRef.current);
+    autoFinishTimeoutRef.current = setTimeout(() => {
+      autoFinishTimeoutRef.current = null;
+      sessionTrace.session('auto_finish', { reason, reps: repsRef.current });
+      finishCurrentSetRef.current();
+    }, delayMs);
+  }, []);
+
+  useEffect(() => {
+    scheduleAutoFinishRef.current = scheduleAutoFinish;
+  }, [scheduleAutoFinish]);
+
+  useEffect(() => () => clearAutoFinishTimers(), [clearAutoFinishTimers]);
+
+  useEffect(() => {
     repsRef.current = reps;
   }, [reps]);
+
+  const finishCurrentSet = useCallback(() => {
+    clearAutoFinishTimers();
+    void Speech.stop();
+    setLastSetSummary(reps, elapsedSec);
+    navigation.navigate('SessionComplete');
+  }, [reps, elapsedSec, navigation, setLastSetSummary, clearAutoFinishTimers]);
+
+  useEffect(() => {
+    finishCurrentSetRef.current = finishCurrentSet;
+  }, [finishCurrentSet]);
 
   useEffect(() => {
     audioOnRef.current = audioOn;
@@ -453,31 +530,52 @@ export function LiveSessionScreen() {
         const bottomGate = stand + DEADLIFT_REP_THRESH.setupDropBelowStanding;
         const lockoutTopY = stand + DEADLIFT_REP_THRESH.lockoutStandingSlack;
         const returnGate = stand + DEADLIFT_REP_THRESH.returnToStandingMargin;
+        const returnGlitchY = stand + DEADLIFT_REP_THRESH.returnGlitchMaxAboveStanding;
+        const rearmMaxY = stand + DEADLIFT_REP_THRESH.lockoutRearmMaxAboveStanding;
 
         if (repPhaseRef.current === 'need_return') {
           setupStreakRef.current = 0;
           lockoutStreakRef.current = 0;
-          if (y >= returnGate) {
+          if (y > returnGlitchY) {
+            returnStreakRef.current = 0;
+          } else if (y >= returnGate) {
             returnStreakRef.current += 1;
             if (returnStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveReturnFrames) {
               repPhaseRef.current = 'need_setup';
               returnStreakRef.current = 0;
+              setupArmingEnabledRef.current = false;
               sessionTrace.repPhase(repPhaseBefore, 'need_setup', {
                 hipY: y,
                 standing: stand,
                 returnGate,
+                bottomGate,
               });
             }
           } else {
             returnStreakRef.current = 0;
           }
         } else if (repPhaseRef.current === 'need_setup') {
-          if (y > bottomGate) {
+          if (y >= returnGate && y <= returnGlitchY) {
+            setupArmingEnabledRef.current = true;
+          }
+          if (setupArmingEnabledRef.current && y > bottomGate) {
             deepestSetupHipYRef.current = Math.max(deepestSetupHipYRef.current, y);
             setupStreakRef.current += 1;
             lockoutStreakRef.current = 0;
             if (setupStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveSetupFrames) {
-              armedDeepHipYRef.current = deepestSetupHipYRef.current;
+              const armedCandidate = deepestSetupHipYRef.current;
+              const minDeep =
+                bottomGate + DEADLIFT_REP_THRESH.minBottomClearanceBeyondGate;
+              const sinceCount = Date.now() - lastCountAtRef.current;
+              const postCountShallow =
+                sinceCount < DEADLIFT_REP_THRESH.postCountShallowArmBlockMs &&
+                armedCandidate <
+                  bottomGate + DEADLIFT_REP_THRESH.postCountMinArmDepthBeyondGate;
+              if (armedCandidate < minDeep || postCountShallow) {
+                setupStreakRef.current = 0;
+                deepestSetupHipYRef.current = 0;
+              } else {
+              armedDeepHipYRef.current = armedCandidate;
               deepestSetupHipYRef.current = 0;
               repPhaseRef.current = 'need_lockout';
               setupStreakRef.current = 0;
@@ -487,6 +585,7 @@ export function LiveSessionScreen() {
                 armed: armedDeepHipYRef.current,
                 standing: stand,
                 bottomGate,
+                minDeep,
                 lockoutTopY,
               });
               const peak = barPeakYSetupRef.current;
@@ -496,6 +595,7 @@ export function LiveSessionScreen() {
                 barFloorBaselineRef.current = bar.y;
               }
               barPeakYSetupRef.current = 0;
+              }
             }
           } else {
             setupStreakRef.current = Math.max(0, setupStreakRef.current - 1);
@@ -506,16 +606,46 @@ export function LiveSessionScreen() {
           }
         } else {
           const deep = armedDeepHipYRef.current;
-          const ascent = deep > 0 ? deep - y : 0;
-          const bottomOk = deep >= bottomGate;
+          if (
+            y > bottomGate &&
+            y <= rearmMaxY &&
+            deep > 0 &&
+            y > deep + DEADLIFT_REP_THRESH.lockoutRearmMinDrop
+          ) {
+            armedDeepHipYRef.current = Math.max(deep, y);
+            armedAtRef.current = Date.now();
+            lockoutStreakRef.current = 0;
+            sessionTrace.rep('rearm', {
+              hipY: y,
+              armed: armedDeepHipYRef.current,
+              prevDeep: deep,
+            });
+          }
+          const armedDeep = armedDeepHipYRef.current;
+          const ascent = armedDeep > 0 ? armedDeep - y : 0;
+          const bottomOk = armedDeep >= bottomGate + DEADLIFT_REP_THRESH.minBottomClearanceBeyondGate;
           const armAgeMs = Date.now() - armedAtRef.current;
+          const hipsOk = hipsReliableForRepCount(pose);
+
+          if (armAgeMs > DEADLIFT_REP_THRESH.maxLockoutWaitMs) {
+            lockoutStreakRef.current = 0;
+            armedDeepHipYRef.current = 0;
+            armedAtRef.current = 0;
+            repPhaseRef.current = 'need_setup';
+            setupArmingEnabledRef.current = false;
+            sessionTrace.rep('stale_reset', { armAgeMs, hipY: y });
+          } else {
           const romComplete = ascent >= DEADLIFT_REP_THRESH.repRomCompleteNorm;
           const atLockoutHeight = y <= lockoutTopY;
+          const armAgeOk =
+            armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount &&
+            armAgeMs <= DEADLIFT_REP_THRESH.maxArmAgeForCount;
+          const canCountFrame = poseValidNow && hipsOk && armAgeOk;
           if (
+            canCountFrame &&
             bottomOk &&
             romComplete &&
-            atLockoutHeight &&
-            armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount
+            atLockoutHeight
           ) {
             lockoutStreakRef.current += 1;
             setupStreakRef.current = 0;
@@ -523,10 +653,12 @@ export function LiveSessionScreen() {
               const now = Date.now();
               if (now - lastRepAtRef.current >= DEADLIFT_REP_THRESH.minMsBetweenReps) {
                 lastRepAtRef.current = now;
+                lastCountAtRef.current = now;
                 lockoutStreakRef.current = 0;
                 armedDeepHipYRef.current = 0;
                 armedAtRef.current = 0;
                 returnStreakRef.current = 0;
+                setupArmingEnabledRef.current = false;
                 repPhaseRef.current = 'need_return';
                 setReps((r) => {
                   const next = r + 1;
@@ -534,12 +666,15 @@ export function LiveSessionScreen() {
                     reps: next,
                     hipY: y,
                     rawHipY: rawY,
-                    armedWas: deep,
+                    armedWas: armedDeep,
                     standing: stand,
                     lockoutTopY,
                     ascent,
                     armAgeMs,
                   });
+                  if (next >= plannedRepsPerSetRef.current) {
+                    scheduleAutoFinishRef.current('target_reps', AUTO_FINISH_TARGET_REPS_DELAY_MS);
+                  }
                   return next;
                 });
                 void impactAsync(ImpactFeedbackStyle.Medium);
@@ -550,6 +685,31 @@ export function LiveSessionScreen() {
           } else {
             lockoutStreakRef.current = 0;
           }
+          }
+        }
+
+        if (
+          !autoFinishScheduledRef.current &&
+          repsRef.current >= 1 &&
+          repPhaseRef.current === 'need_return' &&
+          y != null &&
+          standingHipYRef.current != null &&
+          poseValidNow
+        ) {
+          const idleLockoutTopY =
+            standingHipYRef.current + DEADLIFT_REP_THRESH.lockoutStandingSlack;
+          const atLockout = y <= idleLockoutTopY + LOCKOUT_IDLE_SLACK;
+          if (atLockout) {
+            if (lockoutIdleStartRef.current == null) {
+              lockoutIdleStartRef.current = Date.now();
+            } else if (Date.now() - lockoutIdleStartRef.current >= LOCKOUT_IDLE_FINISH_MS) {
+              scheduleAutoFinishRef.current('lockout_idle', 350);
+            }
+          } else {
+            lockoutIdleStartRef.current = null;
+          }
+        } else if (repPhaseRef.current !== 'need_return') {
+          lockoutIdleStartRef.current = null;
         }
       } else if (y != null && standingHipYRef.current == null) {
         hipSmoothRef.current = y;
@@ -821,8 +981,11 @@ export function LiveSessionScreen() {
         standingHipYRef.current = null;
         baselineHipSamplesRef.current = [];
         lastRepAtRef.current = 0;
+        lastCountAtRef.current = 0;
         armedAtRef.current = 0;
         hipSmoothRef.current = null;
+        setupArmingEnabledRef.current = true;
+        clearAutoFinishTimers();
       }
     } else if (flow !== 'pose_lost') {
       activeEnteredRef.current = false;
@@ -856,12 +1019,6 @@ export function LiveSessionScreen() {
   /** Minutes without leading-zero padding (“0:05” instead of “00:05”). */
   const elapsedClock = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}`;
 
-  const finishCurrentSet = useCallback(() => {
-    void Speech.stop();
-    setLastSetSummary(reps, elapsedSec);
-    navigation.navigate('SessionComplete');
-  }, [reps, elapsedSec, navigation, setLastSetSummary]);
-
   const onConfirmQuitWholeWorkout = useCallback(() => {
     void Speech.stop();
     setShowQuitWorkoutModal(false);
@@ -891,6 +1048,18 @@ export function LiveSessionScreen() {
     MUTE_GAP_ABOVE_TRACKING_PANEL +
     MUTE_FAB_HEIGHT +
     FORM_FEEDBACK_GAP_ABOVE_FAB;
+
+  const showFramingGuide =
+    flow === 'search' || flow === 'detected' || flow === 'countdown' || flow === 'pose_lost';
+
+  const framingHint = useMemo(() => {
+    if (!showFramingGuide || !uiPose) return null;
+    const valid =
+      flow === 'pose_lost' ? isPoseStableForLiftTracking(uiPose) : isPoseValid(uiPose);
+    return framingHintFromPose(uiPose, valid);
+  }, [showFramingGuide, uiPose, flow]);
+
+  const headerScrimBottomPx = topPad + HEADER_SCRIM_BODY_PX + HEADER_CONTROLS_EXTRA_DOWN;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -935,6 +1104,14 @@ export function LiveSessionScreen() {
         </View>
       )}
 
+      {/* ── Framing guide — below all HUD (camera alignment box only) ── */}
+      <FramingGuideOverlay
+        containRect={previewContain}
+        topReservePx={headerScrimBottomPx}
+        visible={showFramingGuide}
+        hint={framingHint}
+      />
+
       {/* ── Skeleton overlay ── */}
       {uiPose && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -969,7 +1146,7 @@ export function LiveSessionScreen() {
           ]}
         >
           <Text style={styles.topTitle} numberOfLines={2}>
-            DEADLIFT · SET {currentSetNumber}/{plannedSetCount} · {weightAmount}{' '}
+            DEADLIFT · SET {currentSetNumber}/{plannedSetCount} · {setWeightAmount}{' '}
             {weightUnit === 'kg' ? 'KG' : 'LB'}
           </Text>
         </View>
@@ -988,6 +1165,8 @@ export function LiveSessionScreen() {
         </View>
       </View>
 
+      {/* ── Positioning HUD — always above framing guide ── */}
+      <View style={styles.positionHudLayer} pointerEvents="box-none">
       {/* ── 7A — Positioning ── */}
       {flow === 'search' && (
         <View style={styles.overlayCenter} pointerEvents="none">
@@ -1002,7 +1181,7 @@ export function LiveSessionScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.infoBannerTitle}>GET IN POSITION</Text>
               <Text style={styles.infoBannerBody}>
-                Stand sideways to the camera. Make sure your full body is in frame.
+                Stand sideways. Fit your full body inside the frame — tracking works best when you&apos;re centered.
               </Text>
             </View>
           </View>
@@ -1057,6 +1236,7 @@ export function LiveSessionScreen() {
           <Text style={styles.getReadyTxt}>GET READY TO LIFT</Text>
         </View>
       )}
+      </View>
 
       {/* ── 7D — Pose lost banner (hidden while quit modal open — avoids stacking above dialog). ── */}
       {flow === 'pose_lost' && !showQuitWorkoutModal && (
@@ -1106,7 +1286,7 @@ export function LiveSessionScreen() {
 
           {/* Stat cards */}
           <View style={styles.statsRow}>
-            <StatCard label="REP" value={String(reps)} />
+            <StatCard label="REP" value={`${reps}/${targetRepsForSet}`} />
             <StatCard label="SERIES" value={`${currentSetNumber}/${plannedSetCount}`} />
             <StatCard label="TIME" value={elapsedClock} green />
           </View>
@@ -1169,7 +1349,7 @@ export function LiveSessionScreen() {
             </Text>
             <View style={styles.modalSummaryBox}>
               <Text style={styles.modalSummaryMain}>
-                SET {currentSetNumber} · {weightAmount} {weightUnit === 'kg' ? 'KG' : 'LB'} · {reps}{' '}
+                SET {currentSetNumber} · {setWeightAmount} {weightUnit === 'kg' ? 'KG' : 'LB'} · {reps}{' '}
                 REPS · {elapsedClock}
               </Text>
             </View>
@@ -1335,6 +1515,11 @@ const styles = StyleSheet.create({
     bottom: 246,
     alignItems: 'center',
   },
+  positionHudLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 25,
+    elevation: 25,
+  },
 
   infoBanner: {
     flexDirection: 'row',
@@ -1346,6 +1531,8 @@ const styles = StyleSheet.create({
     width: '100%',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(72,72,71,0.5)',
+    zIndex: 1,
+    elevation: 12,
   },
   infoBannerGreen: {
     backgroundColor: colors.green_subtle_bg,

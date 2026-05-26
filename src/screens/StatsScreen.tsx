@@ -1,9 +1,10 @@
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -11,16 +12,50 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RepRightHeader } from '@/components/RepRightHeader';
+import type { RootStackParamList } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
+import {
+  exerciseDisplayName,
+  filterSessionsByPeriod,
+  groupSessionsByExercise,
+  type StatsFilterKind,
+} from '@/utils/statsFilters';
 
-type FilterKind = 'week' | 'last' | 'month';
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const PREVIEW_COUNT = 3;
+
+function sessionPerformance(log: SessionLog): number {
+  return Math.round(log.summary.avgScore);
+}
+
+function sessionRepsLabel(log: SessionLog): string {
+  const s = log.summary;
+  const planned = s.plannedReps ?? s.totalReps;
+  return `${s.totalReps}/${planned} reps`;
+}
+
+function fmtCardDate(iso: string): string {
+  const d = new Date(iso);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
+}
+
+function scoreAccent(sc: number) {
+  if (sc >= 90) return colors.primary_green;
+  if (sc >= 70) return colors.accent_green_light;
+  if (sc >= 50) return colors.accent_yellow;
+  return colors.accent_red;
+}
 
 export function StatsScreen() {
+  const nav = useNavigation<Nav>();
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [refresh, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<FilterKind>('week');
+  const [filter, setFilter] = useState<StatsFilterKind>('week');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -35,85 +70,107 @@ export function StatsScreen() {
     }, [load]),
   );
 
-  const peak = sessions.length ? Math.max(...sessions.map((s) => Math.round(s.summary.avgScore))) : null;
+  const filtered = useMemo(
+    () => filterSessionsByPeriod(sessions, filter),
+    [sessions, filter],
+  );
+
+  const grouped = useMemo(() => groupSessionsByExercise(filtered), [filtered]);
+
+  const peak = filtered.length
+    ? Math.max(...filtered.map((s) => sessionPerformance(s)))
+    : null;
+
+  const toggleExpanded = (exerciseId: string) => {
+    setExpanded((prev) => ({ ...prev, [exerciseId]: !prev[exerciseId] }));
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <RepRightHeader />
-      <FlatList
-        data={sessions}
-        keyExtractor={(it) => it.sessionId}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl refreshing={refresh} onRefresh={load} tintColor={colors.primary_green} />
         }
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <Text style={styles.empty}>
-            No sessions yet — complete a live lift to populate the rep log.
-          </Text>
-        }
-        ListHeaderComponent={
-          <View style={styles.hdr}>
-            <Text style={styles.h1}>Rep log</Text>
-            <Text style={styles.meta}>Your biomechanical history</Text>
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.h1}>Rep log</Text>
+        <Text style={styles.meta}>Your biomechanical history</Text>
 
-            <View style={styles.filt}>
-              <Pill tab="THIS WEEK" selected={filter === 'week'} onPress={() => setFilter('week')} />
-              <Pill tab="LAST WEEK" selected={filter === 'last'} onPress={() => setFilter('last')} />
-              <Pill tab="MONTHLY" selected={filter === 'month'} onPress={() => setFilter('month')} />
-            </View>
+        <View style={styles.filt}>
+          <Pill tab="THIS WEEK" selected={filter === 'week'} onPress={() => setFilter('week')} />
+          <Pill tab="LAST WEEK" selected={filter === 'last'} onPress={() => setFilter('last')} />
+          <Pill tab="MONTHLY" selected={filter === 'month'} onPress={() => setFilter('month')} />
+        </View>
 
-            <View style={styles.peakCard}>
-              <Text style={styles.peakLab}>Peak form score</Text>
-              <Text style={styles.peakNum}>{peak != null ? peak : '—'}</Text>
-              <View style={styles.peakBar}>
-                <View
-                  style={[
-                    styles.peakFill,
-                    peak != null && {
-                      width: `${Math.min(Math.max(peak, 0), 100)}%` as `${number}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <Text style={styles.weekVol}>Weekly volume</Text>
-            <View style={styles.bars}>
-              {[0, 1, 2, 3, 4, 5, 6].map((d) => {
-                const hi = ((new Date().getDay() + 6) % 7) === d;
-                return (
-                  <View key={String(d)} style={styles.barWrap}>
-                    <View style={[styles.bar, hi ? styles.barHot : styles.barCold]} />
-                    <Text style={styles.dayL}>{(['M','T','W','T','F','S','S'][d])}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            <Text style={styles.secTitle}>Deadlift sessions</Text>
+        <View style={styles.peakCard}>
+          <Text style={styles.peakLab}>Peak performance</Text>
+          <Text style={styles.peakNum}>{peak != null ? peak : '—'}</Text>
+          <View style={styles.peakBar}>
+            <View
+              style={[
+                styles.peakFill,
+                peak != null && {
+                  width: `${Math.min(Math.max(peak, 0), 100)}%` as `${number}%`,
+                },
+              ]}
+            />
           </View>
-        }
-        renderItem={({ item }) => {
-          const sc = Math.round(item.summary.avgScore);
-          const good = sc >= 70;
-          const d = new Date(item.date);
-          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-          const dateStr = `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
-          const accent = sc >= 90 ? colors.primary_green : sc >= 70 ? colors.accent_green_light : sc >= 50 ? colors.accent_yellow : colors.accent_red;
-          return (
-            <View style={[styles.card, { borderLeftColor: good ? colors.primary_green : colors.accent_red }]}>
-              <Text style={styles.cardDate}>{dateStr}</Text>
-              <Text style={styles.cardMuted}>
-                {item.sets.length} set(s) · deadlift session
-              </Text>
-              <View style={[styles.badge, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
-                <Text style={[styles.badgeTxt, { color: accent }]}>{sc}%</Text>
+        </View>
+
+        {grouped.length === 0 ? (
+          <Text style={styles.empty}>
+            No sessions in this period — complete a live lift to populate the rep log.
+          </Text>
+        ) : (
+          grouped.map(({ exerciseId, sessions: rows }) => {
+            const isOpen = expanded[exerciseId] === true;
+            const visible = isOpen ? rows : rows.slice(0, PREVIEW_COUNT);
+            const hasMore = rows.length > PREVIEW_COUNT;
+            const title = exerciseDisplayName(exerciseId);
+
+            return (
+              <View key={exerciseId} style={styles.section}>
+                <Text style={styles.secTitle}>{title} sessions</Text>
+                {visible.map((item) => {
+                  const sc = sessionPerformance(item);
+                  const accent = scoreAccent(sc);
+                  const setCount = item.setSummaries?.length ?? item.sets.length;
+                  return (
+                    <Pressable
+                      key={item.sessionId}
+                      onPress={() => nav.navigate('SessionDetail', { sessionId: item.sessionId })}
+                      style={({ pressed }) => [
+                        styles.card,
+                        { borderLeftColor: sc >= 70 ? colors.primary_green : colors.accent_red },
+                        pressed && styles.cardPressed,
+                      ]}
+                    >
+                      <Text style={styles.cardDate}>{fmtCardDate(item.date)}</Text>
+                      <Text style={styles.cardMuted}>
+                        {setCount} set(s) · {sessionRepsLabel(item)}
+                      </Text>
+                      <View style={[styles.badge, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
+                        <Text style={[styles.badgeTxt, { color: accent }]}>{sc}%</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+                {hasMore ? (
+                  <Pressable onPress={() => toggleExpanded(exerciseId)} style={styles.seeMoreBtn}>
+                    <Text style={styles.seeMoreTxt}>
+                      {isOpen ? 'Show less' : `See all (${rows.length})`}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
-            </View>
-          );
-        }}
-      />
+            );
+          })
+        )}
+
+        <View style={{ height: 112 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -133,8 +190,7 @@ function Pill(props: { tab: string; selected: boolean; onPress: () => void }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg_v3 },
-  list: { paddingHorizontal: 24, paddingBottom: 112 },
-  hdr: {},
+  scroll: { paddingHorizontal: 24, paddingBottom: 32 },
   h1: {
     marginTop: 6,
     color: colors.text_primary,
@@ -157,8 +213,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillOn: { backgroundColor: colors.primary_green },
+  pillOff: { backgroundColor: colors.bg_high },
   pillTxt: { fontFamily: typography.fontFamily.display, fontSize: typography.fontSize.captionCaps + 2, letterSpacing: 1.6 },
   pillTxtOff: { color: colors.text_secondary, textTransform: 'uppercase' },
+  pillTxtOn: { color: colors.text_on_green, textTransform: 'uppercase' },
   peakCard: {
     marginTop: 16,
     backgroundColor: colors.surface_v3,
@@ -167,33 +225,35 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
   },
-  peakLab: { color: colors.text_secondary, letterSpacing: 2, fontSize: 11, textTransform: 'uppercase', fontFamily: typography.fontFamily.medium },
-  peakNum: { marginTop: 10, fontFamily: typography.fontFamily.display, fontSize: 44, color: colors.primary_green },
-  peakBar: { marginTop: 14, flexDirection: 'row', height: 10, borderRadius: 999, overflow: 'hidden', backgroundColor: colors.bg_high },
+  peakLab: {
+    color: colors.text_secondary,
+    letterSpacing: 2,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    fontFamily: typography.fontFamily.medium,
+  },
+  peakNum: {
+    marginTop: 10,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 44,
+    color: colors.primary_green,
+  },
+  peakBar: {
+    marginTop: 14,
+    flexDirection: 'row',
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: colors.bg_high,
+  },
   peakFill: {
     borderRadius: 999,
     backgroundColor: colors.primary_green,
     height: '100%',
     minWidth: 0,
   },
-  pillOff: { backgroundColor: colors.bg_high },
-  pillTxtOn: { color: colors.text_on_green, textTransform: 'uppercase' },
-  weekVol: {
-    marginTop: 26,
-    color: colors.text_primary,
-    fontFamily: typography.fontFamily.medium,
-    fontSize: 13,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-  },
-  bars: { flexDirection: 'row', marginTop: 12, gap: 8 },
-  barWrap: { flex: 1, alignItems: 'center' },
-  bar: { width: '100%', maxWidth: 24, borderRadius: 999, height: 48 },
-  barHot: { backgroundColor: colors.primary_green },
-  barCold: { backgroundColor: colors.bg_high },
-  dayL: { marginTop: 8, fontSize: 10, color: colors.text_muted },
+  section: { marginTop: 28 },
   secTitle: {
-    marginTop: 28,
     marginBottom: 14,
     color: colors.text_primary,
     fontFamily: typography.fontFamily.bold,
@@ -216,7 +276,14 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border_subtle,
   },
-  cardDate: { flex: 1, minWidth: '40%', fontFamily: typography.fontFamily.bold, color: colors.text_primary, fontSize: 17 },
+  cardPressed: { opacity: 0.88 },
+  cardDate: {
+    flex: 1,
+    minWidth: '40%',
+    fontFamily: typography.fontFamily.bold,
+    color: colors.text_primary,
+    fontSize: 17,
+  },
   cardMuted: { width: '100%', color: colors.text_secondary, fontSize: 13, marginBottom: -4 },
   badge: {
     paddingHorizontal: 14,
@@ -229,5 +296,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.captions,
     letterSpacing: 0.5,
   },
-  empty: { marginTop: 24, marginBottom: 40, color: colors.text_secondary, fontSize: 15, textAlign: 'center' },
+  seeMoreBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  seeMoreTxt: {
+    color: colors.primary_green,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+  empty: { marginTop: 32, color: colors.text_secondary, fontSize: 15, textAlign: 'center' },
 });

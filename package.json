@@ -12,6 +12,7 @@
     "start:tunnel": "expo start --tunnel",
     "log:session": "node scripts/session-log-server.cjs",
     "log:session:adb": "node scripts/watch-session-log.cjs",
+    "eval:session": "node scripts/eval-session-log.cjs",
     "android": "node scripts/run-expo-android.cjs",
     "android:device": "node scripts/run-expo-android.cjs --usb",
     "ios": "expo run:ios",

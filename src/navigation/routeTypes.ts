@@ -2,10 +2,16 @@ import type { CompositeNavigationProp, NavigatorScreenParams } from '@react-navi
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
+/** Nested stack inside the Workout tab — one configure screen per exercise. */
+export type WorkoutStackParamList = {
+  WorkoutHome: undefined;
+  DeadliftConfigure: undefined;
+};
+
 /** Bottom tabs — aligned with docs/screens.md */
 export type MainTabParamList = {
   HomeMain: undefined;
-  Workout: undefined;
+  Workout: NavigatorScreenParams<WorkoutStackParamList> | undefined;
   StatsMain: undefined;
   ProfileMain: undefined;
 };
@@ -21,9 +27,15 @@ export type RootStackParamList = {
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
   LiveSession: { continuedWorkout?: boolean } | undefined;
   SessionComplete: undefined;
+  SessionDetail: { sessionId: string };
 };
 
 export type MainTabCompositeNav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList>,
   NativeStackNavigationProp<RootStackParamList>
+>;
+
+export type WorkoutStackNav = CompositeNavigationProp<
+  NativeStackNavigationProp<WorkoutStackParamList>,
+  MainTabCompositeNav
 >;
