@@ -1,5 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
-import * as SecureStore from "expo-secure-store";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -11,25 +11,26 @@ if (!supabaseUrl) console.error("ERROR: EXPO_PUBLIC_SUPABASE_URL is not set!");
 if (!supabaseAnonKey)
   console.error("ERROR: EXPO_PUBLIC_SUPABASE_ANON_KEY is not set!");
 
-// Custom storage para tokens seguros
-const ExpoSecureStorage = {
+// Use AsyncStorage for development (no native compilation needed)
+// For production with secure storage, rebuild dev client or use EAS build
+const AsyncStorageWrapper = {
   getItem: async (key: string) => {
     try {
-      return await SecureStore.getItemAsync(key);
+      return await AsyncStorage.getItem(key);
     } catch {
       return null;
     }
   },
   setItem: async (key: string, value: string) => {
     try {
-      await SecureStore.setItemAsync(key, value);
+      await AsyncStorage.setItem(key, value);
     } catch {
       // Error al guardar
     }
   },
   removeItem: async (key: string) => {
     try {
-      await SecureStore.deleteItemAsync(key);
+      await AsyncStorage.removeItem(key);
     } catch {
       // Error al eliminar
     }
@@ -38,7 +39,7 @@ const ExpoSecureStorage = {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: ExpoSecureStorage,
+    storage: AsyncStorageWrapper,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,

@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabaseClient";
-import { syncSessionsFromSupabase } from "@/modules/session";
 import { create } from "zustand";
 
 type User = {
@@ -74,11 +73,6 @@ export const useAuthStore = create<AuthState>((set) => ({
           error: null,
         });
         console.log("Auth store updated successfully");
-
-        // Sync existing sessions from Supabase to local storage
-        console.log("Starting session sync from Supabase...");
-        const state = { id: data.user.id };
-        await syncSessionsFromSupabase(supabase, state.id);
       } else {
         console.log("WARNING: No user in response data");
       }
@@ -139,10 +133,6 @@ export const useAuthStore = create<AuthState>((set) => ({
           error: null,
         });
         console.log("Auth store updated successfully");
-
-        // Sync existing sessions from Supabase to local storage
-        console.log("Starting session sync from Supabase...");
-        await syncSessionsFromSupabase(supabase, data.user.id);
       } else {
         console.log("WARNING: No user in response data");
       }
@@ -220,10 +210,6 @@ export const useAuthStore = create<AuthState>((set) => ({
             auth_provider: "email",
           },
         });
-
-        // Sync existing sessions from Supabase to local storage
-        console.log("Starting session sync from Supabase...");
-        await syncSessionsFromSupabase(supabase, authUser.id);
       } else {
         console.log("No session found, user is not logged in");
         set({ isLoggedIn: false, user: null });

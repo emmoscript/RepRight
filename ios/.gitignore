@@ -28,10 +28,3 @@ project.xcworkspace
 
 # CocoaPods
 /Pods/
-
-# IDE
-.swiftpm/
-*.xcconfig
-
-# Carthage (if used)
-Carthage/

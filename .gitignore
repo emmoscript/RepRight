@@ -49,6 +49,9 @@ yarn-error.log*
 .idea/
 .swiftpm/
 *.xcconfig
+*.swp
+*.swo
+*~
 
 # Caches
 .metro-cache/
