@@ -1,165 +1,172 @@
-import { useNavigation } from "@react-navigation/native";
-import React, { useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { PrimaryButton } from "@/components/PrimaryButton";
-import { useAuthStore } from "@/store/authStore";
-import { colors } from "@/theme/colors";
-import { typography } from "@/theme/typography";
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { RepRightHeader } from '@/components/RepRightHeader';
+import { UnderlineField } from '@/components/UnderlineField';
+import type { RootStackParamList } from '@/navigation/routeTypes';
+import { colors } from '@/theme/colors';
+import { typography } from '@/theme/typography';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function SignupScreen() {
-  const nav = useNavigation();
-  const { signUp, isLoading, error } = useAuthStore();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordMismatch, setPasswordMismatch] = useState(false);
-
-  const handleSignup = async () => {
-    console.log("\n=== SIGNUP BUTTON PRESSED ===");
-    console.log("Email:", email);
-    console.log("Email trimmed length:", email.trim().length);
-    console.log("Password length:", password.length);
-    console.log("Confirm Password length:", confirmPassword.length);
-    console.log("Passwords match:", password === confirmPassword);
-
-    if (!email.trim()) {
-      console.error("ERROR: Email is empty");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      console.log("ERROR: Passwords do not match");
-      setPasswordMismatch(true);
-      return;
-    }
-
-    if (password.length < 6) {
-      console.error("ERROR: Password is less than 6 characters");
-      return;
-    }
-
-    setPasswordMismatch(false);
-
-    try {
-      console.log("Calling signUp from auth store...");
-      console.log("Current isLoading state:", isLoading);
-      console.log("Current error state:", error);
-
-      await signUp(email, password);
-
-      console.log("Sign up successful, navigating to MainTabs");
-      nav.navigate("MainTabs" as never);
-    } catch (err) {
-      console.error("Exception caught in handleSignup:", err);
-      console.error(
-        "Error type:",
-        err instanceof Error ? err.constructor.name : typeof err,
-      );
-      console.error(
-        "Error message:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  };
+  const nav = useNavigation<Nav>();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
 
   return (
-    <View style={styles.root}>
-      <Text style={styles.title}>Create Account</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.flex}
+    >
+      <SafeAreaView edges={['top']} style={styles.safeTop}>
+        <RepRightHeader
+          variant="auth"
+          showBack
+          rightSlot={<MaterialIcons name="fitness-center" size={22} color={colors.primary_green} />}
+        />
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.sub}>Join the thesis study cohort and unlock form tracking.</Text>
 
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@university.edu"
-        placeholderTextColor={colors.text_muted}
-        keyboardType="email-address"
-        autoCapitalize="none"
-        editable={!isLoading}
-        style={styles.input}
-      />
+          <View style={{ height: 20 }} />
 
-      <Text style={[styles.label, { marginTop: 16 }]}>Password</Text>
-      <TextInput
-        value={password}
-        onChangeText={setPassword}
-        placeholder="••••••••"
-        placeholderTextColor={colors.text_muted}
-        secureTextEntry
-        editable={!isLoading}
-        style={styles.input}
-      />
+          <UnderlineField
+            label="Full name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            autoCapitalize="words"
+          />
+          <UnderlineField
+            label="Email address"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@university.edu"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-      <Text style={[styles.label, { marginTop: 16 }]}>Confirm Password</Text>
-      <TextInput
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="••••••••"
-        placeholderTextColor={colors.text_muted}
-        secureTextEntry
-        editable={!isLoading}
-        style={styles.input}
-      />
+          <View style={styles.pwOuter}>
+            <Text style={styles.pwLbl}>Password</Text>
+            <View
+              style={[
+                styles.inputRow,
+                { borderBottomColor: pwFocused ? colors.primary_green : colors.border_subtle },
+              ]}
+            >
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Create password"
+                placeholderTextColor={colors.text_muted}
+                secureTextEntry={!showPw}
+                onFocus={() => setPwFocused(true)}
+                onBlur={() => setPwFocused(false)}
+                style={styles.pwInput}
+              />
+              <Pressable accessibilityRole="button" onPress={() => setShowPw((v) => !v)}>
+                <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.text_secondary} />
+              </Pressable>
+            </View>
+          </View>
 
-      {passwordMismatch && (
-        <Text style={styles.errorText}>Passwords do not match</Text>
-      )}
+          <PrimaryButton
+            title="Sign Up →"
+            style={{ marginTop: 32 }}
+            onPress={() => nav.navigate('EmailConfirm')}
+          />
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
-      <PrimaryButton
-        title={isLoading ? "Creating account..." : "Sign up"}
-        onPress={handleSignup}
-        disabled={isLoading || !email.trim() || password !== confirmPassword}
-        style={{ marginTop: 24 }}
-      />
-
-      <Text style={styles.loginPrompt}>
-        Already have an account?{" "}
-        <Text onPress={() => nav.goBack()} style={styles.loginLink}>
-          Log in
-        </Text>
-      </Text>
-    </View>
+          <View style={styles.foot}>
+            <Text style={styles.footMuted}>Already have an account? </Text>
+            <Pressable onPress={() => nav.navigate('Login')} accessibilityRole="link">
+              <Text style={styles.footLink}>Log in</Text>
+            </Pressable>
+          </View>
+          <View style={{ height: 24 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg_v3,
-    padding: 24,
-    justifyContent: "center",
-  },
+  flex: { flex: 1, backgroundColor: colors.bg_surface_alt },
+  safeTop: { flex: 1 },
+  scroll: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 40 },
   title: {
-    fontSize: 28,
-    fontFamily: typography.fontFamily.bold,
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.screenTitle - 4,
     color: colors.text_primary,
-    marginBottom: 32,
+    letterSpacing: -0.9,
+    textTransform: 'capitalize',
   },
-  label: {
+  sub: {
+    marginTop: 12,
     color: colors.text_secondary,
-    fontSize: 14,
+    fontSize: typography.fontSize.body,
+    fontFamily: typography.fontFamily.regular,
+    lineHeight: 24,
+  },
+  pwLbl: {
+    color: colors.text_secondary,
+    fontSize: typography.fontSize.captions,
     fontFamily: typography.fontFamily.medium,
+    marginBottom: 8,
   },
-  input: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: colors.border_medium,
-    borderRadius: 10,
-    padding: 14,
+  pwOuter: {
+    marginBottom: 20,
+    backgroundColor: colors.surface_low,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.border_subtle,
+    gap: 8,
+    paddingVertical: 4,
+  },
+  pwInput: {
+    flex: 1,
+    paddingVertical: 10,
     color: colors.text_primary,
-    fontSize: 16,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.body,
   },
-  errorText: { color: colors.accent_red, fontSize: 13, marginTop: 8 },
-  loginPrompt: {
-    marginTop: 24,
-    textAlign: "center",
-    color: colors.text_secondary,
-    fontSize: 14,
+  foot: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 28,
+    alignItems: 'center',
   },
-  loginLink: {
+  footMuted: { color: colors.text_muted, fontSize: typography.fontSize.bodySm },
+  footLink: {
+    fontFamily: typography.fontFamily.bold,
     color: colors.primary_green,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodySm,
   },
 });

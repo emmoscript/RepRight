@@ -1,16 +1,11 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  TabHomeIcon,
-  TabProfileIcon,
-  TabStatsIcon,
-  TabWorkoutIcon,
-} from '@/components/navigation/TabBarIcons';
 import type { MainTabParamList } from '@/navigation/routeTypes';
-import { ConfigureSessionScreen } from '@/screens/ConfigureSessionScreen';
+import { WorkoutStackNavigator } from '@/navigation/WorkoutStackNavigator';
 import { HomeScreen } from '@/screens/HomeScreen';
 import { ProfileScreen } from '@/screens/ProfileScreen';
 import { StatsScreen } from '@/screens/StatsScreen';
@@ -51,15 +46,29 @@ export function MainTabNavigator() {
         component={HomeScreen}
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <TabHomeIcon color={color} size={24} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons
+              allowFontScaling={false}
+              name={focused ? 'home' : 'home-outline'}
+              size={size ?? 26}
+              color={color ?? colors.tab_inactive}
+            />
+          ),
         }}
       />
       <Tab.Screen
         name="Workout"
-        component={ConfigureSessionScreen}
+        component={WorkoutStackNavigator}
         options={{
           title: 'Workout',
-          tabBarIcon: ({ color }) => <TabWorkoutIcon color={color} size={24} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons
+              allowFontScaling={false}
+              name={focused ? 'barbell' : 'barbell-outline'}
+              size={size ?? 26}
+              color={color ?? colors.tab_inactive}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -67,7 +76,14 @@ export function MainTabNavigator() {
         component={StatsScreen}
         options={{
           title: 'Stats',
-          tabBarIcon: ({ color }) => <TabStatsIcon color={color} size={24} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons
+              allowFontScaling={false}
+              name={focused ? 'stats-chart' : 'stats-chart-outline'}
+              size={size ?? 26}
+              color={color ?? colors.tab_inactive}
+            />
+          ),
         }}
       />
       <Tab.Screen
@@ -75,7 +91,14 @@ export function MainTabNavigator() {
         component={ProfileScreen}
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <TabProfileIcon color={color} size={24} />,
+          tabBarIcon: ({ color, focused, size }) => (
+            <Ionicons
+              allowFontScaling={false}
+              name={focused ? 'person' : 'person-outline'}
+              size={size ?? 26}
+              color={color ?? colors.tab_inactive}
+            />
+          ),
         }}
       />
     </Tab.Navigator>

@@ -6,89 +6,13 @@
  * on all interfaces. Discovery from the Dev Client often fails without this on Windows.
  */
 
-const { networkInterfaces } = require('os');
 const { spawn } = require('child_process');
 const path = require('path');
+const { pickLanIp } = require('./lan-ip.cjs');
 
 const root = path.join(__dirname, '..');
 
-/** @returns {boolean} */
-function ipv4Eligible(addr) {
-  if (addr.internal) return false;
-  const f = addr.family;
-  if (f === 'IPv4' || f === 4) return true;
-  return false;
-}
-
-function pickLanIpStrict() {
-  const nets = networkInterfaces();
-  /** @type {{ address: string; pri: number }[]} */
-  const scored = [];
-
-  for (const [name, addrs] of Object.entries(nets)) {
-    if (!addrs?.length) continue;
-    const skipIface =
-      /^(lo|Loopback)/i.test(name) ||
-      /vEthernet/i.test(name) ||
-      /^Virtual\s/i.test(name) ||
-      /VMware/i.test(name) ||
-      /\b(VMware Network|VBox|WSL|docker|hyperv)\b/i.test(name);
-    if (skipIface) continue;
-
-    for (const a of addrs) {
-      if (!ipv4Eligible(a)) continue;
-      const address = typeof a.address === 'string' ? a.address : '';
-      if (!address || /^169\.254\./.test(address)) continue;
-
-      let pri = 2;
-      // Match Windows "Wi‑Fi" literal hyphen (\u2011) vs ASCII hyphen
-      if (/Wi[\s\u2011]?Fi|WLAN|Wireless|wlan|WiFi|Ethernet/i.test(name)) pri += 6;
-      if (/^192\.168\./.test(address)) pri += 12;
-      if (/^10\./.test(address)) pri += 8;
-      if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(address)) pri += 6;
-
-      scored.push({ address, pri });
-    }
-  }
-
-  scored.sort((a, b) => b.pri - a.pri);
-  return scored[0]?.address ?? null;
-}
-
-/** Fallback when strict filter removes every iface (some Windows setups). Penalizes WSL/virtual names. */
-function pickLanIpRelaxed() {
-  const nets = networkInterfaces();
-  /** @type {{ address: string; pri: number }[]} */
-  const scored = [];
-
-  for (const [name, addrs] of Object.entries(nets)) {
-    if (!addrs?.length) continue;
-    if (/^lo$/i.test(name) || /^Loopback/i.test(name)) continue;
-
-    const virtualPenalty = /WSL|vEthernet|VirtualBox|VMware|\bDocker\b|Hyper[\s\u2011]?V/i.test(name)
-      ? -60
-      : 0;
-
-    for (const a of addrs) {
-      if (!ipv4Eligible(a)) continue;
-      const address = typeof a.address === 'string' ? a.address : '';
-      if (!address || /^169\.254\./.test(address) || address === '127.0.0.1') continue;
-
-      let pri = virtualPenalty + 1;
-      if (/^192\.168\./.test(address)) pri += 100;
-      else if (/^10\./.test(address)) pri += 85;
-      else if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(address)) pri += 40;
-      if (/Wi[\s\u2011]?Fi|WLAN|Wireless|Ethernet/i.test(name)) pri += 25;
-
-      scored.push({ address, pri });
-    }
-  }
-
-  scored.sort((a, b) => b.pri - a.pri);
-  return scored[0]?.address ?? null;
-}
-
-const ip = pickLanIpStrict() ?? pickLanIpRelaxed();
+const ip = pickLanIp();
 
 if (ip) {
   process.env.REACT_NATIVE_PACKAGER_HOSTNAME = ip;
@@ -96,7 +20,8 @@ if (ip) {
     `\x1b[32mRepright dev (wireless LAN / Wi‑Fi)\x1b[0m  Advertised packager host: ${ip}\n` +
       `  Same Wi‑Fi as this PC: shake → Dev menu → Change bundle URL → \x1b[36mhttp://${ip}:8081\x1b[0m\n` +
       `  Use \x1b[1mhttp\x1b[0m only (not https). TLS error \"Unable to parse TLS packet header\" = wrong scheme or wrong port/host.\n` +
-      `  Discovery often fails on Windows until firewall allows inbound TCP 8081.\n`,
+      `  Discovery often fails on Windows until firewall allows inbound TCP 8081.\n` +
+      `  Session debug (wireless): npm run log:session → phone posts traces to \x1b[36mhttp://${ip}:8787\x1b[0m\n`,
   );
 } else {
   console.warn(

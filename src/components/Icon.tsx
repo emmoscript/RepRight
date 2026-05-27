@@ -1,7 +1,6 @@
 /**
- * Centralized icon component using Ionicons from @expo/vector-icons.
- * Always use ICONS constants — never pass raw strings directly.
- * This prevents invalid icon names from silently rendering blank.
+ * Centralized icon component — Ionicons from `@expo/vector-icons` (Expo-supported).
+ * Use ICONS constants so invalid glyph names fail fast at type-check time.
  */
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
@@ -29,9 +28,17 @@ export const ICONS = {
   close: 'close' as const,
   // Fitness
   walk: 'walk' as const,
+  // Demo / onboarding
+  videocam: 'videocam' as const,
+  videocamOutline: 'videocam-outline' as const,
+  arrowForward: 'arrow-forward' as const,
+  arrowForwardCircle: 'arrow-forward-circle' as const,
+  informationOutline: 'information-circle-outline' as const,
+  informationCircle: 'information-circle' as const,
+  phonePortraitOutline: 'phone-portrait-outline' as const,
+  sparklesOutline: 'sparkles-outline' as const,
 };
 
-// Derive the allowed name type from the ICONS values
 type IconName = (typeof ICONS)[keyof typeof ICONS];
 
 type Props = {

@@ -1,29 +1,44 @@
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React from "react";
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Icon, ICONS } from "@/components/Icon";
-import { PrimaryButton } from "@/components/PrimaryButton";
-import type { RootStackParamList } from "@/navigation/routeTypes";
-import { colors } from "@/theme/colors";
-import { typography } from "@/theme/typography";
+import { Icon, ICONS } from '@/components/Icon';
+import { PrimaryButton } from '@/components/PrimaryButton';
+import { SvgArrowForwardIcon, SvgBoltIcon, SvgInfoOutlineIcon } from '@/components/icons/SvgUiIcons';
+import type { RootStackParamList } from '@/navigation/routeTypes';
+import { colors } from '@/theme/colors';
+import { typography } from '@/theme/typography';
+
+const DEMO_IMAGE = require('../../assets/images/movenet-demo-image.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const STEPS = [
-  "Position device 5–7 feet away, full-body profile view.",
-  "Execute your set — AI detects start/end automatically.",
-  "Receive instant feedback on depth, pathing, velocity.",
+const HOW_STEPS = [
+  {
+    num: '01',
+    title: 'Position Device',
+    body: 'Place your phone 5–7 feet away with a full-body view from the side.',
+  },
+  {
+    num: '02',
+    title: 'Perform Reps',
+    body: 'Execute your set as normal. The AI detects start and end points automatically.',
+  },
+  {
+    num: '03',
+    title: 'Get Analysis',
+    body: 'Receive instant feedback on depth, pathing, and tempo.',
+  },
 ] as const;
 
 export function DemoScreen() {
@@ -31,251 +46,260 @@ export function DemoScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={styles.flex}>
-      <SafeAreaView style={styles.flex} edges={["top"]}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollInner}
-          style={styles.scroll}>
-          <View style={styles.logoWrap}>
-            <Icon name={ICONS.barbell} size={42} color={colors.primary_green} />
-            <Text style={styles.logoWord}>RepRight</Text>
-          </View>
-
-          <Text style={styles.demoMode}>DEMO MODE</Text>
-          <Text style={styles.sub}>
-            Test the AI analysis without starting a real session saved to
-            history.
-          </Text>
-
-          <View style={styles.heroCard}>
-            {/* Simulated camera feed with skeleton stats */}
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroPill}>
-                <View style={styles.heroPillDot} />
-                <Text style={styles.heroPillTxt}>AI TRACKING ACTIVE</Text>
-              </View>
-              <Text style={[styles.hudVal, { color: colors.primary_green }]}>
-                98%
-              </Text>
-            </View>
-            <View style={styles.heroSkeleton}>
-              <View style={styles.heroBodyIconWrap}>
-                <Icon
-                  name={ICONS.personOutline}
-                  size={88}
-                  color={colors.primary_green}
-                />
-              </View>
-            </View>
-            <View style={styles.heroStatsRow}>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatVal}>150°</Text>
-                <Text style={styles.heroStatLab}>BACK ANGLE</Text>
-              </View>
-              <View style={styles.heroStat}>
-                <Text
-                  style={[styles.heroStatVal, { color: colors.primary_green }]}>
-                  OK
-                </Text>
-                <Text style={styles.heroStatLab}>LUMBAR</Text>
-              </View>
-              <View style={styles.heroStat}>
-                <Text style={styles.heroStatVal}>SET 1</Text>
-                <Text style={styles.heroStatLab}>SERIES</Text>
-              </View>
-            </View>
-          </View>
-
-          <Text style={styles.stepsTitle}>Instructions</Text>
-          {STEPS.map((line, index) => (
-            <View key={line} style={styles.step}>
-              <Text style={styles.stepNum}>
-                {String(index + 1).padStart(2, "0")}
-              </Text>
-              <Text style={styles.stepTxt}>{line}</Text>
-            </View>
-          ))}
-
-          <View style={styles.note}>
-            <Text style={styles.noteTxt}>
-              Demo data is not saved to your session history.
-            </Text>
-          </View>
-
-          <View style={{ height: 24 }} />
-        </ScrollView>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.flex}
+    >
+      <SafeAreaView style={styles.topNavSafe} edges={['top']}>
+        <View style={styles.topNav} collapsable={false}>
+          <SvgBoltIcon color={colors.primary_green} size={26} />
+          <Text style={styles.topNavWord}>RepRight</Text>
+        </View>
       </SafeAreaView>
 
-      <SafeAreaView style={styles.footer} edges={["bottom"]}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+        contentContainerStyle={styles.scrollInner}
+        style={styles.scroll}
+      >
+        <Text style={styles.title}>Demo mode</Text>
+        <Text style={styles.subtitle}>
+          Explore the full app and test AI analysis without starting a persisted workout log.
+        </Text>
+
+        <View style={styles.featureOuter}>
+          <View style={styles.visCard}>
+            <Image source={DEMO_IMAGE} style={styles.demoImageFull} resizeMode="cover" />
+          </View>
+
+          <View style={styles.featureBodyPad}>
+            <View style={styles.featureRow}>
+              <View style={styles.featureIconCirc} collapsable={false}>
+                <Icon name={ICONS.videocamOutline} size={26} color={colors.primary_green} />
+              </View>
+              <View style={styles.featureTextCol}>
+                <Text style={styles.featureTitle}>Real-time computer vision</Text>
+                <Text style={styles.featureBody}>
+                  MoveNet Lightning tracks pose keypoints from the camera for instant form cues on each rep — no extra
+                  wearables required.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <Text style={styles.howTitle}>How it works</Text>
+        <View style={styles.howCard}>
+          {HOW_STEPS.map((step, idx) => (
+            <View key={step.num} style={[styles.howStep, idx < HOW_STEPS.length - 1 && styles.howStepSep]}>
+              <Text style={styles.stepNum}>{step.num}</Text>
+              <View style={styles.howTxtCol}>
+                <Text style={styles.howStepTitle}>{step.title}</Text>
+                <Text style={styles.howStepBody}>{step.body}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.infoNote}>
+          <View style={styles.infoIconWrap}>
+            <SvgInfoOutlineIcon color={colors.text_secondary} size={22} />
+          </View>
+          <Text style={styles.infoNoteTxt}>
+            Sign in to save sessions and see them in Stats. Demo browsing does not persist history on this device.
+          </Text>
+        </View>
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      <SafeAreaView style={styles.footer} edges={['bottom']}>
         <PrimaryButton
-          title="START DEMO →"
-          onPress={() => nav.navigate("LiveSession")}
+          title="START DEMO"
+          trailing={<SvgArrowForwardIcon size={22} color={colors.text_on_green} />}
+          style={styles.ctaPrimary}
+          onPress={() => nav.navigate('MainTabs', { screen: 'HomeMain' })}
         />
-        <PrimaryButton
-          title="SKIP TO APP →"
-          variant="ghost"
-          onPress={() => nav.navigate("Login")}
-          style={{ marginTop: 12 }}
-        />
-        <Pressable
-          onPress={() => nav.navigate("Signup")}
-          style={styles.backGhost}
-          accessibilityRole="button">
-          <Text style={styles.backGhostTxt}>Create account instead</Text>
-        </Pressable>
+        <PrimaryButton title="BACK" variant="ghost" onPress={() => nav.navigate('AuthGateway')} style={styles.ctaGhost} />
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg_v3 },
+  flex: { flex: 1, backgroundColor: colors.bg_surface_alt },
+
   scroll: { flex: 1 },
-  scrollInner: { paddingHorizontal: 26, paddingTop: 36, paddingBottom: 24 },
-  logoWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
+  scrollInner: {
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 8,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
-  logoWord: {
+
+  topNavSafe: {
+    backgroundColor: colors.bg_surface_alt,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border_subtle,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    backgroundColor: colors.bg_surface_alt,
+  },
+  topNavWord: {
+    marginLeft: 8,
     fontFamily: typography.fontFamily.display,
     color: colors.primary_green,
-    fontSize: 30,
-    letterSpacing: typography.letterSpacing.capsWide,
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: -0.6,
   },
-  demoMode: {
-    marginTop: 28,
-    textAlign: "center",
+
+  title: {
+    marginTop: 8,
+    textAlign: 'center',
     fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.cardHeading,
+    fontWeight: '700',
     color: colors.text_primary,
-    fontSize: typography.fontSize.titleSm,
-    textTransform: "uppercase",
-    letterSpacing: typography.letterSpacing.capsWide,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  sub: {
+  subtitle: {
     marginTop: 12,
-    textAlign: "center",
+    textAlign: 'center',
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.body,
     color: colors.text_secondary,
     lineHeight: 24,
   },
-  heroCard: {
+
+  featureOuter: {
     marginTop: 28,
-    borderRadius: 16,
-    backgroundColor: colors.bg_elevated,
-    paddingVertical: 28,
-    paddingHorizontal: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border_subtle,
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  heroPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(39,195,79,0.12)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "rgba(39,195,79,0.25)",
-  },
-  heroPillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.primary_green,
-  },
-  heroPillTxt: {
-    color: colors.primary_green,
-    fontSize: 9,
-    fontFamily: typography.fontFamily.bold,
-    letterSpacing: 1,
-  },
-  hudVal: { fontFamily: typography.fontFamily.display, fontSize: 22 },
-  heroSkeleton: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-  },
-  heroBodyIconWrap: { opacity: 0.85 },
-  heroStatsRow: { flexDirection: "row", gap: 0, marginTop: 4 },
-  heroStat: { flex: 1, alignItems: "center" },
-  heroStatVal: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: 16,
-    color: colors.text_primary,
-  },
-  heroStatLab: {
-    marginTop: 3,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    color: colors.text_muted,
-    fontFamily: typography.fontFamily.medium,
-    textTransform: "uppercase",
-  },
-  stepsTitle: {
-    marginTop: 32,
-    fontFamily: typography.fontFamily.medium,
-    color: colors.text_primary,
-    fontSize: typography.fontSize.bodySm,
-    letterSpacing: typography.letterSpacing.capsWide,
-  },
-  step: {
-    flexDirection: "row",
-    marginTop: 16,
-    gap: 16,
+    borderRadius: 14,
     backgroundColor: colors.surface_low,
-    borderRadius: 12,
-    padding: 16,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border_subtle,
+    paddingTop: 0,
+    paddingBottom: 0,
+    overflow: 'hidden',
   },
-  stepNum: {
-    fontFamily: typography.fontFamily.display,
-    color: colors.primary_green,
-    fontSize: 18,
+  visCard: {
+    width: '100%',
+    height: 268,
+    backgroundColor: colors.bg_high,
+    marginBottom: 0,
   },
-  stepTxt: {
-    flex: 1,
+  demoImageFull: {
+    width: '100%',
+    height: '100%',
+  },
+  featureBodyPad: {
+    paddingHorizontal: 22,
+    paddingTop: 20,
+    paddingBottom: 22,
+  },
+  featureRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  featureIconCirc: {
+    marginRight: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.bg_high,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(39,195,79,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureTextCol: { flex: 1, minWidth: 0 },
+  featureTitle: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.body,
+    color: colors.text_primary,
+    marginBottom: 4,
+  },
+  featureBody: {
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.bodySm,
+    color: colors.text_secondary,
+    lineHeight: 21,
+  },
+
+  howTitle: {
+    marginTop: 36,
+    marginBottom: 16,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 3.2,
+    textTransform: 'uppercase',
+    color: colors.primary_green,
+  },
+  howCard: {
+    borderRadius: 14,
+    backgroundColor: colors.surface_v3,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  howStep: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 18 },
+  howStepSep: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border_subtle },
+  stepNum: {
+    marginRight: 20,
+    minWidth: 40,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 32,
+    lineHeight: 34,
+    color: colors.skeleton_muted_v3,
+    letterSpacing: -1,
+  },
+  howTxtCol: { flex: 1, minWidth: 0 },
+  howStepTitle: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.body,
     color: colors.text_primary,
-    lineHeight: 22,
+    marginBottom: 4,
   },
-  note: {
-    marginTop: 22,
-    padding: 14,
+  howStepBody: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.bodySm,
+    color: colors.text_secondary,
+    lineHeight: 21,
+  },
+
+  infoNote: {
+    marginTop: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: colors.green_subtle_bg,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary_green,
+    backgroundColor: colors.surface_low,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  noteTxt: {
+  infoIconWrap: { marginRight: 14 },
+  infoNoteTxt: {
+    flex: 1,
+    fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.captions,
     color: colors.text_secondary,
-    fontFamily: typography.fontFamily.medium,
+    fontStyle: 'italic',
+    lineHeight: 20,
   },
+
   footer: {
-    backgroundColor: colors.bg_v3,
-    paddingHorizontal: 26,
-    paddingTop: 8,
-    gap: 8,
+    backgroundColor: 'rgba(32,31,31,0.94)',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 6 : 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border_subtle,
+    maxWidth: 520,
+    width: '100%',
+    alignSelf: 'center',
   },
-  backGhost: { alignItems: "center", paddingVertical: 14 },
-  backGhostTxt: {
-    fontFamily: typography.fontFamily.medium,
-    color: colors.text_secondary,
-    fontSize: 14,
-  },
+  ctaPrimary: { marginTop: 4, marginBottom: 4 },
+  ctaGhost: { marginTop: 12 },
 });
