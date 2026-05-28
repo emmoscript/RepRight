@@ -59,7 +59,8 @@ function scoreTone(score: number) {
 
 export function HomeScreen() {
   const nav = useNavigation<MainTabCompositeNav>();
-  const { participantId, email } = useAuthStore();
+  const participantId = useAuthStore((s) => s.participantId);
+  const email = useAuthStore((s) => s.user?.email ?? null);
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
 
@@ -88,7 +89,7 @@ export function HomeScreen() {
   const displayName = useMemo(
     () =>
       email
-        ? email.split('@')[0]?.replace(/\b\w/g, (c) => c.toUpperCase()) ?? 'Athlete'
+        ? email.split('@')[0]?.replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? 'Athlete'
         : participantId,
     [email, participantId],
   );

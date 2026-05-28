@@ -10,12 +10,10 @@ import { typography } from "@/theme/typography";
 export function ConfigureSessionScreen() {
   const nav = useNavigation();
   const numSets = useSessionConfigStore((s) => s.setCount);
-  const currentWeight = useSessionConfigStore((s) => s.weight);
+  const currentWeight = useSessionConfigStore((s) => s.weightAmount);
   const patch = useSessionConfigStore((s) => s.patch);
   const [sets, setSets] = useState(String(numSets));
-  const [weight, setWeight] = useState(
-    currentWeight ? String(currentWeight) : "",
-  );
+  const [weight, setWeight] = useState(String(currentWeight));
 
   return (
     <View style={styles.root}>
@@ -43,8 +41,11 @@ export function ConfigureSessionScreen() {
         title="Start live session"
         onPress={() => {
           const n = Math.max(1, Math.min(10, parseInt(sets, 10) || 3));
-          const w = weight.trim() ? parseFloat(weight) : null;
-          patch({ setCount: n, weight: w });
+          const parsed = weight.trim() ? parseFloat(weight) : NaN;
+          patch({
+            setCount: n,
+            ...(Number.isFinite(parsed) ? { weightAmount: parsed } : {}),
+          });
           nav.navigate("LiveSession" as never);
         }}
         style={{ marginTop: 24 }}
