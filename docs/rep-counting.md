@@ -38,9 +38,9 @@ need_setup → need_lockout → COUNT → need_return → need_setup → …
 |-------|-----------------|
 | `need_setup` | After return, or session start |
 | `need_lockout` | Hip Y > bottom gate for 3 frames; armed depth ≥ bottom + 0.016 |
-| COUNT | Peak ascent ≥ 0.062; min hip Y ≤ lockout; ≥4 bottom frames; pose OK; 700 ms ≤ arm age ≤ **12 s**; 2 qualifying frames |
-| `need_return` | After COUNT — must reach return gate before next arm |
-| **`stale_reset`** | Only if stuck at bottom 12 s+ (peak ascent &lt; 22% ROM) |
+| COUNT | Peak ascent ≥ 0.062; min hip Y ≤ lockout + **0.028**; ≥3 bottom frames; pose OK; 550 ms ≤ arm age ≤ **12 s** (22 s if slow ascent); **2** qualifying frames (or **1** if ascent ≥ 110% ROM) |
+| `need_return` | After COUNT — return gate **or** touch-and-go bottom arm (fast descent) |
+| **`stale_reset`** | Stuck at bottom 12 s+ (peak ascent &lt; 22% ROM), or cycle exhausted without a valid count |
 
 **Re-arm:** If still in `need_lockout` but hips drop **0.028** below current armed depth (and past bottom gate), armed bottom refreshes (handles stuck shallow arms).
 

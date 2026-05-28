@@ -32,6 +32,8 @@ export const DEADLIFT_REP_THRESH = {
    * Side-view keypoints rarely exceed a large rise above baseline — ROM is the primary signal.
    */
   lockoutStandingSlack: 0.014,
+  /** Extra slack when deciding if lockout height was reached (side view + smoothing). */
+  lockoutCountSlack: 0.028,
   /** After lockout: hips must clear lockout zone (y rises past this). **Below** bottomGate. */
   returnToStandingMargin: 0.030,
   /** Ignore return/re-arm samples above this (walk-to-camera glitches). */
@@ -40,27 +42,34 @@ export const DEADLIFT_REP_THRESH = {
   lockoutRearmMaxAboveStanding: 0.16,
   /** Abandon need_lockout only when stuck at bottom this long (slow reps get 12s+). */
   maxLockoutWaitMs: 12000,
-  /** Reject lockout count if bottom was armed longer ago than this. */
+  /** Reject lockout count if bottom was armed longer ago than this (fast reps). */
   maxArmAgeForCount: 12000,
+  /** Extended arm-age ceiling once meaningful ascent is underway (slow reps). */
+  maxArmAgeForCountSlowMs: 22000,
+  /** Above this ascent fraction, use the slow-rep arm-age ceiling. */
+  slowRepAscentProgressFrac: 0.35,
   /** Min hip keypoint confidence to allow a rep COUNT. */
   minHipScoreForCount: 0.22,
   /** Armed bottom must clear bottomGate by at least this (blocks shallow false-arms). */
-  minBottomClearanceBeyondGate: 0.030,
+  minBottomClearanceBeyondGate: 0.026,
   /** While waiting for lockout, re-arm if hips drop this much below current armed bottom. */
   lockoutRearmMinDrop: 0.028,
   consecutiveSetupFrames: 3,
   consecutiveLockoutFrames: 2,
-  consecutiveReturnFrames: 2,
+  /** With clear ROM, one valid lockout frame is enough (normal tempo + valid=false flicker). */
+  lockoutStrongRomFrac: 1.1,
+  /** One frame at return gate — fast touch-and-go rarely holds 2 frames mid-descent. */
+  consecutiveReturnFrames: 1,
   /** Min ascent from armed bottom to lockout (full rep ROM — primary count gate). */
   repRomCompleteNorm: 0.062,
   /** Ignore back-to-back counts within this window. */
-  minMsBetweenReps: 900,
+  minMsBetweenReps: 700,
   /** Min time from bottom-arm to lockout count (blocks flicker double-counts). */
-  minMsFromArmToCount: 700,
+  minMsFromArmToCount: 550,
   /** After a COUNT, block shallow setup-arms for this window (walk-off / rack false reps). */
-  postCountShallowArmBlockMs: 2200,
+  postCountShallowArmBlockMs: 1200,
   /** Min frames with hips below bottom gate while armed (blocks walk-to-camera false reps). */
-  minDeepHoldFrames: 4,
+  minDeepHoldFrames: 3,
   /** stale_reset only when peak ascent is below this fraction of full ROM. */
   staleResetMaxAscentFrac: 0.22,
   /** Do not re-arm lockout when hips are above this offset from lockout line. */
@@ -88,6 +97,24 @@ export function smoothHipY(prev: number | null, sample: number): number {
   if (prev == null) return sample;
   const a = DEADLIFT_REP_THRESH.hipSmoothAlpha;
   return prev + a * (sample - prev);
+}
+
+export type RepBottomArmReject = 'min_deep' | 'post_count_shallow';
+
+/** Shared gate for arming the bottom of a rep (setup or touch-and-go return). */
+export function repBottomArmGate(
+  armedCandidate: number,
+  bottomGate: number,
+  lastCountAtMs: number,
+): { ok: true; minDeep: number } | { ok: false; reason: RepBottomArmReject; minDeep: number } {
+  const minDeep = bottomGate + DEADLIFT_REP_THRESH.minBottomClearanceBeyondGate;
+  const sinceCount = Date.now() - lastCountAtMs;
+  const postCountShallow =
+    sinceCount < DEADLIFT_REP_THRESH.postCountShallowArmBlockMs &&
+    armedCandidate < bottomGate + DEADLIFT_REP_THRESH.postCountMinArmDepthBeyondGate;
+  if (armedCandidate < minDeep) return { ok: false, reason: 'min_deep', minDeep };
+  if (postCountShallow) return { ok: false, reason: 'post_count_shallow', minDeep };
+  return { ok: true, minDeep };
 }
 
 /** Hips trustworthy enough to increment rep counter (blocks proximity glitches). */

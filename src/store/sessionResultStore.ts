@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type { BiomechanicalError } from '@/modules/analyzer';
+import type { SessionReviewSnapshot } from '@/utils/sessionScore';
 import type { WeightUnit } from '@/utils/weightUnits';
 
 export type WorkoutSetSnapshot = {
@@ -22,9 +23,12 @@ type SessionResultState = {
   currentSetNumber: number;
   /** Finished sets earlier in this workout row (shown before advancing). */
   workoutSetSnapshots: WorkoutSetSnapshot[];
+  /** Immutable summary for Session Complete (survives LiveSession remount / clearResults races). */
+  sessionReview: SessionReviewSnapshot | null;
   setStartedAt: (t: number) => void;
   addErrors: (e: BiomechanicalError[]) => void;
   setLastSetSummary: (reps: number, elapsedSec: number) => void;
+  setSessionReview: (review: SessionReviewSnapshot) => void;
   appendWorkoutSetSnapshot: (row: WorkoutSetSnapshot) => void;
   /** After reviewing a completed set — start the next Live screen without wiping workout progress. */
   advanceToNextSet: () => void;
@@ -38,9 +42,11 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
   lastSetElapsedSec: 0,
   currentSetNumber: 1,
   workoutSetSnapshots: [],
+  sessionReview: null,
   setStartedAt: (t) => set({ startedAt: t }),
   addErrors: (e) => set((s) => ({ errors: s.errors.concat(e) })),
   setLastSetSummary: (reps, elapsedSec) => set({ lastSetReps: reps, lastSetElapsedSec: elapsedSec }),
+  setSessionReview: (review) => set({ sessionReview: review }),
   appendWorkoutSetSnapshot: (row) =>
     set((s) => {
       const rest = s.workoutSetSnapshots.filter((x) => x.setNumber !== row.setNumber);
@@ -53,6 +59,7 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
       lastSetReps: 0,
       lastSetElapsedSec: 0,
       startedAt: Date.now(),
+      sessionReview: null,
     })),
   clear: () =>
     set({
@@ -62,5 +69,6 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
       lastSetElapsedSec: 0,
       currentSetNumber: 1,
       workoutSetSnapshots: [],
+      sessionReview: null,
     }),
 }));

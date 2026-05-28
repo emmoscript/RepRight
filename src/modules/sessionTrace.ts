@@ -105,6 +105,16 @@ export const sessionTrace = {
     emit('rep', `phase:${from}->${to}`, data);
   },
 
+  armReject(data: Record<string, unknown>): void {
+    const reason = String(data.reason ?? 'unknown');
+    emitThrottled('rep', `arm_reject:${reason}`, 900, 'arm_reject', data);
+  },
+
+  countBlocked(data: Record<string, unknown>): void {
+    const reason = String(data.reason ?? 'unknown');
+    emitThrottled('rep', `count_blocked:${reason}`, 1200, 'count_blocked', data);
+  },
+
   poseSample(
     flow: string,
     data: {

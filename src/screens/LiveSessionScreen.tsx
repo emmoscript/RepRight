@@ -71,6 +71,7 @@ import {
   DEADLIFT_REP_THRESH,
   hipsReliableForRepCount,
   primaryHipY,
+  repBottomArmGate,
   smoothHipY,
   standingHipYFromBaseline,
 } from '@/utils/deadliftRep';
@@ -143,6 +144,7 @@ export function LiveSessionScreen() {
   const clearResults = useSessionResultStore((s) => s.clear);
   const setStarted = useSessionResultStore((s) => s.setStartedAt);
   const setLastSetSummary = useSessionResultStore((s) => s.setLastSetSummary);
+  const setSessionReview = useSessionResultStore((s) => s.setSessionReview);
   const addErrors = useSessionResultStore((s) => s.addErrors);
   const currentSetNumber = useSessionResultStore((s) => s.currentSetNumber);
   const plannedSetCount = useSessionConfigStore((s) => s.setCount);
@@ -268,6 +270,8 @@ export function LiveSessionScreen() {
   const hipSmoothRef = useRef<number | null>(null);
   /** False after COUNT until hips descend past returnGate — blocks re-arm at lockout height. */
   const setupArmingEnabledRef = useRef(true);
+  /** Touch-and-go: bottom streak while still in need_return (fast descent skips return gate). */
+  const touchGoBottomStreakRef = useRef(0);
   const lastCountAtRef = useRef(0);
   const autoFinishScheduledRef = useRef(false);
   const autoFinishTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -372,9 +376,34 @@ export function LiveSessionScreen() {
   const finishCurrentSet = useCallback(() => {
     clearAutoFinishTimers();
     void Speech.stop();
-    setLastSetSummary(reps, elapsedSec);
+    const repCount = repsRef.current;
+    const elapsed = Math.max(0, Math.floor((Date.now() - sessionStartRef.current) / 1000));
+    setLastSetSummary(repCount, elapsed);
+
+    const resultState = useSessionResultStore.getState();
+    const configState = useSessionConfigStore.getState();
+    setSessionReview({
+      capturedAt: Date.now(),
+      startedAt: resultState.startedAt,
+      currentSetNumber: resultState.currentSetNumber,
+      lastSetReps: repCount,
+      lastSetElapsedSec: elapsed,
+      errors: [...resultState.errors],
+      workoutSetSnapshots: [...resultState.workoutSetSnapshots],
+      planSlice: {
+        customSetPlan: configState.customSetPlan,
+        setCount: configState.setCount,
+        repsPerSet: configState.repsPerSet,
+        weightAmount: configState.weightAmount,
+        setPlans: configState.setPlans,
+      },
+      weightUnit: configState.weightUnit,
+      exercise: configState.exercise,
+      plannedSetCount: configState.setCount,
+    });
+
     navigation.navigate('SessionComplete');
-  }, [reps, elapsedSec, navigation, setLastSetSummary, clearAutoFinishTimers]);
+  }, [navigation, setLastSetSummary, setSessionReview, clearAutoFinishTimers]);
 
   useEffect(() => {
     finishCurrentSetRef.current = finishCurrentSet;
@@ -539,15 +568,17 @@ export function LiveSessionScreen() {
         const rearmMaxY = stand + DEADLIFT_REP_THRESH.lockoutRearmMaxAboveStanding;
 
         if (repPhaseRef.current === 'need_return') {
-          setupStreakRef.current = 0;
           lockoutStreakRef.current = 0;
           if (y > returnGlitchY) {
             returnStreakRef.current = 0;
+            touchGoBottomStreakRef.current = 0;
+            deepestSetupHipYRef.current = 0;
           } else if (y >= returnGate) {
             returnStreakRef.current += 1;
             if (returnStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveReturnFrames) {
               repPhaseRef.current = 'need_setup';
               returnStreakRef.current = 0;
+              touchGoBottomStreakRef.current = 0;
               setupArmingEnabledRef.current = false;
               sessionTrace.repPhase(repPhaseBefore, 'need_setup', {
                 hipY: y,
@@ -559,6 +590,59 @@ export function LiveSessionScreen() {
           } else {
             returnStreakRef.current = 0;
           }
+
+          // Touch-and-go: lockout → floor without pausing at return gate (fast reps skip need_setup).
+          if (y > bottomGate) {
+            deepestSetupHipYRef.current = Math.max(deepestSetupHipYRef.current, y);
+            touchGoBottomStreakRef.current += 1;
+            if (touchGoBottomStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveSetupFrames) {
+              const armedCandidate = deepestSetupHipYRef.current;
+              const gate = repBottomArmGate(armedCandidate, bottomGate, lastCountAtRef.current);
+              if (!gate.ok) {
+                sessionTrace.armReject({
+                  phase: 'need_return',
+                  path: 'touch_go',
+                  reason: gate.reason,
+                  hipY: y,
+                  armedCandidate,
+                  sinceCount: Date.now() - lastCountAtRef.current,
+                });
+                touchGoBottomStreakRef.current = 0;
+                deepestSetupHipYRef.current = 0;
+              } else {
+                armedDeepHipYRef.current = armedCandidate;
+                deepestSetupHipYRef.current = 0;
+                touchGoBottomStreakRef.current = 0;
+                repPhaseRef.current = 'need_lockout';
+                armedAtRef.current = Date.now();
+                bestAscentSinceArmRef.current = 0;
+                minHipYSinceArmRef.current = 1;
+                deepHoldFramesRef.current = 0;
+                lockoutQualifyingFramesRef.current = 0;
+                sessionTrace.repPhase(repPhaseBefore, 'need_lockout', {
+                  hipY: y,
+                  armed: armedDeepHipYRef.current,
+                  standing: stand,
+                  bottomGate,
+                  minDeep: gate.minDeep,
+                  lockoutTopY,
+                  touchGo: true,
+                });
+                const peak = barPeakYSetupRef.current;
+                if (peak > 0) {
+                  barFloorBaselineRef.current = peak;
+                } else if (bar != null) {
+                  barFloorBaselineRef.current = bar.y;
+                }
+                barPeakYSetupRef.current = 0;
+              }
+            }
+          } else {
+            touchGoBottomStreakRef.current = Math.max(0, touchGoBottomStreakRef.current - 1);
+            if (touchGoBottomStreakRef.current === 0) {
+              deepestSetupHipYRef.current = 0;
+            }
+          }
         } else if (repPhaseRef.current === 'need_setup') {
           if (y >= returnGate && y <= returnGlitchY) {
             setupArmingEnabledRef.current = true;
@@ -569,14 +653,15 @@ export function LiveSessionScreen() {
             lockoutStreakRef.current = 0;
             if (setupStreakRef.current >= DEADLIFT_REP_THRESH.consecutiveSetupFrames) {
               const armedCandidate = deepestSetupHipYRef.current;
-              const minDeep =
-                bottomGate + DEADLIFT_REP_THRESH.minBottomClearanceBeyondGate;
-              const sinceCount = Date.now() - lastCountAtRef.current;
-              const postCountShallow =
-                sinceCount < DEADLIFT_REP_THRESH.postCountShallowArmBlockMs &&
-                armedCandidate <
-                  bottomGate + DEADLIFT_REP_THRESH.postCountMinArmDepthBeyondGate;
-              if (armedCandidate < minDeep || postCountShallow) {
+              const gate = repBottomArmGate(armedCandidate, bottomGate, lastCountAtRef.current);
+              if (!gate.ok) {
+                sessionTrace.armReject({
+                  phase: 'need_setup',
+                  reason: gate.reason,
+                  hipY: y,
+                  armedCandidate,
+                  sinceCount: Date.now() - lastCountAtRef.current,
+                });
                 setupStreakRef.current = 0;
                 deepestSetupHipYRef.current = 0;
               } else {
@@ -594,7 +679,7 @@ export function LiveSessionScreen() {
                 armed: armedDeepHipYRef.current,
                 standing: stand,
                 bottomGate,
-                minDeep,
+                minDeep: gate.minDeep,
                 lockoutTopY,
               });
               const peak = barPeakYSetupRef.current;
@@ -640,6 +725,9 @@ export function LiveSessionScreen() {
           const ascent = armedDeep > 0 ? armedDeep - y : 0;
           bestAscentSinceArmRef.current = Math.max(bestAscentSinceArmRef.current, ascent);
           minHipYSinceArmRef.current = Math.min(minHipYSinceArmRef.current, y);
+          if (rawY != null) {
+            minHipYSinceArmRef.current = Math.min(minHipYSinceArmRef.current, rawY);
+          }
           if (y > bottomGate) deepHoldFramesRef.current += 1;
 
           const bottomOk = armedDeep >= bottomGate + DEADLIFT_REP_THRESH.minBottomClearanceBeyondGate;
@@ -647,10 +735,20 @@ export function LiveSessionScreen() {
           const hipsOk = hipsReliableForRepCount(pose);
           const bestAscent = bestAscentSinceArmRef.current;
           const romComplete = bestAscent >= DEADLIFT_REP_THRESH.repRomCompleteNorm;
-          const sawLockout = minHipYSinceArmRef.current <= lockoutTopY + 0.015;
+          const sawLockout =
+            minHipYSinceArmRef.current <=
+            lockoutTopY + DEADLIFT_REP_THRESH.lockoutCountSlack;
           const heldBottom = deepHoldFramesRef.current >= DEADLIFT_REP_THRESH.minDeepHoldFrames;
           const stuckAtBottom =
             bestAscent < DEADLIFT_REP_THRESH.repRomCompleteNorm * DEADLIFT_REP_THRESH.staleResetMaxAscentFrac;
+          const slowRepUnderway =
+            bestAscent >=
+            DEADLIFT_REP_THRESH.repRomCompleteNorm * DEADLIFT_REP_THRESH.slowRepAscentProgressFrac;
+          const armAgeMax = slowRepUnderway
+            ? DEADLIFT_REP_THRESH.maxArmAgeForCountSlowMs
+            : DEADLIFT_REP_THRESH.maxArmAgeForCount;
+          const cycleExhausted =
+            armAgeMs > armAgeMax && !(romComplete && sawLockout && heldBottom && bottomOk);
 
           if (armAgeMs > DEADLIFT_REP_THRESH.maxLockoutWaitMs && stuckAtBottom) {
             lockoutStreakRef.current = 0;
@@ -669,21 +767,58 @@ export function LiveSessionScreen() {
             lockoutQualifyingFramesRef.current = 0;
             repPhaseRef.current = 'need_setup';
             setupArmingEnabledRef.current = false;
+          } else if (cycleExhausted) {
+            lockoutStreakRef.current = 0;
+            sessionTrace.rep('stale_reset', {
+              armAgeMs,
+              hipY: y,
+              ascent,
+              bestAscent,
+              deepHold: deepHoldFramesRef.current,
+              reason: 'cycle_exhausted',
+            });
+            armedDeepHipYRef.current = 0;
+            armedAtRef.current = 0;
+            bestAscentSinceArmRef.current = 0;
+            minHipYSinceArmRef.current = 1;
+            deepHoldFramesRef.current = 0;
+            lockoutQualifyingFramesRef.current = 0;
+            repPhaseRef.current = 'need_setup';
+            setupArmingEnabledRef.current = false;
           } else {
           const armAgeOk =
-            armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount &&
-            armAgeMs <= DEADLIFT_REP_THRESH.maxArmAgeForCount;
+            armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount && armAgeMs <= armAgeMax;
           const canCountFrame = poseValidNow && hipsOk && armAgeOk;
           const repLooksReal = romComplete && sawLockout && heldBottom && bottomOk;
+          const lockoutFramesRequired =
+            bestAscent >=
+            DEADLIFT_REP_THRESH.repRomCompleteNorm * DEADLIFT_REP_THRESH.lockoutStrongRomFrac
+              ? 1
+              : DEADLIFT_REP_THRESH.consecutiveLockoutFrames;
 
           if (canCountFrame && repLooksReal) {
             lockoutQualifyingFramesRef.current += 1;
+          } else if (
+            repLooksReal &&
+            armAgeOk &&
+            lockoutQualifyingFramesRef.current > 0 &&
+            !canCountFrame
+          ) {
+            sessionTrace.countBlocked({
+              reason: !poseValidNow ? 'pose_invalid' : !hipsOk ? 'hips_low_score' : 'arm_age',
+              hipY: y,
+              bestAscent,
+              qualifying: lockoutQualifyingFramesRef.current,
+              required: lockoutFramesRequired,
+              armAgeMs,
+            });
+            lockoutQualifyingFramesRef.current = 0;
           }
 
           if (
             canCountFrame &&
             repLooksReal &&
-            lockoutQualifyingFramesRef.current >= DEADLIFT_REP_THRESH.consecutiveLockoutFrames
+            lockoutQualifyingFramesRef.current >= lockoutFramesRequired
           ) {
             setupStreakRef.current = 0;
             const now = Date.now();
@@ -1034,6 +1169,7 @@ export function LiveSessionScreen() {
         armedAtRef.current = 0;
         hipSmoothRef.current = null;
         setupArmingEnabledRef.current = true;
+        touchGoBottomStreakRef.current = 0;
         clearAutoFinishTimers();
       }
     } else if (flow !== 'pose_lost') {

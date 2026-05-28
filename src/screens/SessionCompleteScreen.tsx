@@ -9,7 +9,6 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
 import type { RootStackParamList } from '@/navigation/routeTypes';
-import { calculateRepScore } from '@/modules/scoring';
 import { saveSession, type SessionLog, type SessionSetSummary } from '@/modules/session';
 import { useSessionResultStore } from '@/store/sessionResultStore';
 import { useAuthStore } from '@/store/authStore';
@@ -20,9 +19,38 @@ import { clampMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits'
 import { clampSetReps, getSetTarget } from '@/utils/setPlan';
 import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from '@/components/RepsSlider';
 import {
-  buildWorkoutScoreMetrics,
-  type WorkoutSetResult,
+  deriveSessionReviewDisplay,
+  type SessionReviewDisplay,
+  type SessionReviewSnapshot,
 } from '@/utils/sessionScore';
+
+function captureSessionReviewDisplay(): SessionReviewDisplay {
+  const review = useSessionResultStore.getState().sessionReview;
+  if (review) return deriveSessionReviewDisplay(review);
+
+  const resultState = useSessionResultStore.getState();
+  const configState = useSessionConfigStore.getState();
+  const fallback: SessionReviewSnapshot = {
+    capturedAt: Date.now(),
+    startedAt: resultState.startedAt,
+    currentSetNumber: resultState.currentSetNumber,
+    lastSetReps: resultState.lastSetReps,
+    lastSetElapsedSec: resultState.lastSetElapsedSec,
+    errors: [...resultState.errors],
+    workoutSetSnapshots: [...resultState.workoutSetSnapshots],
+    planSlice: {
+      customSetPlan: configState.customSetPlan,
+      setCount: configState.setCount,
+      repsPerSet: configState.repsPerSet,
+      weightAmount: configState.weightAmount,
+      setPlans: configState.setPlans,
+    },
+    weightUnit: configState.weightUnit,
+    exercise: configState.exercise,
+    plannedSetCount: configState.setCount,
+  };
+  return deriveSessionReviewDisplay(fallback);
+}
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -91,39 +119,35 @@ function buildFormInsights(errorIds: Set<string>): Array<{ key: string; label: s
 
 export function SessionCompleteScreen() {
   const nav = useNavigation<Nav>();
-  const {
-    errors,
-    startedAt,
-    lastSetReps,
-    lastSetElapsedSec,
-    currentSetNumber,
-    advanceToNextSet,
-    workoutSetSnapshots,
-    appendWorkoutSetSnapshot,
-  } = useSessionResultStore();
+  /** Frozen once at mount — live store can be cleared if LiveSession remounts underneath. */
+  const [review] = useState(captureSessionReviewDisplay);
+  const { appendWorkoutSetSnapshot, advanceToNextSet } = useSessionResultStore();
   const {
     setCount: plannedSetCount,
-    weightAmount,
     weightUnit,
     customSetPlan,
     repsPerSet,
     setPlans,
-    exercise,
+    weightAmount,
   } = useSessionConfigStore();
   const applyNextSetTarget = useSessionConfigStore((s) => s.applyNextSetTarget);
   const { participantId } = useAuthStore();
   const [saved, setSaved] = useState(false);
 
-  const canAdvanceToNextSet = currentSetNumber < plannedSetCount;
+  const {
+    currentSetNumber,
+    lastSetReps,
+    lastSetElapsedSec,
+    completedSetTarget,
+    workoutSetResults,
+    metrics,
+    workoutSetSnapshots,
+    errors,
+    startedAt,
+    exercise,
+  } = review;
 
-  const completedSetTarget = useMemo(
-    () =>
-      getSetTarget(
-        { customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans },
-        currentSetNumber,
-      ),
-    [customSetPlan, plannedSetCount, repsPerSet, weightAmount, setPlans, currentSetNumber],
-  );
+  const canAdvanceToNextSet = currentSetNumber < plannedSetCount;
   const nextSetNumber = currentSetNumber + 1;
   const nextSetTarget = useMemo(
     () =>
@@ -161,50 +185,6 @@ export function SessionCompleteScreen() {
     const body = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
     return `${body} ${weightUnit === 'kg' ? 'kg' : 'lb'}`;
   }, [lastSetReps, completedSetTarget.weightAmount, weightUnit]);
-
-  const planSlice = useMemo(
-    () => ({ customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans }),
-    [customSetPlan, plannedSetCount, repsPerSet, weightAmount, setPlans],
-  );
-
-  const workoutSetResults = useMemo((): WorkoutSetResult[] => {
-    const bySet = new Map<number, WorkoutSetResult>();
-    for (const row of workoutSetSnapshots) {
-      bySet.set(row.setNumber, {
-        setNumber: row.setNumber,
-        reps: row.reps,
-        repsPlanned: getSetTarget(planSlice, row.setNumber).reps,
-        weightAmount: row.weightAmount,
-        weightUnit: row.weightUnit,
-        elapsedSec: row.elapsedSec,
-        formScore: row.scoreRounded,
-      });
-    }
-    bySet.set(currentSetNumber, {
-      setNumber: currentSetNumber,
-      reps: lastSetReps,
-      repsPlanned: completedSetTarget.reps,
-      weightAmount: completedSetTarget.weightAmount,
-      weightUnit,
-      elapsedSec: lastSetElapsedSec,
-      formScore: Math.round(calculateRepScore(errors).score),
-    });
-    return [...bySet.values()].sort((a, b) => a.setNumber - b.setNumber);
-  }, [
-    workoutSetSnapshots,
-    currentSetNumber,
-    lastSetReps,
-    completedSetTarget,
-    weightUnit,
-    lastSetElapsedSec,
-    errors,
-    planSlice,
-  ]);
-
-  const metrics = useMemo(
-    () => buildWorkoutScoreMetrics(workoutSetResults, errors),
-    [workoutSetResults, errors],
-  );
 
   const score = metrics.overallScore;
   const sc = Math.round(score);
