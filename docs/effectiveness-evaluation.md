@@ -112,7 +112,7 @@ Session Complete score = `100 − Σ(unique error weights)` (see [`form-errors.m
 | Phase | Goal | Actions |
 |-------|------|---------|
 | **A — Engineering** (now) | Rep counter stable | 10+ logged sets, `--expected` eval, tune `deadliftRep.ts` if needed |
-| **B — Error pilot** | ERR_001/002/005 meaningful | Trainer labels 25 reps; compute agreement; adjust thresholds in `analyzer.ts` |
+| **B — Error pilot** | ERR_001/002/005 meaningful | Run [`phase-b-protocol.md`](phase-b-protocol.md); `npm run eval:errors`; adjust thresholds in `analyzer.ts` |
 | **C — Field study** | Hypothesis 1–5 in README | 4-week protocol, AsyncStorage export, paired t-test |
 | **D — Production** | Size & perf | EAS production AAB, latency spot-check on target devices |
 

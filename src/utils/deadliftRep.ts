@@ -24,7 +24,11 @@ export function primaryHipY(pose: PoseResult): number | null {
  */
 export const DEADLIFT_REP_THRESH = {
   /** Frames at lift start used to estimate standing hip height. */
-  baselineFrameCount: 12,
+  baselineFrameCount: 14,
+  /** Wait for hip Y to settle before locking baseline (side-view jitter). */
+  baselineMaxSpread: 0.055,
+  /** Hard cap on baseline collection window. */
+  baselineMaxFrames: 28,
   /** Hips must drop this far below standing (norm Y) to arm the bottom of a rep. */
   setupDropBelowStanding: 0.055,
   /**
@@ -54,22 +58,24 @@ export const DEADLIFT_REP_THRESH = {
   minBottomClearanceBeyondGate: 0.026,
   /** While waiting for lockout, re-arm if hips drop this much below current armed bottom. */
   lockoutRearmMinDrop: 0.028,
-  consecutiveSetupFrames: 3,
+  consecutiveSetupFrames: 4,
   consecutiveLockoutFrames: 2,
   /** With clear ROM, one valid lockout frame is enough (normal tempo + valid=false flicker). */
-  lockoutStrongRomFrac: 1.1,
+  lockoutStrongRomFrac: 1.25,
   /** One frame at return gate — fast touch-and-go rarely holds 2 frames mid-descent. */
   consecutiveReturnFrames: 1,
   /** Min ascent from armed bottom to lockout (full rep ROM — primary count gate). */
-  repRomCompleteNorm: 0.062,
+  repRomCompleteNorm: 0.070,
+  /** At COUNT frame, smoothed ascent must still be near peak (blocks count on descent). */
+  lockoutCountCurrentRomFrac: 0.78,
   /** Ignore back-to-back counts within this window. */
-  minMsBetweenReps: 700,
+  minMsBetweenReps: 900,
   /** Min time from bottom-arm to lockout count (blocks flicker double-counts). */
-  minMsFromArmToCount: 550,
+  minMsFromArmToCount: 700,
   /** After a COUNT, block shallow setup-arms for this window (walk-off / rack false reps). */
   postCountShallowArmBlockMs: 1200,
   /** Min frames with hips below bottom gate while armed (blocks walk-to-camera false reps). */
-  minDeepHoldFrames: 3,
+  minDeepHoldFrames: 5,
   /** stale_reset only when peak ascent is below this fraction of full ROM. */
   staleResetMaxAscentFrac: 0.22,
   /** Do not re-arm lockout when hips are above this offset from lockout line. */

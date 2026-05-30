@@ -1,0 +1,12 @@
+# Phase B label sheet — copy to phase-b-labels.csv and fill expected column
+set,error_id,expected,notes
+1,ERR_001,Y,intentional lumbar rounding
+2,ERR_002,Y,hips rise before back set
+3,ERR_003,Y,bar swings forward mid-pull
+4,ERR_004,Y,lean back at lockout
+5,ERR_005,Y,shoulders behind bar at setup
+6,ERR_001,N,clean control set
+6,ERR_002,N,clean control set
+6,ERR_003,N,clean control set
+6,ERR_004,N,clean control set
+6,ERR_005,N,clean control set

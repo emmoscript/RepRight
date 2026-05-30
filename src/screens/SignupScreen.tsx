@@ -37,7 +37,7 @@ export function SignupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.flex}
     >
-      <SafeAreaView edges={['top']} style={styles.safeTop}>
+      <SafeAreaView edges={[]} style={styles.safeTop}>
         <RepRightHeader
           variant="auth"
           showBack

@@ -16,7 +16,7 @@ Implementation: [`src/modules/analyzer.ts`](../src/modules/analyzer.ts) · Feedb
 | ERR_005 | Shoulder behind bar (setup) | warning | `setup` | −10 |
 
 Each unique `errorId` is counted **once per session summary** for scoring (not per frame).  
-Live banners/audio require the error to persist **≥ 3 consecutive analyzed frames** (see Live Session).
+Live banners/audio: **critical** errors after **1** consecutive frame; **warning** errors after **2** (per errorId).
 
 ---
 
@@ -27,8 +27,8 @@ Live banners/audio require the error to persist **≥ 3 consecutive analyzed fra
 | **Severity** | Critical (red banner, white text, haptic) |
 | **Phases** | `pull_initiation`, `mid_pull` |
 | **Joint angle** | Shoulder → hip → knee (left chain) |
-| **Threshold** | Angle **< 150°** → error |
-| **Confidence** | `(150 − angle) / 30`, capped at 1 |
+| **Threshold** | Angle **< 165°** → error (side-view 2D; nominal doc target 150°) |
+| **Confidence** | `(165 − angle) / 35`, capped at 1 |
 
 **Meaning:** Torso collapses or rounds during the pull — hip–shoulder–knee chain closes too much.
 
@@ -135,7 +135,7 @@ Rep counting uses a **separate FSM** (hip Y baseline + ROM gates) — see [`docs
 
 | Rule | Value |
 |------|-------|
-| Banner persistence | ≥ 3 consecutive frames with same error |
+| Banner persistence | 1 frame (critical) · 2 frames (warning), per errorId |
 | Audio throttle | Max 1 spoken cue / 2 s |
 | Priority | Critical before warning; then higher confidence |
 | Per-rep score | `100 − Σ(unique error weights)`; floor 0 |
@@ -149,6 +149,7 @@ When `npm run log:session` is active, analyzer hits appear as:
 
 ```text
 [timestamp] analyzer  detected | phase=setup errors=["ERR_005"]
+[timestamp] analyzer  recorded | errorId=ERR_005 rep=1 phase=setup
 ```
 
-See [`session-debug.md`](session-debug.md).
+`recorded` = persisted to session summary (≥3 consecutive frames). Use for Phase B eval (`npm run eval:errors`).

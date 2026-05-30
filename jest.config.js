@@ -3,5 +3,8 @@ module.exports = {
   preset: 'jest-expo',
   testMatch: ['**/__tests__/**/*.test.ts?(x)'],
   setupFiles: ['<rootDir>/jest.setup.js'],
-  moduleNameMapper: { '^@/(.*)$': '<rootDir>/src/$1' },
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '\\.tflite$': '<rootDir>/jest.tflite.mock.js',
+  },
 };

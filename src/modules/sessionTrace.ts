@@ -143,6 +143,11 @@ export const sessionTrace = {
     emitThrottled('analyzer', errorIds.join(','), 1200, 'detected', { phase, errors: errorIds });
   },
 
+  /** Persisted to session summary after ≥3 consecutive frames (Phase B ground truth). */
+  formErrorRecorded(errorId: string, rep: number, phase: string): void {
+    emit('analyzer', 'recorded', { errorId, rep, phase });
+  },
+
   rawTensor(kind: string, values: number[]): void {
     if (!enabled || values.length < 51) return;
     emit('infer', 'raw_tensor', {

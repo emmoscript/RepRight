@@ -56,7 +56,7 @@ import {
   keypointsFromMovenetOutput,
   type PoseResult,
 } from '@/modules/movenet';
-import { analyzePose } from '@/modules/analyzer';
+import { analyzePose, type ErrorId, type Phase } from '@/modules/analyzer';
 import { generateFeedback } from '@/modules/feedback';
 import { sessionTrace } from '@/modules/sessionTrace';
 import type { RootStackParamList } from '@/navigation/routeTypes';
@@ -99,6 +99,47 @@ const AUTO_FINISH_TARGET_REPS_DELAY_MS = 900;
 const LOCKOUT_IDLE_FINISH_MS = 4500;
 /** Extra slack on lockoutTopY for idle detection (smoothed hip Y lags slightly). */
 const LOCKOUT_IDLE_SLACK = 0.012;
+
+type RepPhase = 'need_return' | 'need_setup' | 'need_lockout';
+
+/** When each error may drive live banners / recording (rep FSM + hip height). */
+function formFeedbackLiveForError(
+  errorId: ErrorId,
+  repPhase: RepPhase,
+  hipY: number | null,
+  standing: number | null,
+  armedDeep: number,
+  analyzerPhase?: Phase,
+): boolean {
+  if (standing == null) return false;
+  const lockoutZoneY =
+    standing +
+    DEADLIFT_REP_THRESH.lockoutStandingSlack +
+    DEADLIFT_REP_THRESH.lockoutCountSlack;
+  const atLockoutTop = hipY != null && hipY <= lockoutZoneY + LOCKOUT_IDLE_SLACK;
+  const bottomGate = standing + DEADLIFT_REP_THRESH.setupDropBelowStanding;
+  const atSetupBottom = hipY != null && hipY > bottomGate;
+
+  switch (errorId) {
+    case 'ERR_001':
+    case 'ERR_002':
+      return repPhase === 'need_lockout' && armedDeep > 0;
+    case 'ERR_003':
+      if (atLockoutTop) return false;
+      return repPhase === 'need_lockout' && armedDeep > 0;
+    case 'ERR_004':
+      if (!atLockoutTop) return false;
+      return (
+        analyzerPhase === 'lockout' ||
+        repPhase === 'need_lockout' ||
+        repPhase === 'need_return'
+      );
+    case 'ERR_005':
+      return repPhase === 'need_setup' && analyzerPhase === 'setup' && atSetupBottom;
+    default:
+      return false;
+  }
+}
 
 /** State tick still 100ms; streak × tick ≈ min time “valid” before leaving search (~400–550 ms typical). */
 const SEARCH_VALID_STREAK = 5;
@@ -281,8 +322,9 @@ export function LiveSessionScreen() {
   const scheduleAutoFinishRef = useRef<(reason: 'target_reps' | 'lockout_idle', delayMs: number) => void>(
     () => {},
   );
-  /** Biomechanical cue streak → banner after stable detection (with modal gate). */
-  const formErrStreakRef = useRef(0);
+  /** Biomechanical cue streak per errorId → banner after stable detection. */
+  const formErrStreakByIdRef = useRef<Map<ErrorId, number>>(new Map());
+  const FORM_ERR_STREAK_TARGET = 2;
   /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
   const lastFormAudioAtRef = useRef(0);
   /** One `addErrors` per `errorId` per session (summary / Session Complete). */
@@ -322,8 +364,10 @@ export function LiveSessionScreen() {
       prevFlowTraceRef.current = flow;
       if (flow === 'active' && activeEnteredRef.current) {
         sessionTrace.session('lift_resumed', { mock: useMock });
+        formErrStreakByIdRef.current = new Map();
       } else if (flow === 'active') {
         sessionTrace.session('lift_started', { mock: useMock, continued: continuedWorkout });
+        formErrStreakByIdRef.current = new Map();
         inferCountRef.current = 0;
         inferWindowStartRef.current = Date.now();
       }
@@ -460,6 +504,7 @@ export function LiveSessionScreen() {
     setReps(0);
     setElapsedSec(0);
     recordedFormErrIdsRef.current = new Set();
+    formErrStreakByIdRef.current = new Map();
     lastFormAudioAtRef.current = 0;
   }, [continuedWorkout, clearResults, setStarted]);
 
@@ -734,10 +779,15 @@ export function LiveSessionScreen() {
           const armAgeMs = Date.now() - armedAtRef.current;
           const hipsOk = hipsReliableForRepCount(pose);
           const bestAscent = bestAscentSinceArmRef.current;
-          const romComplete = bestAscent >= DEADLIFT_REP_THRESH.repRomCompleteNorm;
-          const sawLockout =
-            minHipYSinceArmRef.current <=
+          const lockoutCeiling =
             lockoutTopY + DEADLIFT_REP_THRESH.lockoutCountSlack;
+          const romComplete = bestAscent >= DEADLIFT_REP_THRESH.repRomCompleteNorm;
+          const currentRomOk =
+            ascent >=
+            DEADLIFT_REP_THRESH.repRomCompleteNorm *
+              DEADLIFT_REP_THRESH.lockoutCountCurrentRomFrac;
+          const atLockoutNow = y <= lockoutCeiling;
+          const sawLockout = minHipYSinceArmRef.current <= lockoutCeiling;
           const heldBottom = deepHoldFramesRef.current >= DEADLIFT_REP_THRESH.minDeepHoldFrames;
           const stuckAtBottom =
             bestAscent < DEADLIFT_REP_THRESH.repRomCompleteNorm * DEADLIFT_REP_THRESH.staleResetMaxAscentFrac;
@@ -789,7 +839,13 @@ export function LiveSessionScreen() {
           const armAgeOk =
             armAgeMs >= DEADLIFT_REP_THRESH.minMsFromArmToCount && armAgeMs <= armAgeMax;
           const canCountFrame = poseValidNow && hipsOk && armAgeOk;
-          const repLooksReal = romComplete && sawLockout && heldBottom && bottomOk;
+          const repLooksReal =
+            romComplete &&
+            currentRomOk &&
+            atLockoutNow &&
+            sawLockout &&
+            heldBottom &&
+            bottomOk;
           const lockoutFramesRequired =
             bestAscent >=
             DEADLIFT_REP_THRESH.repRomCompleteNorm * DEADLIFT_REP_THRESH.lockoutStrongRomFrac
@@ -863,7 +919,7 @@ export function LiveSessionScreen() {
 
         if (
           !autoFinishScheduledRef.current &&
-          repsRef.current >= 1 &&
+          repsRef.current >= plannedRepsPerSetRef.current &&
           repPhaseRef.current === 'need_return' &&
           y != null &&
           standingHipYRef.current != null &&
@@ -887,9 +943,23 @@ export function LiveSessionScreen() {
       } else if (y != null && standingHipYRef.current == null) {
         hipSmoothRef.current = y;
         baselineHipSamplesRef.current.push(y);
-        if (baselineHipSamplesRef.current.length >= DEADLIFT_REP_THRESH.baselineFrameCount) {
-          standingHipYRef.current = standingHipYFromBaseline(baselineHipSamplesRef.current);
-          sessionTrace.rep('baseline', { standing: standingHipYRef.current });
+        const baselineSamples = baselineHipSamplesRef.current;
+        const baselineReady =
+          baselineSamples.length >= DEADLIFT_REP_THRESH.baselineFrameCount;
+        const baselineSpread =
+          baselineSamples.length > 0
+            ? Math.max(...baselineSamples) - Math.min(...baselineSamples)
+            : 0;
+        const baselineSettled =
+          baselineSpread <= DEADLIFT_REP_THRESH.baselineMaxSpread ||
+          baselineSamples.length >= DEADLIFT_REP_THRESH.baselineMaxFrames;
+        if (baselineReady && baselineSettled) {
+          standingHipYRef.current = standingHipYFromBaseline(baselineSamples);
+          sessionTrace.rep('baseline', {
+            standing: standingHipYRef.current,
+            spread: baselineSpread,
+            frames: baselineSamples.length,
+          });
         }
       } else if (repPhaseRef.current === 'need_lockout') {
         lockoutStreakRef.current = 0;
@@ -898,21 +968,85 @@ export function LiveSessionScreen() {
 
       if (stage === 'active' && !showQuitModalRef.current) {
       const analysis = analyzePose(pose, historyRef.current.slice(-16));
-      if (analysis.errors.length > 0) {
-        formErrStreakRef.current += 1;
+      const activeErrIds = analysis.errors.map((e) => e.errorId);
+      if (activeErrIds.length > 0) {
         sessionTrace.analyzer(
           analysis.phase,
-          analysis.errors.map((e) => e.errorId),
+          activeErrIds,
         );
-      } else formErrStreakRef.current = 0;
+      }
 
-      const fb = generateFeedback(analysis, lastFormAudioAtRef.current);
+      const formHipY =
+        hipSmoothRef.current != null && hipSmoothRef.current > 0
+          ? hipSmoothRef.current
+          : hipY;
+      let liveErrors = analysis.errors.filter((e) =>
+        formFeedbackLiveForError(
+          e.errorId,
+          repPhaseRef.current,
+          formHipY,
+          standingHipYRef.current,
+          armedDeepHipYRef.current,
+          analysis.phase,
+        ),
+      );
+      if (
+        liveErrors.some((e) => e.errorId === 'ERR_004') &&
+        analysis.phase === 'lockout'
+      ) {
+        liveErrors = liveErrors.filter(
+          (e) => e.errorId !== 'ERR_001' && e.errorId !== 'ERR_002',
+        );
+      }
+      const liveErrIds = liveErrors.map((e) => e.errorId);
+
+      for (const err of liveErrors) {
+        const next = (formErrStreakByIdRef.current.get(err.errorId) ?? 0) + 1;
+        formErrStreakByIdRef.current.set(err.errorId, next);
+      }
+      for (const id of [...formErrStreakByIdRef.current.keys()]) {
+        if (!liveErrIds.includes(id)) formErrStreakByIdRef.current.set(id, 0);
+      }
+
+      const fb = generateFeedback(
+        { ...analysis, errors: liveErrors },
+        lastFormAudioAtRef.current,
+      );
+      const topStreak = fb.topError
+        ? (formErrStreakByIdRef.current.get(fb.topError.errorId) ?? 0)
+        : 0;
+      const streakTarget =
+        fb.topError?.severity === 'critical' || fb.topError?.errorId === 'ERR_004'
+          ? 1
+          : FORM_ERR_STREAK_TARGET;
+      const formAnalysisLive = fb.topError != null;
+      const hipSwayTaken =
+        recordedFormErrIdsRef.current.has('ERR_001') ||
+        recordedFormErrIdsRef.current.has('ERR_002');
+      const isHipSway =
+        fb.topError?.errorId === 'ERR_001' || fb.topError?.errorId === 'ERR_002';
       const showBn =
-        formErrStreakRef.current >= 3 && fb.activeBanner != null && !showQuitModalRef.current;
+        formAnalysisLive &&
+        topStreak >= streakTarget &&
+        fb.activeBanner != null &&
+        !showQuitModalRef.current;
 
-      if (showBn && fb.topError && !recordedFormErrIdsRef.current.has(fb.topError.errorId)) {
+      const skipRecord =
+        (fb.topError != null &&
+          fb.topError.errorId === 'ERR_005' &&
+          recordedFormErrIdsRef.current.has('ERR_001')) ||
+        (isHipSway && hipSwayTaken && fb.topError != null &&
+          !recordedFormErrIdsRef.current.has(fb.topError.errorId));
+
+      if (
+        showBn &&
+        fb.topError &&
+        !skipRecord &&
+        !recordedFormErrIdsRef.current.has(fb.topError.errorId)
+      ) {
         recordedFormErrIdsRef.current.add(fb.topError.errorId);
         addErrors([fb.topError]);
+        sessionTrace.formErrorRecorded(fb.topError.errorId, repsRef.current, analysis.phase);
         if (fb.topError.severity === 'critical') {
           void impactAsync(ImpactFeedbackStyle.Medium);
         }
@@ -924,7 +1058,7 @@ export function LiveSessionScreen() {
       }
 
       setLiveFormBanner((prev) => {
-        if (formErrStreakRef.current === 0) return null;
+        if (!formAnalysisLive || topStreak < streakTarget) return null;
         if (!showBn || !fb.activeBanner) return prev;
         const next = {
           message: fb.activeBanner.message,

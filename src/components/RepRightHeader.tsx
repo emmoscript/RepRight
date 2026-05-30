@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon, ICONS } from '@/components/Icon';
@@ -30,7 +30,7 @@ export function RepRightHeader({
         styles.bar,
         variant === 'auth' && styles.barAuth,
         isSessionComplete && styles.barSessionComplete,
-        { paddingTop: topInset + 4 },
+        { paddingTop: topInset + 2 },
       ]}
     >
       <View style={[styles.contentRow, isSessionComplete && styles.contentRowSessionComplete]}>
@@ -59,7 +59,7 @@ export function RepRightHeader({
 const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 10,
     backgroundColor: colors.nav_bar_bg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border_subtle,
@@ -75,13 +75,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 44,
-  },
-  contentRowSessionComplete: {
     minHeight: 40,
   },
+  contentRowSessionComplete: {
+    minHeight: 36,
+  },
   left: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
-  right: { marginLeft: 12 },
+  right: {
+    marginLeft: 12,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   backHit: {
     marginRight: 12,
     minWidth: 40,
@@ -96,7 +101,9 @@ const styles = StyleSheet.create({
     color: colors.primary_green,
     fontFamily: typography.fontFamily.display,
     fontSize: 18,
+    lineHeight: 22,
     letterSpacing: typography.letterSpacing.capsWide,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
   wordmarkSm: {
     fontSize: 17,

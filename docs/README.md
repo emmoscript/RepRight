@@ -7,6 +7,7 @@
 | [`form-errors.md`](form-errors.md) | **ERR_001–ERR_005** — thresholds, phases, messages |
 | [`rep-counting.md`](rep-counting.md) | Hip-Y rep FSM (baseline, gates, states) |
 | [`effectiveness-evaluation.md`](effectiveness-evaluation.md) | How to measure rep & error accuracy |
+| [`phase-b-protocol.md`](phase-b-protocol.md) | **Phase B** — intentional form-error pilot |
 | [`session-debug.md`](session-debug.md) | Wireless `log:session` for dev |
 | [`screens.md`](screens.md) | Screen inventory & navigation |
 | [`design-system/design-system-v3.md`](design-system/design-system-v3.md) | Colors, typography, components |

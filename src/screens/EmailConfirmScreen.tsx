@@ -36,7 +36,7 @@ export function EmailConfirmScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.flex}
     >
-      <SafeAreaView edges={['top']} style={styles.flex}>
+      <SafeAreaView edges={[]} style={styles.flex}>
         <RepRightHeader
           variant="auth"
           rightSlot={<Ionicons name="mail-outline" size={22} color={colors.primary_green} />}
