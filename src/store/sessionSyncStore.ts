@@ -3,15 +3,15 @@ import { useAuthStore } from "@/store/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 
+import type {
+    BiomechanicalErrorInput,
+    SaveSessionResponse,
+    SaveSessionWithErrorsParams,
+} from "@/lib/supabaseTypes";
 import * as Crypto from "expo-crypto";
 
-export type BiomechanicalErrorInput = {
-  error_type: string;
-  timestamp_ms: number;
-  confidence: number;
-  severity: "low" | "medium" | "high";
-  metadata?: Record<string, any>;
-};
+// Re-export for backwards compatibility
+export type { BiomechanicalErrorInput };
 
 type LocalSession = {
   id: string; // UUID local
@@ -84,6 +84,20 @@ export const useSessionSyncStore = create<SessionSyncState>((set, get) => ({
     console.log("Session ID:", sessionId);
     console.log("Set count:", setCount);
     console.log("Weight:", weight);
+
+    // ─────────────────────────────────────────────────────────────
+    // Validate weight before processing
+    // ─────────────────────────────────────────────────────────────
+    if (weight !== undefined && weight !== null) {
+      if (!Number.isFinite(weight)) {
+        console.error("❌ Invalid weight: must be a valid number");
+        return null;
+      }
+      if (weight <= 0) {
+        console.error("❌ Invalid weight: must be greater than 0");
+        return null;
+      }
+    }
 
     const state = get();
     const session = state.sessions.get(sessionId);
@@ -188,14 +202,29 @@ export const useSessionSyncStore = create<SessionSyncState>((set, get) => ({
 
         console.log("Calling Supabase RPC: save_session_with_errors");
 
-        // Llamar RPC de Supabase
-        const { data, error } = await supabase.rpc("save_session_with_errors", {
+        // ─────────────────────────────────────────────────────────────
+        // Prepare and validate RPC parameters
+        // ─────────────────────────────────────────────────────────────
+        const rpcParams: SaveSessionWithErrorsParams = {
           p_exercise: session.exercise,
           p_set_count: session.set_count,
           p_started_at: new Date(session.started_at).toISOString(),
-          p_weight: session.weight || null,
+          p_weight: session.weight ?? null,
           p_errors: session.errors,
+        };
+
+        console.log("RPC parameters:", {
+          exercise: rpcParams.p_exercise,
+          set_count: rpcParams.p_set_count,
+          weight: rpcParams.p_weight,
+          errors_count: rpcParams.p_errors.length,
         });
+
+        // Call Supabase RPC with type-safe parameters
+        const { data, error } = await supabase.rpc<SaveSessionResponse>(
+          "save_session_with_errors",
+          rpcParams,
+        );
 
         console.log("Supabase RPC response received");
         console.log("Response data:", data);
@@ -208,6 +237,22 @@ export const useSessionSyncStore = create<SessionSyncState>((set, get) => ({
             details: error.details,
             hint: error.hint,
           });
+
+          // ─────────────────────────────────────────────────────────────
+          // Enhanced error classification for weight validation
+          // ─────────────────────────────────────────────────────────────
+          if (error.message?.includes("CHECK constraint")) {
+            console.error(
+              "❌ Weight validation failed (Supabase): must be > 0",
+            );
+          } else if (error.message?.includes("Not authenticated")) {
+            console.error(
+              "❌ User authentication failed - session may be expired",
+            );
+          } else if (error.message?.includes("user_id")) {
+            console.error("❌ User ID mismatch or auth issue");
+          }
+
           throw error;
         }
 

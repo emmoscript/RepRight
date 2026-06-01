@@ -1,29 +1,46 @@
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { randomUUID } from 'expo-crypto';
-import React, { useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View, Platform, TextInput } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
-
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { RepRightHeader } from '@/components/RepRightHeader';
-import type { RootStackParamList } from '@/navigation/routeTypes';
-import { saveSession, type SessionLog, type SessionSetSummary } from '@/modules/session';
-import { useSessionResultStore } from '@/store/sessionResultStore';
-import { useAuthStore } from '@/store/authStore';
-import { useSessionConfigStore } from '@/store/sessionConfigStore';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { clampMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
-import { clampSetReps, getSetTarget } from '@/utils/setPlan';
-import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from '@/components/RepsSlider';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { randomUUID } from "expo-crypto";
+import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  deriveSessionReviewDisplay,
-  type SessionReviewDisplay,
-  type SessionReviewSnapshot,
-} from '@/utils/sessionScore';
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import Svg, { Circle, G } from "react-native-svg";
+
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { RepRightHeader } from "@/components/RepRightHeader";
+import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from "@/components/RepsSlider";
+import {
+    saveSession,
+    type SessionLog,
+    type SessionSetSummary,
+} from "@/modules/session";
+import type { RootStackParamList } from "@/navigation/routeTypes";
+import { useAuthStore } from "@/store/authStore";
+import { useSessionConfigStore } from "@/store/sessionConfigStore";
+import { useSessionResultStore } from "@/store/sessionResultStore";
+import { useSessionSyncStore } from "@/store/sessionSyncStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
+import {
+    deriveSessionReviewDisplay,
+    type SessionReviewDisplay,
+    type SessionReviewSnapshot,
+} from "@/utils/sessionScore";
+import { clampSetReps, getSetTarget } from "@/utils/setPlan";
+import {
+    clampMass,
+    parseMassDraft,
+    type WeightUnit,
+} from "@/utils/weightUnits";
 
 function captureSessionReviewDisplay(): SessionReviewDisplay {
   const review = useSessionResultStore.getState().sessionReview;
@@ -58,11 +75,11 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 function fmtWeight(amount: number, unit: WeightUnit) {
   const rounded = Math.round(amount * 10) / 10;
   const body = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
-  return `${body} ${unit === 'kg' ? 'kg' : 'lb'}`;
+  return `${body} ${unit === "kg" ? "kg" : "lb"}`;
 }
 
 function fmtElapsed(sec: number) {
-  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 }
 
 const RING_SZ = 240;
@@ -80,31 +97,31 @@ function ringColor(sc: number) {
 }
 
 function precisionTitle(scoreRounded: number, t: (key: string) => string) {
-  if (scoreRounded >= 90) return t('sessionComplete.precisionElite');
-  if (scoreRounded >= 80) return t('sessionComplete.precisionStrong');
-  if (scoreRounded >= 70) return t('sessionComplete.precisionSolid');
-  if (scoreRounded >= 50) return t('sessionComplete.precisionCleanup');
-  return t('sessionComplete.precisionAlert');
+  if (scoreRounded >= 90) return t("sessionComplete.precisionElite");
+  if (scoreRounded >= 80) return t("sessionComplete.precisionStrong");
+  if (scoreRounded >= 70) return t("sessionComplete.precisionSolid");
+  if (scoreRounded >= 50) return t("sessionComplete.precisionCleanup");
+  return t("sessionComplete.precisionAlert");
 }
 
-type FormBand = 'critical' | 'warning' | 'good';
+type FormBand = "critical" | "warning" | "good";
 
 function bandLabel(band: FormBand, t: (key: string) => string) {
-  if (band === 'critical') return t('common.critical');
-  if (band === 'warning') return t('common.warning');
-  return t('common.good');
+  if (band === "critical") return t("common.critical");
+  if (band === "warning") return t("common.warning");
+  return t("common.good");
 }
 
 function bandDotColor(band: FormBand) {
-  if (band === 'critical') return colors.accent_red;
-  if (band === 'warning') return '#FF9100';
+  if (band === "critical") return colors.accent_red;
+  if (band === "warning") return "#FF9100";
   return colors.primary_green;
 }
 
 function badgeColors(band: FormBand) {
   const dot = bandDotColor(band);
-  if (band === 'good') return { fg: dot, bg: `${dot}14`, bd: `${dot}33` };
-  if (band === 'critical') return { fg: dot, bg: `${dot}1A`, bd: `${dot}33` };
+  if (band === "good") return { fg: dot, bg: `${dot}14`, bd: `${dot}33` };
+  if (band === "critical") return { fg: dot, bg: `${dot}1A`, bd: `${dot}33` };
   return { fg: dot, bg: `${dot}22`, bd: `${dot}40` };
 }
 
@@ -112,12 +129,27 @@ function buildFormInsights(
   errorIds: Set<string>,
   t: (key: string) => string,
 ): Array<{ key: string; label: string; band: FormBand }> {
-  const hipCrit = errorIds.has('ERR_001') || errorIds.has('ERR_002');
-  const romWarn = errorIds.has('ERR_003') || errorIds.has('ERR_004') || errorIds.has('ERR_005');
+  const hipCrit = errorIds.has("ERR_001") || errorIds.has("ERR_002");
+  const romWarn =
+    errorIds.has("ERR_003") ||
+    errorIds.has("ERR_004") ||
+    errorIds.has("ERR_005");
   return [
-    { key: 'hip-sway', label: t('sessionComplete.hipSway'), band: hipCrit ? 'critical' : 'good' },
-    { key: 'rom', label: t('sessionComplete.rangeOfMotion'), band: romWarn ? 'warning' : 'good' },
-    { key: 'tempo', label: t('sessionComplete.tempoConsistency'), band: 'good' },
+    {
+      key: "hip-sway",
+      label: t("sessionComplete.hipSway"),
+      band: hipCrit ? "critical" : "good",
+    },
+    {
+      key: "rom",
+      label: t("sessionComplete.rangeOfMotion"),
+      band: romWarn ? "warning" : "good",
+    },
+    {
+      key: "tempo",
+      label: t("sessionComplete.tempoConsistency"),
+      band: "good",
+    },
   ];
 }
 
@@ -126,7 +158,8 @@ export function SessionCompleteScreen() {
   const nav = useNavigation<Nav>();
   /** Frozen once at mount — live store can be cleared if LiveSession remounts underneath. */
   const [review] = useState(captureSessionReviewDisplay);
-  const { appendWorkoutSetSnapshot, advanceToNextSet } = useSessionResultStore();
+  const { appendWorkoutSetSnapshot, advanceToNextSet } =
+    useSessionResultStore();
   const {
     setCount: plannedSetCount,
     weightUnit,
@@ -158,7 +191,13 @@ export function SessionCompleteScreen() {
     () =>
       canAdvanceToNextSet
         ? getSetTarget(
-            { customSetPlan, setCount: plannedSetCount, repsPerSet, weightAmount, setPlans },
+            {
+              customSetPlan,
+              setCount: plannedSetCount,
+              repsPerSet,
+              weightAmount,
+              setPlans,
+            },
             nextSetNumber,
           )
         : null,
@@ -174,7 +213,9 @@ export function SessionCompleteScreen() {
   );
 
   /** Working weight on the bar for the *next* set (pre-filled from plan). */
-  const [nextWeightDraft, setNextWeightDraft] = useState(() => String(completedSetTarget.weightAmount));
+  const [nextWeightDraft, setNextWeightDraft] = useState(() =>
+    String(completedSetTarget.weightAmount),
+  );
   const [nextRepsDraft, setNextRepsDraft] = useState(repsPerSet);
 
   useEffect(() => {
@@ -184,11 +225,11 @@ export function SessionCompleteScreen() {
   }, [nextSetTarget]);
 
   const volumeDisplay = useMemo(() => {
-    if (lastSetReps <= 0) return '—';
+    if (lastSetReps <= 0) return "—";
     const v = completedSetTarget.weightAmount * lastSetReps;
     const rounded = Math.round(v * 10) / 10;
     const body = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
-    return `${body} ${weightUnit === 'kg' ? 'kg' : 'lb'}`;
+    return `${body} ${weightUnit === "kg" ? "kg" : "lb"}`;
   }, [lastSetReps, completedSetTarget.weightAmount, weightUnit]);
 
   const score = metrics.overallScore;
@@ -211,7 +252,7 @@ export function SessionCompleteScreen() {
     const ids = new Set(uniqueErrors.map((e) => e.errorId));
     return buildFormInsights(ids, t);
   }, [uniqueErrors, t]);
-  const goHome = () => nav.navigate('MainTabs', { screen: 'HomeMain' });
+  const goHome = () => nav.navigate("MainTabs", { screen: "HomeMain" });
 
   const onNextSet = () => {
     appendWorkoutSetSnapshot({
@@ -223,14 +264,20 @@ export function SessionCompleteScreen() {
       scoreRounded: formSc,
     });
     const parsed = parseMassDraft(nextWeightDraft);
-    const nextMass = clampMass(parsed ?? completedSetTarget.weightAmount, weightUnit);
+    const nextMass = clampMass(
+      parsed ?? completedSetTarget.weightAmount,
+      weightUnit,
+    );
     applyNextSetTarget(nextSetNumber, nextMass, nextRepsDraft);
     advanceToNextSet();
-    nav.replace('LiveSession', { continuedWorkout: true });
+    nav.replace("LiveSession", { continuedWorkout: true });
   };
 
   const onSave = async () => {
-    if (saved) { goHome(); return; }
+    if (saved) {
+      goHome();
+      return;
+    }
     const sessionId = randomUUID();
     const endedAt = Date.now();
     const setSummaries: SessionSetSummary[] = workoutSetResults.map((row) => ({
@@ -279,7 +326,44 @@ export function SessionCompleteScreen() {
         mostFrequentError: errors[0]?.errorId ?? null,
       },
     };
+
+    // Save to local AsyncStorage for backward compatibility
     await saveSession(log);
+
+    // Sync to Supabase with weight data
+    try {
+      console.log("\n=== SESSION COMPLETE: Syncing to Supabase ===");
+      console.log("Exercise:", exercise);
+      console.log("Set count:", plannedSetCount);
+      console.log("Weight amount:", weightAmount);
+
+      const {
+        startSession: syncStartSession,
+        completeSession: completeSessionSync,
+      } = useSessionSyncStore.getState();
+
+      // Create session in sync store
+      const syncStoreSessionId = await syncStartSession(
+        exercise,
+        weightAmount || null,
+      );
+      console.log("Sync store session created:", syncStoreSessionId);
+
+      // Complete the session and sync to Supabase
+      await completeSessionSync(
+        syncStoreSessionId,
+        plannedSetCount,
+        weightAmount || null,
+      );
+      console.log("✅ Session synced to Supabase successfully");
+    } catch (err) {
+      console.error(
+        "⚠️ Error syncing to Supabase:",
+        err instanceof Error ? err.message : String(err),
+      );
+      // Don't block the UI if Supabase sync fails - session is still saved locally
+    }
+
     setSaved(true);
     useSessionResultStore.getState().clear();
     goHome();
@@ -288,22 +372,32 @@ export function SessionCompleteScreen() {
   return (
     <View style={styles.root}>
       <RepRightHeader variant="sessionComplete" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        <Text style={styles.h1}>{t('sessionComplete.sessionComplete')}</Text>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}>
+        <Text style={styles.h1}>{t("sessionComplete.sessionComplete")}</Text>
 
         {/* Score ring */}
         <View style={styles.ringOuter}>
           <Svg width={RING_SZ} height={RING_SZ}>
             <G transform={`rotate(-90 ${RING_SZ / 2} ${RING_SZ / 2})`}>
               <Circle
-                cx={RING_SZ / 2} cy={RING_SZ / 2} r={R}
-                stroke={colors.surface_v3} strokeWidth={RING_STROKE} fill="none"
+                cx={RING_SZ / 2}
+                cy={RING_SZ / 2}
+                r={R}
+                stroke={colors.surface_v3}
+                strokeWidth={RING_STROKE}
+                fill="none"
               />
               <Circle
-                cx={RING_SZ / 2} cy={RING_SZ / 2} r={R}
-                stroke={rc} strokeWidth={RING_STROKE} fill="none"
-                strokeLinecap="round" strokeDasharray={arc}
+                cx={RING_SZ / 2}
+                cy={RING_SZ / 2}
+                r={R}
+                stroke={rc}
+                strokeWidth={RING_STROKE}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={arc}
               />
             </G>
           </Svg>
@@ -314,16 +408,14 @@ export function SessionCompleteScreen() {
                   style={styles.ringScoreBig}
                   adjustsFontSizeToFit
                   numberOfLines={1}
-                  minimumFontScale={0.65}
-                >
+                  minimumFontScale={0.65}>
                   {sc}
                 </Text>
                 <Text
                   style={styles.ringScoreFrac}
                   adjustsFontSizeToFit
                   numberOfLines={1}
-                  minimumFontScale={0.7}
-                >
+                  minimumFontScale={0.7}>
                   /100
                 </Text>
               </View>
@@ -331,36 +423,57 @@ export function SessionCompleteScreen() {
                 style={styles.ringRecoveryLbl}
                 adjustsFontSizeToFit
                 numberOfLines={1}
-                minimumFontScale={0.75}
-              >
-                {t('sessionComplete.recoveryIndex')}
+                minimumFontScale={0.75}>
+                {t("sessionComplete.recoveryIndex")}
               </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.eliteBadge}>
-          <MaterialIcons name="verified" size={16} color={colors.primary_green} />
+          <MaterialIcons
+            name="verified"
+            size={16}
+            color={colors.primary_green}
+          />
           <Text style={styles.eliteBadgeTxt}>{precisionTitle(sc, t)}</Text>
         </View>
 
         {/* Stats grid */}
         <View style={styles.grid}>
-          <MiniCard label={t('sessionComplete.volume')} value={volumeDisplay} accentBorder />
           <MiniCard
-            label={t('common.repsLower')}
+            label={t("sessionComplete.volume")}
+            value={volumeDisplay}
+            accentBorder
+          />
+          <MiniCard
+            label={t("common.repsLower")}
             value={`${metrics.totalReps}/${metrics.plannedReps}`}
             accentBorder
           />
-          <MiniCard label={t('sessionComplete.form')} value={`${formSc}%`} accentBorder />
-          <MiniCard label={t('sessionComplete.completion')} value={`${completionSc}%`} accentBorder />
+          <MiniCard
+            label={t("sessionComplete.form")}
+            value={`${formSc}%`}
+            accentBorder
+          />
+          <MiniCard
+            label={t("sessionComplete.completion")}
+            value={`${completionSc}%`}
+            accentBorder
+          />
         </View>
 
         {/* Form adjustments — canonical summary rows */}
         <View style={styles.formCard}>
           <View style={styles.formCardTitleRow}>
-            <MaterialIcons name="analytics" size={22} color={colors.primary_green} />
-            <Text style={styles.formCardTitle}>{t('sessionComplete.setInsights')}</Text>
+            <MaterialIcons
+              name="analytics"
+              size={22}
+              color={colors.primary_green}
+            />
+            <Text style={styles.formCardTitle}>
+              {t("sessionComplete.setInsights")}
+            </Text>
           </View>
           <View style={styles.formCardBody}>
             {insightRows.map((row, idx) => {
@@ -368,14 +481,27 @@ export function SessionCompleteScreen() {
               return (
                 <View
                   key={row.key}
-                  style={[styles.insightRow, idx < insightRows.length - 1 && styles.insightRowSep]}
-                >
+                  style={[
+                    styles.insightRow,
+                    idx < insightRows.length - 1 && styles.insightRowSep,
+                  ]}>
                   <View style={styles.insightLeft}>
-                    <View style={[styles.insightDot, { backgroundColor: bandDotColor(row.band) }]} />
+                    <View
+                      style={[
+                        styles.insightDot,
+                        { backgroundColor: bandDotColor(row.band) },
+                      ]}
+                    />
                     <Text style={styles.insightName}>{row.label}</Text>
                   </View>
-                  <View style={[styles.bandBadge, { backgroundColor: b.bg, borderColor: b.bd }]}>
-                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>{bandLabel(row.band, t)}</Text>
+                  <View
+                    style={[
+                      styles.bandBadge,
+                      { backgroundColor: b.bg, borderColor: b.bd },
+                    ]}>
+                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>
+                      {bandLabel(row.band, t)}
+                    </Text>
                   </View>
                 </View>
               );
@@ -387,14 +513,16 @@ export function SessionCompleteScreen() {
           <View style={styles.nextSetBlock}>
             {workoutSetSnapshots.length > 0 && (
               <>
-                <Text style={styles.nextSetSectionTitle}>{t('sessionComplete.setInsights')}</Text>
+                <Text style={styles.nextSetSectionTitle}>
+                  {t("sessionComplete.setInsights")}
+                </Text>
                 {workoutSetSnapshots.map((row) => (
                   <View key={row.setNumber} style={styles.snapshotRow}>
                     <Text style={styles.snapshotSetLab}>
-                      {t('deadliftConfigure.setLabel', { n: row.setNumber })}
+                      {t("deadliftConfigure.setLabel", { n: row.setNumber })}
                     </Text>
                     <Text style={styles.snapshotMeta}>
-                      {t('sessionComplete.setLine', {
+                      {t("sessionComplete.setLine", {
                         weight: fmtWeight(row.weightAmount, row.weightUnit),
                         reps: row.reps,
                         score: row.scoreRounded,
@@ -407,47 +535,71 @@ export function SessionCompleteScreen() {
             )}
 
             <Text style={styles.nextSetSectionTitle}>
-              {t('sessionComplete.nextSet')}: {t('deadliftConfigure.setLabel', { n: nextSetNumber })}
+              {t("sessionComplete.nextSet")}:{" "}
+              {t("deadliftConfigure.setLabel", { n: nextSetNumber })}
             </Text>
             <View style={styles.nextRepsRow}>
               <Pressable
                 onPress={() => setNextRepsDraft((r) => clampSetReps(r - 1))}
                 disabled={nextRepsDraft <= REPS_PER_SET_MIN}
-                style={[styles.nextRepBtn, nextRepsDraft <= REPS_PER_SET_MIN && styles.nextRepBtnOff]}
-              >
+                style={[
+                  styles.nextRepBtn,
+                  nextRepsDraft <= REPS_PER_SET_MIN && styles.nextRepBtnOff,
+                ]}>
                 <Text style={styles.nextRepBtnTxt}>−</Text>
               </Pressable>
               <Text style={styles.nextRepsVal}>{nextRepsDraft}</Text>
               <Pressable
                 onPress={() => setNextRepsDraft((r) => clampSetReps(r + 1))}
                 disabled={nextRepsDraft >= REPS_PER_SET_MAX}
-                style={[styles.nextRepBtn, nextRepsDraft >= REPS_PER_SET_MAX && styles.nextRepBtnOff]}
-              >
+                style={[
+                  styles.nextRepBtn,
+                  nextRepsDraft >= REPS_PER_SET_MAX && styles.nextRepBtnOff,
+                ]}>
                 <Text style={styles.nextRepBtnTxt}>+</Text>
               </Pressable>
             </View>
-            <Text style={styles.weightFieldHint}>{t('sessionComplete.weightLabel', { unit: weightUnit === 'kg' ? 'kg' : 'lb' })}</Text>
+            <Text style={styles.weightFieldHint}>
+              {t("sessionComplete.weightLabel", {
+                unit: weightUnit === "kg" ? "kg" : "lb",
+              })}
+            </Text>
             <TextInput
               value={nextWeightDraft}
               onChangeText={setNextWeightDraft}
               onBlur={() => {
                 const n = parseMassDraft(nextWeightDraft);
-                if (n == null) setNextWeightDraft(String(nextSetTarget?.weightAmount ?? completedSetTarget.weightAmount));
+                if (n == null)
+                  setNextWeightDraft(
+                    String(
+                      nextSetTarget?.weightAmount ??
+                        completedSetTarget.weightAmount,
+                    ),
+                  );
                 else setNextWeightDraft(String(clampMass(n, weightUnit)));
               }}
               keyboardType="decimal-pad"
               returnKeyType="done"
-              placeholder={weightUnit === 'kg' ? '100' : '225'}
+              placeholder={weightUnit === "kg" ? "100" : "225"}
               placeholderTextColor={colors.text_muted}
               style={styles.nextWeightInput}
             />
 
-            <PrimaryButton title={t('sessionComplete.nextSetBtn')} variant="ghost" style={styles.secondaryCta} onPress={onNextSet} />
+            <PrimaryButton
+              title={t("sessionComplete.nextSetBtn")}
+              variant="ghost"
+              style={styles.secondaryCta}
+              onPress={onNextSet}
+            />
           </View>
         )}
 
         <PrimaryButton
-          title={saved ? t('sessionComplete.savedGoHome') : t('sessionComplete.saveSession')}
+          title={
+            saved
+              ? t("sessionComplete.savedGoHome")
+              : t("sessionComplete.saveSession")
+          }
           style={[styles.cta, canAdvanceToNextSet && styles.ctaAfterSecondary]}
           onPress={() => void onSave()}
         />
@@ -476,16 +628,16 @@ function MiniCard({
 const miniStyles = StyleSheet.create({
   card: {
     backgroundColor: colors.bg_elevated,
-    width: '48%',
+    width: "48%",
     padding: 18,
     borderRadius: 14,
     minHeight: 84,
-    justifyContent: 'center',
+    justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
     marginBottom: 12,
     borderLeftWidth: 4,
-    borderLeftColor: 'transparent',
+    borderLeftColor: "transparent",
   },
   cardAccent: {
     borderLeftColor: colors.primary_green,
@@ -495,7 +647,7 @@ const miniStyles = StyleSheet.create({
     letterSpacing: 1.5,
     fontSize: 10,
     fontFamily: typography.fontFamily.medium,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   value: {
     marginTop: 8,
@@ -511,50 +663,50 @@ const styles = StyleSheet.create({
 
   h1: {
     marginTop: 6,
-    textAlign: 'center',
+    textAlign: "center",
     color: colors.text_primary,
     fontSize: typography.fontSize.screenTitle - 10,
     fontFamily: typography.fontFamily.display,
     letterSpacing: -1.8,
-    textTransform: 'uppercase',
-    fontWeight: '700',
+    textTransform: "uppercase",
+    fontWeight: "700",
   },
 
   ringOuter: {
     marginTop: 16,
     width: RING_CONTAINER,
     height: RING_CONTAINER,
-    alignSelf: 'center',
-    justifyContent: 'center',
-    alignItems: 'center',
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
   ringInnerOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 28,
     paddingVertical: 28,
   },
   ringCenterStack: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     maxWidth: RING_SZ - RING_STROKE * 2 - 36,
   },
   ringScoreInline: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
-    maxWidth: '100%',
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    maxWidth: "100%",
   },
   ringScoreBig: {
     fontFamily: typography.fontFamily.display,
     fontSize: 52,
     lineHeight: 56,
     color: colors.text_primary,
-    fontWeight: '700',
+    fontWeight: "700",
     letterSpacing: -1.5,
     flexShrink: 1,
-    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
   },
   ringScoreFrac: {
     marginLeft: 3,
@@ -562,10 +714,10 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     color: colors.text_secondary,
-    fontWeight: '400',
+    fontWeight: "400",
     letterSpacing: 0,
     flexShrink: 1,
-    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
+    ...(Platform.OS === "android" ? { includeFontPadding: false } : {}),
   },
   ringRecoveryLbl: {
     marginTop: 6,
@@ -573,22 +725,22 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bold,
     letterSpacing: 2,
     fontSize: 9,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    maxWidth: '100%',
+    textTransform: "uppercase",
+    textAlign: "center",
+    maxWidth: "100%",
   },
 
   eliteBadge: {
     marginTop: 8,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(39,195,79,0.25)',
-    backgroundColor: 'rgba(39,195,79,0.10)',
+    borderColor: "rgba(39,195,79,0.25)",
+    backgroundColor: "rgba(39,195,79,0.10)",
   },
   eliteBadgeTxt: {
     marginLeft: 8,
@@ -596,14 +748,14 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.captions - 2,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
 
   grid: {
     marginTop: 28,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
 
   formCard: {
@@ -614,23 +766,49 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
   },
-  formCardTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  formCardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 18,
+  },
   formCardTitle: {
     marginLeft: 10,
     color: colors.text_primary,
     fontFamily: typography.fontFamily.display,
-    fontWeight: '700',
+    fontWeight: "700",
     fontSize: typography.fontSize.bodyLg,
     letterSpacing: -0.2,
   },
   formCardBody: {},
-  insightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
-  insightRowSep: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border_subtle },
-  insightLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  insightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 14,
+  },
+  insightRowSep: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border_subtle,
+  },
+  insightLeft: { flexDirection: "row", alignItems: "center", flex: 1 },
   insightDot: { width: 6, height: 6, borderRadius: 3, marginRight: 14 },
-  insightName: { color: colors.text_primary, fontFamily: typography.fontFamily.medium, fontSize: typography.fontSize.body },
-  bandBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
-  bandBadgeTxt: { fontFamily: typography.fontFamily.bold, fontSize: 10, letterSpacing: 1.6, textTransform: 'uppercase' },
+  insightName: {
+    color: colors.text_primary,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.body,
+  },
+  bandBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  bandBadgeTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 10,
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
 
   nextSetBlock: {
     marginTop: 26,
@@ -677,11 +855,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.text_muted,
     letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   nextRepsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
     marginTop: 8,
   },
@@ -690,8 +868,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.bg_elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   nextRepBtnOff: { opacity: 0.35 },
   nextRepBtnTxt: {
@@ -701,7 +879,7 @@ const styles = StyleSheet.create({
   },
   nextRepsVal: {
     minWidth: 48,
-    textAlign: 'center',
+    textAlign: "center",
     fontFamily: typography.fontFamily.display,
     fontSize: 28,
     color: colors.primary_green,
@@ -714,7 +892,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.bodyLg,
     color: colors.text_primary,
-    ...(Platform.OS === 'android' ? { paddingVertical: 8 } : {}),
+    ...(Platform.OS === "android" ? { paddingVertical: 8 } : {}),
   },
 
   cta: { marginTop: 28 },
