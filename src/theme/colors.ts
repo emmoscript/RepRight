@@ -5,6 +5,7 @@
 export const colors = {
   // Primary green
   primary_green: '#27C34F',
+  secondary_green: '#0A9D5D',
   accent_green_light: '#5FF075',
   accent_green_dim: '#1FBF4B',
   green_subtle_bg: '#002F0B',
@@ -34,6 +35,7 @@ export const colors = {
 
   // Text (v3)
   text_primary: '#FFFFFF',
+  on_surface: '#E5E2E1',
   text_secondary: '#ADAAAA',
   text_muted: '#767575',
   text_on_green: '#000000',
@@ -48,6 +50,13 @@ export const colors = {
   border_subtle: '#484847',
   border_medium: '#484847',
   border_active: '#27C34F',
+  outline: '#849585',
+  outline_variant: '#3B4B3D',
+
+  // Onboarding surfaces
+  surface_container: '#1C1B1B',
+  surface_container_high: '#2A2A2A',
+  surface_card: '#1A1A1A',
 
   // Legacy aliases — map to v3 so existing imports stay valid
   bg_primary: '#0D0D0D',

@@ -37,7 +37,14 @@ const config: ExpoConfig = {
     // expo-font / expo-asset need expo-file-system native filesystem bindings at runtime (e.g. AppDirectories).
     "expo-file-system",
     "expo-asset",
-    "expo-secure-store",
+    "expo-localization",
+    [
+      "expo-image-picker",
+      {
+        photosPermission:
+          "RepRight uses your photo library to set a profile picture.",
+      },
+    ],
     [
       "react-native-vision-camera",
       {

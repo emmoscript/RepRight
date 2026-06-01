@@ -1,35 +1,94 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useRef, useState } from 'react';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
+import { resetToMainTabs } from '@/navigation/navigationRef';
 import type { RootStackParamList } from '@/navigation/routeTypes';
+import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Route = RouteProp<RootStackParamList, 'EmailConfirm'>;
 
-const LEN = 6;
+const RESEND_COOLDOWN_SEC = 60;
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return email;
+  if (local.length <= 2) return `${local[0] ?? '*'}***@${domain}`;
+  return `${local.slice(0, 2)}***@${domain}`;
+}
 
 export function EmailConfirmScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
-  const [code, setCode] = useState('');
-  const [focusIdx, setFocusIdx] = useState<number | null>(0);
-  const inputRef = useRef<TextInput>(null);
+  const route = useRoute<Route>();
+  const email = route.params.email;
 
-  const cells = [...code.padEnd(LEN, ' ')];
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const resendConfirmationEmail = useAuthStore((s) => s.resendConfirmationEmail);
+  const refreshVerificationStatus = useAuthStore((s) => s.refreshVerificationStatus);
+  const clearError = useAuthStore((s) => s.clearError);
+
+  const [resendSec, setResendSec] = useState(0);
+  const [resentOk, setResentOk] = useState(false);
+
+  const masked = useMemo(() => maskEmail(email), [email]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      resetToMainTabs();
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (resendSec <= 0) return;
+    const t = setInterval(() => setResendSec((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendSec]);
+
+  const handleResend = useCallback(async () => {
+    if (resendSec > 0 || isLoading) return;
+    clearError();
+    setResentOk(false);
+    try {
+      await resendConfirmationEmail(email);
+      setResentOk(true);
+      setResendSec(RESEND_COOLDOWN_SEC);
+    } catch {
+      // error surfaced via store
+    }
+  }, [clearError, email, isLoading, resendConfirmationEmail, resendSec]);
+
+  const handleContinue = useCallback(async () => {
+    clearError();
+    const ok = await refreshVerificationStatus();
+    if (ok) {
+      resetToMainTabs();
+    }
+  }, [clearError, refreshVerificationStatus]);
+
+  const openMailApp = useCallback(() => {
+    void Linking.openURL('mailto:');
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -39,65 +98,70 @@ export function EmailConfirmScreen() {
       <SafeAreaView edges={[]} style={styles.flex}>
         <RepRightHeader
           variant="auth"
+          showBack
           rightSlot={<Ionicons name="mail-outline" size={22} color={colors.primary_green} />}
         />
         <View style={styles.body}>
           <View style={styles.mailIcon}>
-            <Ionicons name="mail-outline" size={42} color={colors.text_primary} />
+            <Ionicons name="mail-unread-outline" size={44} color={colors.primary_green} />
           </View>
 
-          <Text style={styles.title}>Verify email</Text>
-          <Text style={styles.sub}>We sent a code to your email.</Text>
-
-          <Pressable style={styles.otpOuter} onPress={() => inputRef.current?.focus()}>
-            {cells.slice(0, LEN).map((ch, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.cell,
-                  focusIdx === i && styles.cellFocus,
-                  ch.trim().length === 1 && styles.cellFilled,
-                ]}
-              >
-                <Text style={[styles.cellTxt, ch.trim().length === 1 ? styles.cellTxtActive : styles.cellTxtPh]}>
-                  {ch.trim() ? ch : '·'}
-                </Text>
-              </View>
-            ))}
-            <TextInput
-              ref={inputRef}
-              value={code}
-              onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, LEN))}
-              keyboardType="number-pad"
-              style={styles.hiddenInput}
-              onFocus={() => setFocusIdx(Math.min(code.length, LEN - 1))}
-              onBlur={() => setFocusIdx(null)}
-              maxLength={LEN}
-              caretHidden
-            />
-          </Pressable>
+          <Text style={styles.title}>{t('emailConfirm.title')}</Text>
+          <Text style={styles.sub}>
+            {t('emailConfirm.body', { email: masked })}
+          </Text>
 
           <PrimaryButton
-            title="Verify & Continue →"
-            style={{ marginTop: 28 }}
-            onPress={() => nav.navigate('MainTabs', { screen: 'HomeMain' })}
+            title={t('emailConfirm.openEmail')}
+            trailing={<MaterialIcons name="mail-outline" size={22} color={colors.text_on_green} />}
+            style={styles.primaryBtn}
+            onPress={openMailApp}
           />
 
-          <Pressable style={styles.resendWrap} accessibilityRole="button">
+          <PrimaryButton
+            title={isLoading ? t('emailConfirm.checking') : t('emailConfirm.verifiedContinue')}
+            variant="ghost"
+            disabled={isLoading}
+            onPress={() => void handleContinue()}
+            style={styles.secondaryBtn}
+          />
+
+          {error ? <Text style={styles.errorTxt}>{error}</Text> : null}
+          {resentOk && !error ? (
+            <Text style={styles.okTxt}>{t('emailConfirm.resentOk')}</Text>
+          ) : null}
+
+          <Pressable
+            style={styles.resendWrap}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: resendSec > 0 || isLoading }}
+            onPress={() => void handleResend()}
+            disabled={resendSec > 0 || isLoading}
+          >
             <Text style={styles.resend}>
-              Didn&apos;t receive the code?{' '}
-              <Text style={styles.resendBold}>Resend code</Text>
+              {t('emailConfirm.resendPrompt')}{' '}
+              <Text style={[styles.resendBold, resendSec > 0 && styles.resendMuted]}>
+                {resendSec > 0 ? t('emailConfirm.resendIn', { seconds: resendSec }) : t('emailConfirm.resendLink')}
+              </Text>
             </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.backLogin}
+            accessibilityRole="button"
+            onPress={() => nav.navigate('AuthGateway')}
+          >
+            <Text style={styles.backLoginTxt}>{t('emailConfirm.backToSignIn')}</Text>
           </Pressable>
 
           <View style={styles.infoRow}>
             <View style={styles.infoChip}>
               <Ionicons name="shield-checkmark-outline" color={colors.primary_green} size={20} />
-              <Text style={styles.infoTxt}>Encrypted on device</Text>
+              <Text style={styles.infoTxt}>{t('emailConfirm.expiresHint')}</Text>
             </View>
             <View style={styles.infoChip}>
-              <Ionicons name="timer-outline" color={colors.primary_green} size={20} />
-              <Text style={styles.infoTxt}>Expires soon</Text>
+              <Ionicons name="phone-portrait-outline" color={colors.primary_green} size={20} />
+              <Text style={styles.infoTxt}>{t('emailConfirm.openOnPhone')}</Text>
             </View>
           </View>
         </View>
@@ -108,68 +172,67 @@ export function EmailConfirmScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.bg_surface_alt },
-  body: { paddingHorizontal: 24, alignItems: 'center' },
+  body: { flex: 1, paddingHorizontal: 24, alignItems: 'center' },
   mailIcon: {
     marginTop: 12,
-    width: 92,
-    height: 92,
-    borderRadius: 16,
-    backgroundColor: colors.bg_high,
+    width: 96,
+    height: 96,
+    borderRadius: 20,
+    backgroundColor: colors.green_subtle_bg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border_subtle,
+    borderColor: 'rgba(39,195,79,0.35)',
   },
   title: {
     marginTop: 28,
     fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.titleSm + 10,
+    fontSize: typography.fontSize.titleSm + 8,
     color: colors.text_primary,
-    letterSpacing: -1,
-    textTransform: 'capitalize',
+    letterSpacing: -0.8,
+    textAlign: 'center',
   },
   sub: {
-    marginTop: 12,
+    marginTop: 14,
     textAlign: 'center',
     color: colors.text_secondary,
     fontSize: typography.fontSize.body,
     lineHeight: 24,
     fontFamily: typography.fontFamily.regular,
-    paddingHorizontal: 12,
+    paddingHorizontal: 4,
   },
-  otpOuter: {
-    marginTop: 28,
-    flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'center',
-    width: '100%',
-    position: 'relative',
-    paddingVertical: 4,
-  },
-  cell: {
-    flex: 1,
-    minWidth: 40,
-    maxHeight: 56,
-    backgroundColor: colors.surface_low,
-    borderRadius: 8,
-    borderBottomWidth: 3,
-    borderBottomColor: colors.border_subtle,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cellFocus: { borderBottomColor: colors.primary_green },
-  cellFilled: { borderBottomColor: colors.primary_green },
-  cellTxt: {
+  emailHighlight: {
+    color: colors.text_primary,
     fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.bodyLg,
   },
-  cellTxtPh: { color: colors.text_muted },
-  cellTxtActive: { color: colors.primary_green },
-  hiddenInput: { position: 'absolute', opacity: 0, width: '100%', height: '100%' },
-  resendWrap: { marginTop: 20 },
+  primaryBtn: { marginTop: 28, alignSelf: 'stretch' },
+  secondaryBtn: { marginTop: 12, alignSelf: 'stretch' },
+  errorTxt: {
+    marginTop: 16,
+    color: colors.accent_red,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.captions,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  okTxt: {
+    marginTop: 16,
+    color: colors.primary_green,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.captions,
+    textAlign: 'center',
+  },
+  resendWrap: { marginTop: 22, paddingVertical: 8 },
   resend: { color: colors.text_muted, fontSize: typography.fontSize.captions, textAlign: 'center' },
   resendBold: { color: colors.primary_green, fontFamily: typography.fontFamily.bold },
-  infoRow: { flexDirection: 'row', gap: 12, marginTop: 40, alignSelf: 'stretch' },
+  resendMuted: { color: colors.text_muted },
+  backLogin: { marginTop: 8, paddingVertical: 8 },
+  backLoginTxt: {
+    color: colors.text_secondary,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.bodySm,
+  },
+  infoRow: { flexDirection: 'row', gap: 12, marginTop: 36, alignSelf: 'stretch' },
   infoChip: {
     flex: 1,
     flexDirection: 'row',
@@ -181,5 +244,5 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: colors.border_subtle,
   },
-  infoTxt: { flex: 1, color: colors.text_secondary, fontSize: typography.fontSize.captions },
+  infoTxt: { flex: 1, color: colors.text_secondary, fontSize: typography.fontSize.captions, lineHeight: 18 },
 });

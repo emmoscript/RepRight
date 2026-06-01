@@ -2,8 +2,8 @@ import { useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteP
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  AppState,
   LayoutChangeEvent,
   Linking,
   Pressable,
@@ -25,16 +25,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Worklets } from 'react-native-worklets-core';
 import {
   Camera,
-  getCameraDevice,
-  useCameraDevice,
-  useCameraDevices,
   useCameraFormat,
-  useCameraPermission,
   useFrameProcessor,
   type Orientation,
-  type PhysicalCameraDeviceType,
 } from 'react-native-vision-camera';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
+
+import { useResolvedCamera } from '@/hooks/useResolvedCamera';
 
 import {
   SvgCameraReverseOutline,
@@ -62,6 +59,7 @@ import { sessionTrace } from '@/modules/sessionTrace';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { useSessionResultStore } from '@/store/sessionResultStore';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { barbellProxyFromWrists } from '@/utils/barbellProxy';
@@ -176,6 +174,7 @@ type WorkletKind = 'f32' | 'u8' | 'i8';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function LiveSessionScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'LiveSession'>>();
   const continuedWorkout = route.params?.continuedWorkout === true;
@@ -206,32 +205,23 @@ export function LiveSessionScreen() {
   const setWeightAmount = setTarget.weightAmount;
 
   // ── Camera ─────────────────────────────────────────────────────────────────
-  const { requestPermission } = useCameraPermission();
-  const [useFront, setUseFront] = useState(true);
+  const [useFront, setUseFront] = useState(() => useUserPreferencesStore.getState().defaultCameraFront);
   const position = useFront ? 'front' : 'back';
 
-  /** Prefer simplest logical cam (widest-compatible on Samsung/MediaTek). Falls back via getCameraDevice. */
-  const wideFilter = useMemo(
-    () => ({ physicalDevices: ['wide-angle-camera'] as PhysicalCameraDeviceType[] }),
-    [],
-  );
-  const hookedDevice = useCameraDevice(position, wideFilter);
-  const allDevices = useCameraDevices();
-  const device = useMemo(
-    () =>
-      hookedDevice ??
-      getCameraDevice(allDevices, position, wideFilter) ??
-      getCameraDevice(allDevices, position) ??
-      allDevices.find((d) => d.position === position),
-    [hookedDevice, allDevices, position, wideFilter],
-  );
+  const {
+    device,
+    allDevices,
+    permissionStatus,
+    cameraGranted,
+    discovering,
+    requestAccess,
+    refreshEnumeration,
+    fallbackPosition,
+  } = useResolvedCamera({ position, isFocused });
 
   /** Portrait UI aspect ratio (VisionCamera expects width/height; sensor is landscape; see Snapchat template). */
   const portraitVideoAspectRatio = Math.max(winH, 1) / Math.max(winW, 1);
-  const format = useCameraFormat(device ?? undefined, [{ videoAspectRatio: portraitVideoAspectRatio }, { fps: 30 }]);
-
-  const permissionStatus = Camera.getCameraPermissionStatus();
-  const cameraGranted = permissionStatus === 'granted';
+  const format = useCameraFormat(device, [{ videoAspectRatio: portraitVideoAspectRatio }, { fps: 30 }]);
   const { resize } = useResizePlugin();
 
   // ── Layout ─────────────────────────────────────────────────────────────────
@@ -254,8 +244,8 @@ export function LiveSessionScreen() {
   // ── Session flow ────────────────────────────────────────────────────────────
   const [flow, setFlow] = useState<Flow>('search');
   const [countdown, setCountdown] = useState(3);
-  const [audioOn, setAudioOn] = useState(true);
-  const audioOnRef = useRef(true);
+  const [audioOn, setAudioOn] = useState(() => useUserPreferencesStore.getState().audioFeedbackEnabled);
+  const audioOnRef = useRef(useUserPreferencesStore.getState().audioFeedbackEnabled);
   const [reps, setReps] = useState(0);
   const repsRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -335,6 +325,7 @@ export function LiveSessionScreen() {
   const [uiPose, setUiPose] = useState<PoseResult | null>(null);
   const [useMock, setUseMock] = useState(false);
   const [modelReady, setModelReady] = useState(false);
+  const [cameraWarmupExpired, setCameraWarmupExpired] = useState(false);
   const [liveFormBanner, setLiveFormBanner] = useState<{
     message: string;
     backgroundColor: string;
@@ -511,19 +502,18 @@ export function LiveSessionScreen() {
   useEffect(() => () => { void Speech.stop(); }, []);
 
   useEffect(() => {
-    if (permissionStatus === 'granted') return;
-    void requestPermission();
-  }, [permissionStatus, requestPermission]);
+    if (!cameraGranted || device != null || allDevices.length === 0) return;
+    const hasPreferred = allDevices.some((d) => d.position === position);
+    const hasFallback = allDevices.some((d) => d.position === fallbackPosition);
+    if (!hasPreferred && hasFallback) {
+      setUseFront(fallbackPosition === 'front');
+    }
+  }, [cameraGranted, device, allDevices, position, fallbackPosition]);
 
-  /** Re-evaluate permission when returning from Settings — only re-prompt when explicitly denied. */
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') return;
-      const status = Camera.getCameraPermissionStatus();
-      if (status === 'denied') void requestPermission();
-    });
-    return () => sub.remove();
-  }, [requestPermission]);
+    if (!isFocused || permissionStatus !== 'not-determined') return;
+    void requestAccess();
+  }, [permissionStatus, isFocused, requestAccess]);
 
   useEffect(() => {
     void (async () => {
@@ -1312,18 +1302,50 @@ export function LiveSessionScreen() {
   }, [flow]);
 
   const requestCamAccess = useCallback(async () => {
-    await Camera.requestCameraPermission();
-    await requestPermission();
-  }, [requestPermission]);
+    const status = await requestAccess();
+    if (status !== 'granted') {
+      await Linking.openSettings();
+    }
+    setCameraWarmupExpired(false);
+  }, [requestAccess]);
+
+  const retryCameraDiscovery = useCallback(() => {
+    setCameraWarmupExpired(false);
+    setUseFront((v) => !v);
+    refreshEnumeration();
+  }, [refreshEnumeration]);
 
   const openCameraSettings = useCallback(() => void Linking.openSettings(), []);
 
-  /** Native still enumerating Chrome stack (rare); avoid showing "no camera" flash. */
+  /** Stop showing "Opening camera…" too soon on cold start (cleared app data). */
+  useEffect(() => {
+    if (!cameraGranted || device != null) {
+      setCameraWarmupExpired(false);
+      return;
+    }
+    const id = setTimeout(() => setCameraWarmupExpired(true), 15000);
+    return () => clearTimeout(id);
+  }, [cameraGranted, device, allDevices.length, discovering]);
+
   const cameraPrep =
-    cameraGranted && device == null && allDevices.length === 0 ? 'warming' : 'none';
+    cameraGranted && device == null && (discovering || !cameraWarmupExpired)
+      ? 'warming'
+      : 'none';
+
+  const cameraReady = cameraGranted && device != null;
+  const sessionActive = cameraReady || useMock;
+  const showCameraGate = !sessionActive;
+
+  const cameraGateKind: CameraGateKind | null = showCameraGate
+    ? !cameraGranted
+      ? 'permission'
+      : cameraPrep === 'warming'
+        ? 'warming'
+        : 'unavailable'
+    : null;
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const showStop = flow === 'active' || flow === 'pose_lost';
+  const showStop = sessionActive && (flow === 'active' || flow === 'pose_lost');
   const useFrame = modelReady && !useMock;
 
   const poseValid = uiPose != null && isPoseValid(uiPose);
@@ -1369,7 +1391,8 @@ export function LiveSessionScreen() {
     FORM_FEEDBACK_GAP_ABOVE_FAB;
 
   const showFramingGuide =
-    flow === 'search' || flow === 'detected' || flow === 'countdown' || flow === 'pose_lost';
+    sessionActive &&
+    (flow === 'search' || flow === 'detected' || flow === 'countdown' || flow === 'pose_lost');
 
   const framingHint = useMemo(() => {
     if (!showFramingGuide || !uiPose) return null;
@@ -1383,76 +1406,53 @@ export function LiveSessionScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root} onLayout={onLayout}>
-
-      {/* ── Camera feed ── */}
-      {cameraGranted && device ? (
+      {cameraReady ? (
         <Camera
           style={StyleSheet.absoluteFill}
-          device={device}
-          isActive={isFocused}
-          format={format}
+          device={device!}
+          isActive={isFocused && cameraReady}
+          {...(format ? { format } : {})}
           resizeMode="contain"
           frameProcessor={useFrame ? frameProcessor : undefined}
-          androidPreviewViewType="surface-view"
+          androidPreviewViewType="texture-view"
           outputOrientation="preview"
           pixelFormat="yuv"
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, styles.noCamera]}>
-          {!cameraGranted ? (
-            <>
-              <Text style={styles.noCamTxt}>Camera permission is required for live analysis.</Text>
-              <Text style={styles.noCamSub}>
-                If you tapped “Don&apos;t allow” before, allow it from system settings for RepRight.
-              </Text>
-              {permissionStatus === 'denied' || permissionStatus === 'restricted' ? (
-                <PrimaryButton title="Open app settings" onPress={openCameraSettings} />
-              ) : (
-                <PrimaryButton title="Allow camera access" onPress={() => void requestCamAccess()} />
-              )}
-            </>
-          ) : cameraPrep === 'warming' ? (
-            <Text style={styles.noCamTxt}>Opening camera...</Text>
-          ) : (
-            <>
-              <Text style={styles.noCamTxt}>No camera available.</Text>
-              <Text style={styles.noCamSub}>Try flipping front/back ({useFront ? 'front' : 'rear'}) or restart the session.</Text>
-              <PrimaryButton title="Flip camera" onPress={() => setUseFront((v) => !v)} />
-            </>
-          )}
-        </View>
+        <View style={[StyleSheet.absoluteFill, styles.cameraBackdrop]} />
       )}
 
-      {/* ── Framing guide — below all HUD (camera alignment box only) ── */}
-      <FramingGuideOverlay
-        containRect={previewContain}
-        topReservePx={headerScrimBottomPx}
-        visible={showFramingGuide}
-        hint={framingHint}
+      {sessionActive ? (
+        <>
+          <FramingGuideOverlay
+            containRect={previewContain}
+            topReservePx={headerScrimBottomPx}
+            visible={showFramingGuide}
+            hint={framingHint}
+          />
+          {uiPose ? (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <SkeletonOverlay
+                width={layout.w}
+                height={layout.h}
+                containRect={previewContain}
+                keypoints={uiPose.keypoints}
+                lineColor={skColor}
+                pointColor={skColor}
+                dynamicColors={true}
+                groupTriggerScore={0.22}
+              />
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      <View
+        style={[styles.topScrim, { height: topPad + HEADER_SCRIM_BODY_PX + HEADER_CONTROLS_EXTRA_DOWN }]}
+        pointerEvents="none"
       />
 
-      {/* ── Skeleton overlay ── */}
-      {uiPose && (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <SkeletonOverlay
-            width={layout.w}
-            height={layout.h}
-            containRect={previewContain}
-            keypoints={uiPose.keypoints}
-            lineColor={skColor}
-            pointColor={skColor}
-            dynamicColors={true}
-            groupTriggerScore={0.22}
-          />
-        </View>
-      )}
-
-      {/* ── Top gradient scrim ── */}
-      <View style={[styles.topScrim, { height: topPad + HEADER_SCRIM_BODY_PX + HEADER_CONTROLS_EXTRA_DOWN }]} pointerEvents="none" />
-
-      {/* ── Top bar: back · centered title rail · flip camera only ── */}
       <View style={styles.headerBar} pointerEvents="box-none">
-        {/* Title paints first; row + buttons on top so Ionicons isn’t covered by the title strip */}
         <View
           pointerEvents="none"
           style={[
@@ -1473,217 +1473,314 @@ export function LiveSessionScreen() {
           <Pressable onPress={() => navigation.goBack()} style={styles.circleBtn}>
             <SvgChevronBack color={colors.text_primary} size={22} />
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={useFront ? 'Use rear camera' : 'Use front camera'}
-            onPress={() => setUseFront((v) => !v)}
-            style={styles.circleBtn}
-          >
-            <SvgCameraReverseOutline color={colors.text_primary} size={22} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* ── Positioning HUD — always above framing guide ── */}
-      <View style={styles.positionHudLayer} pointerEvents="box-none">
-      {/* ── 7A — Positioning ── */}
-      {flow === 'search' && (
-        <View style={styles.overlayCenter} pointerEvents="none">
-          <Text style={styles.searchingLbl}>SEARCHING FOR POSE...</Text>
-          <View style={styles.dotsRow}>
-            <Animated.View style={[styles.dot, d1Style]} />
-            <Animated.View style={[styles.dot, d2Style]} />
-            <Animated.View style={[styles.dot, d3Style]} />
-          </View>
-          <View style={[styles.infoBanner, styles.searchAlertBelowSearching]}>
-            <SvgHudWalkPerson color={colors.text_secondary} size={26} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.infoBannerTitle}>GET IN POSITION</Text>
-              <Text style={styles.infoBannerBody}>
-                Stand sideways. Fit your full body inside the frame — tracking works best when you&apos;re centered.
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* ── 7B — Detected ── */}
-      {flow === 'detected' && (
-        <View style={styles.overlayCenter} pointerEvents="none">
-          <View style={[styles.infoBanner, styles.infoBannerGreen]}>
-            <SvgHudCheckCircle color={colors.primary_green} size={26} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.infoBannerTitle, { color: colors.primary_green }]}>
-                POSITION OK
-              </Text>
-              <Text style={styles.infoBannerBody}>Hold still...</Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* ── 7C — Countdown ── */}
-      {flow === 'countdown' && (
-        <View style={styles.overlayCenter} pointerEvents="none">
-          <View style={styles.ringWrap}>
-            <Svg width={RING_SZ} height={RING_SZ}>
-              <G transform={`rotate(-90 ${RING_SZ / 2} ${RING_SZ / 2})`}>
-                <Circle
-                  cx={RING_SZ / 2}
-                  cy={RING_SZ / 2}
-                  r={RING_R}
-                  stroke="rgba(255,255,255,0.15)"
-                  strokeWidth={10}
-                  fill="none"
-                />
-                <Circle
-                  cx={RING_SZ / 2}
-                  cy={RING_SZ / 2}
-                  r={RING_R}
-                  stroke={colors.primary_green}
-                  strokeWidth={10}
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={arcDash}
-                />
-              </G>
-            </Svg>
-            <View style={styles.ringCenter}>
-              <Text style={styles.countNum}>{countdown > 0 ? String(countdown) : ''}</Text>
-            </View>
-          </View>
-          <Text style={styles.getReadyTxt}>GET READY TO LIFT</Text>
-        </View>
-      )}
-      </View>
-
-      {/* ── 7D — Pose lost banner (hidden while quit modal open — avoids stacking above dialog). ── */}
-      {flow === 'pose_lost' && !showQuitWorkoutModal && (
-        <View style={[styles.topBannerAbs, { top: belowHeaderBannerTop, zIndex: 12 }]} pointerEvents="none">
-          <View style={[styles.infoBanner, styles.infoBannerAmber]}>
-            <SvgHudWarnTriangle color={colors.accent_yellow} size={22} />
-            <Text style={[styles.infoBannerTitle, { color: colors.accent_yellow }]}>
-              POSE LOST — REPOSITION
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {/* ── Live form cues (analyzer) above strip — cleared during pose_lost / modal. ── */}
-      {liveFormBanner && showStop && !showQuitWorkoutModal && flow !== 'pose_lost' && (
-        <View
-          pointerEvents="none"
-          style={[styles.formFeedbackDock, { bottom: formFeedbackDockBottom }]}
-        >
-          <View
-            style={[styles.formFeedbackInner, { backgroundColor: liveFormBanner.backgroundColor }]}
-          >
-            <SvgHudWarnTriangle color={liveFormBanner.textColor} size={22} />
-            <View style={styles.formFeedbackTextCol}>
-              <Text style={[styles.formFeedbackKicker, { color: liveFormBanner.textColor }]}>
-                AI LIVE FEEDBACK
-              </Text>
-              <Text style={[styles.formFeedbackTxt, { color: liveFormBanner.textColor }]}>
-                {liveFormBanner.message}
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* ── Stats panel: finish this set vs quit whole workout ── */}
-      {showStop && (
-        <View
-          style={[styles.statsPanel, { paddingBottom: Math.max(32, insets.bottom + 14) }]}
-          onLayout={onTrackingStripLayout}
-        >
-          {/* Status pill */}
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusTxt}>TRACKING DEADLIFT</Text>
-          </View>
-
-          {/* Stat cards */}
-          <View style={styles.statsRow}>
-            <StatCard label="REP" value={`${reps}/${targetRepsForSet}`} />
-            <StatCard label="SERIES" value={`${currentSetNumber}/${plannedSetCount}`} />
-            <StatCard label="TIME" value={elapsedClock} green />
-          </View>
-
-          <PrimaryButton
-            title="FINISH SET"
-            variant="primary"
-            onPress={finishCurrentSet}
-            style={styles.finishSetBtn}
-          />
-
-          <PrimaryButton
-            title="QUIT WORKOUT"
-            variant="ghost"
-            onPress={() => setShowQuitWorkoutModal(true)}
-            style={styles.quitWorkoutBtn}
-          />
-        </View>
-      )}
-
-      {/* ── Voice mute (bottom‑right FAB) — hidden while quit modal is open. ── */}
-      {!showQuitWorkoutModal && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={audioOn ? 'Mute voice feedback' : 'Unmute voice feedback'}
-          onPress={() => setAudioOn((v) => !v)}
-          style={[
-            styles.muteFab,
-            { bottom: muteFabBottom, right: Math.max(insets.right, 12) + 6 },
-          ]}
-        >
-          {audioOn ? (
-            <SvgVolumeOn key="vol-on" color={colors.text_primary} size={22} />
+          {sessionActive ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={useFront ? 'Use rear camera' : 'Use front camera'}
+              onPress={() => setUseFront((v) => !v)}
+              style={styles.circleBtn}
+            >
+              <SvgCameraReverseOutline color={colors.text_primary} size={22} />
+            </Pressable>
           ) : (
-            <SvgVolumeMuted key="vol-mute" color={colors.text_primary} size={22} />
+            <View style={styles.circleBtnSpacer} />
           )}
-        </Pressable>
-      )}
-
-      {/* ── Dev badge ── */}
-      {__DEV__ && useMock && (
-        <View style={[styles.devChip, { top: belowHeaderBannerTop }]} pointerEvents="none">
-          <Text style={styles.devChipTxt}>MOCK</Text>
         </View>
-      )}
+      </View>
 
-      {/* ── Quit whole workout modal (discard in-progress session). ── */}
-      {showQuitWorkoutModal && (
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowQuitWorkoutModal(false)}
-        >
+      {cameraGateKind ? (
+        <CameraGatePanel
+          kind={cameraGateKind}
+          permissionStatus={permissionStatus}
+          useFront={useFront}
+          t={t}
+          onAllow={() => void requestCamAccess()}
+          onOpenSettings={openCameraSettings}
+          onFlip={retryCameraDiscovery}
+          deviceCount={allDevices.length}
+          topInset={topPad}
+          bottomInset={insets.bottom}
+        />
+      ) : null}
+
+      {sessionActive ? (
+        <>
+          <View style={styles.positionHudLayer} pointerEvents="box-none">
+            {flow === 'search' ? (
+              <View style={styles.overlayCenter} pointerEvents="none">
+                <Text style={styles.searchingLbl}>{t('liveSession.searchingPose')}</Text>
+                <View style={styles.dotsRow}>
+                  <Animated.View style={[styles.dot, d1Style]} />
+                  <Animated.View style={[styles.dot, d2Style]} />
+                  <Animated.View style={[styles.dot, d3Style]} />
+                </View>
+                <View style={[styles.infoBanner, styles.searchAlertBelowSearching]}>
+                  <SvgHudWalkPerson color={colors.text_secondary} size={26} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.infoBannerTitle}>{t('liveSession.getInPosition')}</Text>
+                    <Text style={styles.infoBannerBody}>{t('liveSession.getInPositionBody')}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {flow === 'detected' ? (
+              <View style={styles.overlayCenter} pointerEvents="none">
+                <View style={[styles.infoBanner, styles.infoBannerGreen]}>
+                  <SvgHudCheckCircle color={colors.primary_green} size={26} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.infoBannerTitle, { color: colors.primary_green }]}>
+                      {t('liveSession.poseDetected')}
+                    </Text>
+                    <Text style={styles.infoBannerBody}>{t('liveSession.holdStill')}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+            {flow === 'countdown' ? (
+              <View style={styles.overlayCenter} pointerEvents="none">
+                <View style={styles.ringWrap}>
+                  <Svg width={RING_SZ} height={RING_SZ}>
+                    <G transform={`rotate(-90 ${RING_SZ / 2} ${RING_SZ / 2})`}>
+                      <Circle
+                        cx={RING_SZ / 2}
+                        cy={RING_SZ / 2}
+                        r={RING_R}
+                        stroke="rgba(255,255,255,0.15)"
+                        strokeWidth={10}
+                        fill="none"
+                      />
+                      <Circle
+                        cx={RING_SZ / 2}
+                        cy={RING_SZ / 2}
+                        r={RING_R}
+                        stroke={colors.primary_green}
+                        strokeWidth={10}
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={arcDash}
+                      />
+                    </G>
+                  </Svg>
+                  <View style={styles.ringCenter}>
+                    <Text style={styles.countNum}>{countdown > 0 ? String(countdown) : ''}</Text>
+                  </View>
+                </View>
+                <Text style={styles.getReadyTxt}>{t('liveSession.getReady')}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {flow === 'pose_lost' && !showQuitWorkoutModal ? (
+            <View style={[styles.topBannerAbs, { top: belowHeaderBannerTop, zIndex: 12 }]} pointerEvents="none">
+              <View style={[styles.infoBanner, styles.infoBannerAmber]}>
+                <SvgHudWarnTriangle color={colors.accent_yellow} size={22} />
+                <Text style={[styles.infoBannerTitle, { color: colors.accent_yellow }]}>
+                  {t('liveSession.poseLost')}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          {liveFormBanner && showStop && !showQuitWorkoutModal && flow !== 'pose_lost' ? (
+            <View
+              pointerEvents="none"
+              style={[styles.formFeedbackDock, { bottom: formFeedbackDockBottom }]}
+            >
+              <View
+                style={[styles.formFeedbackInner, { backgroundColor: liveFormBanner.backgroundColor }]}
+              >
+                <SvgHudWarnTriangle color={liveFormBanner.textColor} size={22} />
+                <View style={styles.formFeedbackTextCol}>
+                  <Text style={[styles.formFeedbackKicker, { color: liveFormBanner.textColor }]}>
+                    {t('liveSession.formCue')}
+                  </Text>
+                  <Text style={[styles.formFeedbackTxt, { color: liveFormBanner.textColor }]}>
+                    {liveFormBanner.message}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {showStop ? (
+            <View
+              style={[styles.statsPanel, { paddingBottom: Math.max(32, insets.bottom + 14) }]}
+              onLayout={onTrackingStripLayout}
+            >
+              <View style={styles.statusPill}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusTxt}>{t('liveSession.tracking')}</Text>
+              </View>
+              <View style={styles.statsRow}>
+                <StatCard label={t('liveSession.reps')} value={`${reps}/${targetRepsForSet}`} />
+                <StatCard label={t('common.sets')} value={`${currentSetNumber}/${plannedSetCount}`} />
+                <StatCard label={t('liveSession.time')} value={elapsedClock} green />
+              </View>
+              <PrimaryButton
+                title={t('liveSession.finishSet')}
+                variant="primary"
+                onPress={finishCurrentSet}
+                style={styles.finishSetBtn}
+              />
+              <PrimaryButton
+                title={t('liveSession.quitWorkout')}
+                variant="ghost"
+                onPress={() => setShowQuitWorkoutModal(true)}
+                style={styles.quitWorkoutBtn}
+              />
+            </View>
+          ) : null}
+
+          {!showQuitWorkoutModal ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={audioOn ? 'Mute voice feedback' : 'Unmute voice feedback'}
+              onPress={() => setAudioOn((v) => !v)}
+              style={[
+                styles.muteFab,
+                { bottom: muteFabBottom, right: Math.max(insets.right, 12) + 6 },
+              ]}
+            >
+              {audioOn ? (
+                <SvgVolumeOn key="vol-on" color={colors.text_primary} size={22} />
+              ) : (
+                <SvgVolumeMuted key="vol-mute" color={colors.text_primary} size={22} />
+              )}
+            </Pressable>
+          ) : null}
+
+          {__DEV__ && useMock ? (
+            <View style={[styles.devChip, { top: belowHeaderBannerTop }]} pointerEvents="none">
+              <Text style={styles.devChipTxt}>{t('liveSession.mock')}</Text>
+            </View>
+          ) : null}
+        </>
+      ) : null}
+
+      {showQuitWorkoutModal ? (
+        <Pressable style={styles.modalOverlay} onPress={() => setShowQuitWorkoutModal(false)}>
           <Pressable onPress={() => {}} style={styles.modalCard}>
             <Text style={styles.modalWarnIcon}>⚠️</Text>
-            <Text style={styles.modalTitle}>Quit workout?</Text>
-            <Text style={styles.modalBody}>
-              {
-                "You'll lose timers and reps for this workout draft. Stats entries you already saved are unchanged. Use FINISH SET to save the current set. Quitting resets this workout draft, including notes from prior sets you haven't exported yet."
-              }
-            </Text>
+            <Text style={styles.modalTitle}>{t('liveSession.quitTitle')}</Text>
+            <Text style={styles.modalBody}>{t('liveSession.quitBody')}</Text>
             <View style={styles.modalSummaryBox}>
               <Text style={styles.modalSummaryMain}>
-                SET {currentSetNumber} · {setWeightAmount} {weightUnit === 'kg' ? 'KG' : 'LB'} · {reps}{' '}
-                REPS · {elapsedClock}
+                {t('liveSession.setSummary', {
+                  set: currentSetNumber,
+                  weight: setWeightAmount,
+                  unit: weightUnit === 'kg' ? 'KG' : 'LB',
+                  reps,
+                })}{' '}
+                · {elapsedClock}
               </Text>
             </View>
-            <Pressable
-              style={styles.modalKeepBtn}
-              onPress={() => setShowQuitWorkoutModal(false)}
-            >
-              <Text style={styles.modalKeepTxt}>KEEP LIFTING</Text>
+            <Pressable style={styles.modalKeepBtn} onPress={() => setShowQuitWorkoutModal(false)}>
+              <Text style={styles.modalKeepTxt}>{t('liveSession.keepLifting')}</Text>
             </Pressable>
             <Pressable style={styles.modalEndBtn} onPress={onConfirmQuitWholeWorkout}>
-              <Text style={styles.modalEndTxt}>QUIT WORKOUT</Text>
+              <Text style={styles.modalEndTxt}>{t('liveSession.quitConfirm')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
-      )}
+      ) : null}
+    </View>
+  );
+}
+
+type CameraGateKind = 'permission' | 'warming' | 'unavailable';
+
+function CameraGatePanel({
+  kind,
+  permissionStatus,
+  useFront,
+  deviceCount,
+  t,
+  onAllow,
+  onOpenSettings,
+  onFlip,
+  topInset,
+  bottomInset,
+}: {
+  kind: CameraGateKind;
+  permissionStatus: ReturnType<typeof Camera.getCameraPermissionStatus>;
+  useFront: boolean;
+  deviceCount: number;
+  t: ReturnType<typeof useTranslation>['t'];
+  onAllow: () => void;
+  onOpenSettings: () => void;
+  onFlip: () => void;
+  topInset: number;
+  bottomInset: number;
+}) {
+  const denied = permissionStatus === 'denied' || permissionStatus === 'restricted';
+
+  const title =
+    kind === 'permission'
+      ? t('liveSession.cameraRequired')
+      : kind === 'warming'
+        ? t('liveSession.openingCamera')
+        : t('liveSession.noCamera');
+
+  const body =
+    kind === 'permission'
+      ? t('liveSession.cameraSettingsHint')
+      : kind === 'warming'
+        ? t('liveSession.cameraWarmingHint')
+        : denied
+          ? t('liveSession.cameraDeniedDeviceHint')
+          : t('liveSession.cameraEnumFailedHint');
+
+  return (
+    <View
+      style={[
+        styles.cameraGate,
+        { paddingTop: topInset + 72, paddingBottom: Math.max(bottomInset, 24) + 16 },
+      ]}
+    >
+      <View style={styles.cameraGateCard}>
+        <Text style={styles.cameraGateTitle}>{title}</Text>
+        <Text style={styles.cameraGateBody}>{body}</Text>
+
+        {kind === 'warming' ? (
+          <View style={styles.cameraGateDots}>
+            <View style={styles.cameraGateDot} />
+            <View style={[styles.cameraGateDot, styles.cameraGateDotMid]} />
+            <View style={styles.cameraGateDot} />
+          </View>
+        ) : (
+          <View style={styles.cameraGateActions}>
+            {kind === 'permission' ? (
+              denied ? (
+                <PrimaryButton title={t('liveSession.openSettings')} onPress={onOpenSettings} />
+              ) : (
+                <PrimaryButton title={t('liveSession.allowCamera')} onPress={onAllow} />
+              )
+            ) : (
+              <>
+                <PrimaryButton title={t('liveSession.flipCamera')} onPress={onFlip} />
+                <PrimaryButton
+                  title={t('liveSession.openSettings')}
+                  variant="ghost"
+                  onPress={onOpenSettings}
+                  style={styles.cameraGateSecondaryBtn}
+                />
+              </>
+            )}
+          </View>
+        )}
+
+        {kind === 'unavailable' ? (
+          <Text style={styles.cameraGateFootnote}>
+            {deviceCount === 0
+              ? t('liveSession.cameraZeroDevicesHint')
+              : t('liveSession.flipHint', {
+                  side: useFront ? t('liveSession.front') : t('liveSession.rear'),
+                })}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1737,6 +1834,79 @@ const cardStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
 
+  cameraBackdrop: {
+    backgroundColor: colors.bg_v3,
+  },
+  cameraGate: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 40,
+    elevation: 40,
+    backgroundColor: colors.bg_v3,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  cameraGateCard: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+    backgroundColor: colors.surface_v3,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border_subtle,
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    gap: 14,
+  },
+  cameraGateTitle: {
+    color: colors.text_primary,
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodyLg,
+    lineHeight: 26,
+  },
+  cameraGateBody: {
+    color: colors.text_secondary,
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.bodySm,
+    lineHeight: 22,
+  },
+  cameraGateActions: {
+    gap: 10,
+    marginTop: 4,
+  },
+  cameraGateSecondaryBtn: {
+    marginTop: 0,
+  },
+  cameraGateFootnote: {
+    color: colors.text_muted,
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.captions,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  cameraGateDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  cameraGateDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary_green,
+    opacity: 0.45,
+  },
+  cameraGateDotMid: {
+    opacity: 1,
+  },
+  circleBtnSpacer: {
+    width: 44,
+    height: 44,
+  },
+
   noCamera: {
     justifyContent: 'center',
     alignItems: 'center',
@@ -1759,6 +1929,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     marginBottom: 4,
   },
+  flipBtn: { marginTop: 8 },
 
   // Scrim — darkens the top area for readability
   topScrim: {

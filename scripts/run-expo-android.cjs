@@ -311,15 +311,38 @@ function adbPath() {
   return path.join(sdk, 'platform-tools', bin);
 }
 
-function parseAdbDevices(stdout) {
+function parseAdbDevicesLong(stdout) {
   return (stdout || '')
     .split(/\r?\n/)
     .slice(1)
     .map((line) => {
-      const m = line.trim().match(/^(\S+)\s+(\S+)/);
-      return m ? { serial: m[1], state: m[2] } : null;
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return null;
+      }
+      const m = trimmed.match(/^(\S+)\s+(\S+)/);
+      if (!m) {
+        return null;
+      }
+      const modelMatch = trimmed.match(/model:(\S+)/);
+      return {
+        serial: m[1],
+        state: m[2],
+        model: modelMatch ? modelMatch[1] : null,
+      };
     })
     .filter(Boolean);
+}
+
+/** Expo `--device` expects a friendly model name, not the ADB serial. */
+function expoDeviceArgForSerial(adb, serial) {
+  const stdout = spawnSync(adb, ['devices', '-l'], { encoding: 'utf8' }).stdout;
+  const row = parseAdbDevicesLong(stdout).find((d) => d.serial === serial);
+  return row?.model || null;
+}
+
+function parseAdbDevices(stdout) {
+  return parseAdbDevicesLong(stdout).map(({ serial, state }) => ({ serial, state }));
 }
 
 /** Ghost emulators (offline) break Expo’s `adb reverse` — drop them before run:android. */
@@ -438,12 +461,17 @@ function main() {
       ].join('\n'),
     );
   } else if (usb && deviceSerial) {
-    console.error(`[run-expo-android] Target device: ${deviceSerial}`);
+    const expoName = expoDeviceArgForSerial(adb, deviceSerial);
+    console.error(`[run-expo-android] Target device: ${deviceSerial}${expoName ? ` (${expoName})` : ''}`);
   }
 
   const args = ['expo', 'run:android'];
   if (deviceSerial) {
-    args.push('--device', deviceSerial);
+    const expoName = adb && fs.existsSync(adb) ? expoDeviceArgForSerial(adb, deviceSerial) : null;
+    if (expoName) {
+      args.push('--device', expoName);
+    }
+    // Always pin adb/gradle to the USB serial; Expo --device alone is not enough on Windows.
   } else if (usb) {
     args.push('--device');
   }

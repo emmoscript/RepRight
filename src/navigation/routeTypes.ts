@@ -19,10 +19,12 @@ export type MainTabParamList = {
 /** Root native stack — auth flows + overlay screens */
 export type RootStackParamList = {
   Demo: undefined;
+  /** Auth entry for returning users (after sign-out). Not the first-run onboarding. */
+  Welcome: undefined;
   AuthGateway: undefined;
   Login: undefined;
   Signup: undefined;
-  EmailConfirm: undefined;
+  EmailConfirm: { email: string };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
   LiveSession: { continuedWorkout?: boolean } | undefined;

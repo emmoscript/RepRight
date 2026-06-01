@@ -1,6 +1,7 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Pressable,
   RefreshControl,
@@ -37,9 +38,8 @@ function sessionRepsLabel(log: SessionLog): string {
   return `${s.totalReps}/${planned} reps`;
 }
 
-function fmtCardDate(iso: string): string {
+function fmtCardDate(iso: string, months: string[]): string {
   const d = new Date(iso);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
 }
 
@@ -51,6 +51,7 @@ function scoreAccent(sc: number) {
 }
 
 export function StatsScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [refresh, setRefreshing] = useState(false);
@@ -68,6 +69,11 @@ export function StatsScreen() {
     useCallback(() => {
       void load();
     }, [load]),
+  );
+
+  const longMonths = useMemo(
+    () => t('months.long', { returnObjects: true }) as string[],
+    [t],
   );
 
   const filtered = useMemo(
@@ -95,17 +101,17 @@ export function StatsScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.h1}>Rep log</Text>
-        <Text style={styles.meta}>Your biomechanical history</Text>
+        <Text style={styles.h1}>{t('stats.title')}</Text>
+        <Text style={styles.meta}>{t('stats.meta')}</Text>
 
         <View style={styles.filt}>
-          <Pill tab="THIS WEEK" selected={filter === 'week'} onPress={() => setFilter('week')} />
-          <Pill tab="LAST WEEK" selected={filter === 'last'} onPress={() => setFilter('last')} />
-          <Pill tab="MONTHLY" selected={filter === 'month'} onPress={() => setFilter('month')} />
+          <Pill tab={t('stats.thisWeek')} selected={filter === 'week'} onPress={() => setFilter('week')} />
+          <Pill tab={t('stats.lastWeek')} selected={filter === 'last'} onPress={() => setFilter('last')} />
+          <Pill tab={t('stats.monthly')} selected={filter === 'month'} onPress={() => setFilter('month')} />
         </View>
 
         <View style={styles.peakCard}>
-          <Text style={styles.peakLab}>Peak performance</Text>
+          <Text style={styles.peakLab}>{t('stats.peakPerformance')}</Text>
           <Text style={styles.peakNum}>{peak != null ? peak : '—'}</Text>
           <View style={styles.peakBar}>
             <View
@@ -120,9 +126,7 @@ export function StatsScreen() {
         </View>
 
         {grouped.length === 0 ? (
-          <Text style={styles.empty}>
-            No sessions in this period — complete a live lift to populate the rep log.
-          </Text>
+          <Text style={styles.empty}>{t('stats.empty')}</Text>
         ) : (
           grouped.map(({ exerciseId, sessions: rows }) => {
             const isOpen = expanded[exerciseId] === true;
@@ -132,7 +136,7 @@ export function StatsScreen() {
 
             return (
               <View key={exerciseId} style={styles.section}>
-                <Text style={styles.secTitle}>{title} sessions</Text>
+                <Text style={styles.secTitle}>{t('stats.sessionsTitle', { exercise: title })}</Text>
                 {visible.map((item) => {
                   const sc = sessionPerformance(item);
                   const accent = scoreAccent(sc);
@@ -147,9 +151,9 @@ export function StatsScreen() {
                         pressed && styles.cardPressed,
                       ]}
                     >
-                      <Text style={styles.cardDate}>{fmtCardDate(item.date)}</Text>
+                      <Text style={styles.cardDate}>{fmtCardDate(item.date, longMonths)}</Text>
                       <Text style={styles.cardMuted}>
-                        {setCount} set(s) · {sessionRepsLabel(item)}
+                        {t('stats.setCount', { count: setCount, reps: sessionRepsLabel(item) })}
                       </Text>
                       <View style={[styles.badge, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
                         <Text style={[styles.badgeTxt, { color: accent }]}>{sc}%</Text>
@@ -160,7 +164,7 @@ export function StatsScreen() {
                 {hasMore ? (
                   <Pressable onPress={() => toggleExpanded(exerciseId)} style={styles.seeMoreBtn}>
                     <Text style={styles.seeMoreTxt}>
-                      {isOpen ? 'Show less' : `See all (${rows.length})`}
+                      {isOpen ? t('stats.showLess') : t('stats.seeAll', { count: rows.length })}
                     </Text>
                   </Pressable>
                 ) : null}

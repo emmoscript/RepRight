@@ -1,234 +1,339 @@
-import { supabase } from "@/lib/supabaseClient";
-import { create } from "zustand";
+import { getAuthRedirectUri } from '@/lib/authRedirect';
+import { createSessionFromAuthUrl } from '@/lib/authDeepLink';
+import { isEmailConfirmed, supabase } from '@/lib/supabaseClient';
+import { resetToMainTabs, resetToWelcome } from '@/navigation/navigationRef';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
+import {
+  EmailNotConfirmedError,
+  isSupabaseEmailNotConfirmedMessage,
+} from '@/utils/authErrors';
+import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { create } from 'zustand';
 
 type User = {
   id: string;
   email: string | null;
-  auth_provider: "email" | "apple" | "google";
+  auth_provider: 'email' | 'apple' | 'google';
 };
 
 type AuthState = {
-  // Datos
   isLoggedIn: boolean;
+  isGuest: boolean;
   user: User | null;
   participantId: string;
   isLoading: boolean;
+  /** True after the first restoreSession() completes — gate app shell until then. */
+  authReady: boolean;
   error: string | null;
+  pendingVerificationEmail: string | null;
 
-  // Métodos
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, displayName?: string) => Promise<{ needsEmailVerification: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  enterAsGuest: () => void;
   restoreSession: () => Promise<void>;
+  initAuthListener: () => void;
+  resendConfirmationEmail: (email: string) => Promise<void>;
+  handleAuthCallbackUrl: (url: string) => Promise<boolean>;
+  refreshVerificationStatus: () => Promise<boolean>;
+  clearError: () => void;
 };
 
-const randomParticipant = () =>
-  `P${String(Math.floor(Math.random() * 900) + 100)}`;
+const randomParticipant = () => `P${String(Math.floor(Math.random() * 900) + 100)}`;
 
-export const useAuthStore = create<AuthState>((set) => ({
+const syncDisplayNameFromAuthUser = async (metadata: Record<string, unknown> | undefined) => {
+  const raw = metadata?.full_name;
+  if (typeof raw === 'string' && raw.trim()) {
+    await useUserPreferencesStore.getState().setDisplayName(raw.trim());
+  }
+};
+
+function mapUser(authUser: SupabaseUser): User {
+  return {
+    id: authUser.id,
+    email: authUser.email ?? null,
+    auth_provider: 'email',
+  };
+}
+
+function applyVerifiedSession(set: (partial: Partial<AuthState>) => void, session: Session) {
+  const authUser = session.user;
+  if (!isEmailConfirmed(authUser)) {
+    return false;
+  }
+  set({
+    isLoggedIn: true,
+    isGuest: false,
+    user: mapUser(authUser),
+    pendingVerificationEmail: null,
+    error: null,
+  });
+  return true;
+}
+
+let authListenerStarted = false;
+
+export const useAuthStore = create<AuthState>((set, get) => ({
   isLoggedIn: false,
+  isGuest: false,
   user: null,
   participantId: randomParticipant(),
   isLoading: false,
+  authReady: false,
   error: null,
+  pendingVerificationEmail: null,
 
-  signUp: async (email, password) => {
-    console.log("\n=== AUTH STORE SIGNUP STARTED ===");
-    console.log("Email:", email);
-    console.log("Password length:", password.length);
+  clearError: () => set({ error: null }),
+
+  enterAsGuest: () => {
+    set({
+      isGuest: true,
+      isLoggedIn: false,
+      user: null,
+      pendingVerificationEmail: null,
+      participantId: randomParticipant(),
+      error: null,
+    });
+  },
+
+  signUp: async (email, password, displayName) => {
     set({ isLoading: true, error: null });
     try {
-      console.log("Making Supabase signUp API call...");
+      const trimmedName = displayName?.trim() ?? '';
+      const redirectTo = getAuthRedirectUri();
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: redirectTo,
+          data: trimmedName ? { full_name: trimmedName } : undefined,
+        },
       });
 
-      console.log("Supabase response received");
-      console.log("Response data:", data);
-      console.log("Response error:", error);
+      if (error) throw error;
 
-      if (error) {
-        console.error("Supabase returned error:", error.message);
-        console.error("Error status:", error.status);
-        console.error("Full error object:", JSON.stringify(error));
-        throw error;
+      if (trimmedName) {
+        await useUserPreferencesStore.getState().setDisplayName(trimmedName);
       }
 
-      console.log("No error in response");
-
-      if (data.user) {
-        console.log("User object found:", {
-          id: data.user.id,
-          email: data.user.email,
-          user_metadata: data.user.user_metadata,
-        });
-        set({
-          isLoggedIn: true,
-          user: {
-            id: data.user.id,
-            email: data.user.email ?? null,
-            auth_provider: "email",
-          },
-          error: null,
-        });
-        console.log("Auth store updated successfully");
-      } else {
-        console.log("WARNING: No user in response data");
+      if (data.session && data.user && isEmailConfirmed(data.user)) {
+        await syncDisplayNameFromAuthUser(data.user.user_metadata);
+        applyVerifiedSession(set, data.session);
+        return { needsEmailVerification: false };
       }
+
+      // Do not keep a partial session — access only after the email link is opened.
+      await supabase.auth.signOut();
+      set({
+        isLoggedIn: false,
+        isGuest: false,
+        user: null,
+        pendingVerificationEmail: email,
+        error: null,
+      });
+      return { needsEmailVerification: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Sign up failed";
-      console.error("\n=== SIGNUP ERROR ===");
-      console.error("Error message:", message);
-      console.error(
-        "Error type:",
-        err instanceof Error ? err.constructor.name : typeof err,
-      );
-      console.error("Full error:", err);
+      const message = err instanceof Error ? err.message : 'Sign up failed';
       set({ error: message, isLoading: false });
       throw err;
     } finally {
-      console.log("Setting isLoading to false");
       set({ isLoading: false });
     }
   },
 
   signIn: async (email, password) => {
-    console.log("\n=== AUTH STORE SIGNIN STARTED ===");
-    console.log("Email:", email);
-    console.log("Password length:", password.length);
     set({ isLoading: true, error: null });
     try {
-      console.log("Making Supabase signIn API call...");
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      console.log("Supabase response received");
-      console.log("Response data:", data);
-      console.log("Response error:", error);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        console.error("Supabase returned error:", error.message);
-        console.error("Error status:", error.status);
-        console.error("Full error object:", JSON.stringify(error));
+        if (isSupabaseEmailNotConfirmedMessage(error.message)) {
+          set({ pendingVerificationEmail: email, isLoading: false });
+          throw new EmailNotConfirmedError();
+        }
         throw error;
       }
 
-      console.log("No error in response");
-
-      if (data.user) {
-        console.log("User object found:", {
-          id: data.user.id,
-          email: data.user.email,
-        });
-        set({
-          isLoggedIn: true,
-          user: {
-            id: data.user.id,
-            email: data.user.email ?? null,
-            auth_provider: "email",
-          },
-          error: null,
-        });
-        console.log("Auth store updated successfully");
-      } else {
-        console.log("WARNING: No user in response data");
+      if (!data.user || !data.session) {
+        throw new Error('Sign in failed');
       }
+
+      if (!isEmailConfirmed(data.user)) {
+        await supabase.auth.signOut();
+        set({ pendingVerificationEmail: email, isLoading: false });
+        throw new EmailNotConfirmedError();
+      }
+
+      await syncDisplayNameFromAuthUser(data.user.user_metadata);
+      applyVerifiedSession(set, data.session);
+      resetToMainTabs();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Sign in failed";
-      console.error("\n=== SIGNIN ERROR ===");
-      console.error("Error message:", message);
-      console.error(
-        "Error type:",
-        err instanceof Error ? err.constructor.name : typeof err,
-      );
-      console.error("Full error:", err);
-      set({ error: message, isLoading: false });
+      if (!(err instanceof EmailNotConfirmedError)) {
+        const message = err instanceof Error ? err.message : 'Sign in failed';
+        set({ error: message, isLoading: false });
+      }
       throw err;
     } finally {
-      console.log("Setting isLoading to false");
+      set({ isLoading: false });
+    }
+  },
+
+  resendConfirmationEmail: async (email) => {
+    set({ isLoading: true, error: null });
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: getAuthRedirectUri() },
+      });
+      if (error) throw error;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not resend email';
+      set({ error: message });
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  handleAuthCallbackUrl: async (url) => {
+    set({ isLoading: true, error: null });
+    try {
+      const session = await createSessionFromAuthUrl(url);
+      if (!session?.user) {
+        return false;
+      }
+
+      if (!isEmailConfirmed(session.user)) {
+        await supabase.auth.signOut();
+        set({
+          isLoggedIn: false,
+          user: null,
+          pendingVerificationEmail: session.user.email ?? get().pendingVerificationEmail,
+        });
+        return false;
+      }
+
+      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+      const ok = applyVerifiedSession(set, session);
+      if (ok) resetToMainTabs();
+      return ok;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Email verification failed';
+      set({ error: message });
+      return false;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  refreshVerificationStatus: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      const session = data.session;
+      if (!session?.user) {
+        return false;
+      }
+      if (!isEmailConfirmed(session.user)) {
+        return false;
+      }
+      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+      return applyVerifiedSession(set, session);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not verify status';
+      set({ error: message });
+      return false;
+    } finally {
       set({ isLoading: false });
     }
   },
 
   signOut: async () => {
-    console.log("\n=== AUTH STORE SIGNOUT STARTED ===");
     set({ isLoading: true });
     try {
-      console.log("Making Supabase signOut API call...");
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("Supabase signOut error:", error);
-        throw error;
-      }
-
-      console.log("Sign out successful");
+      if (error) throw error;
       set({
         isLoggedIn: false,
+        isGuest: false,
         user: null,
+        pendingVerificationEmail: null,
         participantId: randomParticipant(),
         error: null,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Sign out failed";
-      console.error("\n=== SIGNOUT ERROR ===");
-      console.error("Error message:", message);
-      console.error("Full error:", err);
+      const message = err instanceof Error ? err.message : 'Sign out failed';
       set({ error: message });
     } finally {
-      console.log("Setting isLoading to false");
       set({ isLoading: false });
     }
   },
 
   restoreSession: async () => {
-    console.log("\n=== AUTH STORE RESTORE SESSION STARTED ===");
     set({ isLoading: true });
     try {
-      console.log("Making Supabase getSession API call...");
       const { data, error } = await supabase.auth.getSession();
+      if (error) throw error;
 
-      console.log("Supabase response received");
-      console.log("Response error:", error);
-      console.log("Session data:", data);
-
-      if (error) {
-        console.error("Supabase getSession error:", error);
-        throw error;
+      const session = data.session;
+      if (!session?.user) {
+        set({ isLoggedIn: false, isGuest: false, user: null });
+        return;
       }
 
-      if (data.session?.user) {
-        const authUser = data.session.user;
-        console.log("Session found for user:", authUser.id);
+      if (!isEmailConfirmed(session.user)) {
+        await supabase.auth.signOut();
         set({
-          isLoggedIn: true,
-          user: {
-            id: authUser.id,
-            email: authUser.email ?? null,
-            auth_provider: "email",
-          },
+          isLoggedIn: false,
+          isGuest: false,
+          user: null,
+          pendingVerificationEmail: session.user.email ?? null,
         });
-      } else {
-        console.log("No session found, user is not logged in");
-        set({ isLoggedIn: false, user: null });
+        return;
       }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to restore session";
-      console.error("\n=== RESTORE SESSION ERROR ===");
-      console.error("Error message:", message);
-      console.error("Full error:", err);
-      set({ isLoggedIn: false, user: null });
+
+      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+      applyVerifiedSession(set, session);
+    } catch {
+      set({ isLoggedIn: false, isGuest: false, user: null });
     } finally {
-      console.log("Setting isLoading to false");
-      set({ isLoading: false });
+      set({ isLoading: false, authReady: true });
     }
+  },
+
+  initAuthListener: () => {
+    if (authListenerStarted) return;
+    authListenerStarted = true;
+
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        set({
+          isLoggedIn: false,
+          isGuest: false,
+          user: null,
+          pendingVerificationEmail: null,
+        });
+        resetToWelcome();
+        return;
+      }
+
+      if (
+        session?.user &&
+        isEmailConfirmed(session.user) &&
+        (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
+      ) {
+        void syncDisplayNameFromAuthUser(session.user.user_metadata);
+        applyVerifiedSession(set, session);
+        if (event === 'SIGNED_IN') {
+          resetToMainTabs();
+        }
+      }
+    });
   },
 }));
 
-// Selectores para facilitar acceso
 export const selectIsLoggedIn = (state: AuthState) => state.isLoggedIn;
 export const selectUser = (state: AuthState) => state.user;
 export const selectError = (state: AuthState) => state.error;

@@ -47,16 +47,16 @@ type SessionConfigState = {
 
 const INITIAL_SET_COUNT = 3;
 const INITIAL_REPS = 5;
-const INITIAL_WEIGHT = 80;
+const INITIAL_WEIGHT_LB = 135;
 
 export const useSessionConfigStore = create<SessionConfigState>((set) => ({
   exercise: "conventional_deadlift",
   setCount: INITIAL_SET_COUNT,
   repsPerSet: INITIAL_REPS,
   customSetPlan: false,
-  setPlans: buildSetPlans(INITIAL_SET_COUNT, INITIAL_REPS, INITIAL_WEIGHT),
-  weightUnit: "kg",
-  weightAmount: INITIAL_WEIGHT,
+  setPlans: buildSetPlans(INITIAL_SET_COUNT, INITIAL_REPS, INITIAL_WEIGHT_LB),
+  weightUnit: "lb",
+  weightAmount: INITIAL_WEIGHT_LB,
   patch: (c) => set((s) => ({ ...s, ...c })),
   setSetCount: (count) =>
     set((s) => ({

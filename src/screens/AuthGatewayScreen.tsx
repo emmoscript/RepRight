@@ -3,6 +3,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,13 +20,16 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { RepRightHeader } from "@/components/RepRightHeader";
 import { UnderlineField } from "@/components/UnderlineField";
 import type { RootStackParamList } from "@/navigation/routeTypes";
+import { resetToEmailConfirm } from "@/navigation/navigationRef";
 import { useAuthStore } from "@/store/authStore";
+import { isEmailNotConfirmedError } from "@/utils/authErrors";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function AuthGatewayScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const signIn = useAuthStore((s) => s.signIn);
   const signUp = useAuthStore((s) => s.signUp);
@@ -71,7 +75,7 @@ export function AuthGatewayScreen() {
                   styles.modeChipTxt,
                   mode === "login" && styles.modeChipTxtOn,
                 ]}>
-                LOG IN
+                {t('auth.logIn')}
               </Text>
             </Pressable>
             <Pressable
@@ -84,42 +88,42 @@ export function AuthGatewayScreen() {
                   styles.modeChipTxt,
                   mode === "signup" && styles.modeChipTxtOn,
                 ]}>
-                CREATE ACCOUNT
+                {t('auth.createAccount')}
               </Text>
             </Pressable>
           </View>
 
           {mode === "login" ? (
             <>
-              <Text style={styles.title}>Welcome back</Text>
+              <Text style={styles.title}>{t('auth.welcomeBack')}</Text>
               <Text style={styles.sub}>
-                Log in to track your progress and hit your goals.
+                {t('auth.loginSub')}
               </Text>
               <View style={{ height: 20 }} />
               <UnderlineField
-                label="Email address"
+                label={t('auth.email')}
                 value={loginEmail}
                 onChangeText={setLoginEmail}
-                placeholder="you@university.edu"
+                placeholder={t('auth.emailPlaceholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
               <View style={{ marginBottom: 4 }}>
                 <UnderlineField
-                  label="Password"
+                  label={t('auth.password')}
                   value={loginPassword}
                   onChangeText={setLoginPassword}
-                  placeholder="Enter password"
+                  placeholder={t('auth.passwordPlaceholder')}
                   secureTextEntry
                   autoCapitalize="none"
                 />
               </View>
               <Pressable style={styles.forgotWrap} accessibilityRole="button">
-                <Text style={styles.forgotTxt}>Forgot password?</Text>
+                <Text style={styles.forgotTxt}>{t('auth.forgotPassword')}</Text>
               </Pressable>
               <PrimaryButton
-                title="Log In"
+                title={t('auth.loginBtn')}
                 trailing={
                   <MaterialIcons
                     name="arrow-forward"
@@ -134,14 +138,17 @@ export function AuthGatewayScreen() {
                       await signIn(loginEmail.trim(), loginPassword.trim());
                       nav.navigate("MainTabs", { screen: "HomeMain" });
                     } catch (err) {
-                      console.error("Login error:", err);
+                      if (isEmailNotConfirmedError(err)) {
+                        resetToEmailConfirm(loginEmail.trim());
+                        nav.navigate("EmailConfirm", { email: loginEmail.trim() });
+                      }
                     }
                   }
                 }}
               />
               <View style={styles.divWrap}>
                 <View style={styles.divLine} />
-                <Text style={styles.divTxt}>Or continue with</Text>
+                <Text style={styles.divTxt}>{t('auth.orContinue')}</Text>
                 <View style={styles.divLine} />
               </View>
               <View style={styles.socialRow}>
@@ -151,7 +158,7 @@ export function AuthGatewayScreen() {
                     size={20}
                     color={colors.text_primary}
                   />
-                  <Text style={styles.socialLab}>Google</Text>
+                  <Text style={styles.socialLab}>{t('auth.google')}</Text>
                 </Pressable>
                 <Pressable style={styles.socialChip} accessibilityRole="button">
                   <Ionicons
@@ -159,35 +166,35 @@ export function AuthGatewayScreen() {
                     size={22}
                     color={colors.text_primary}
                   />
-                  <Text style={styles.socialLab}>Apple</Text>
+                  <Text style={styles.socialLab}>{t('auth.apple')}</Text>
                 </Pressable>
               </View>
             </>
           ) : (
             <>
-              <Text style={styles.title}>Create account</Text>
+              <Text style={styles.title}>{t('auth.createTitle')}</Text>
               <Text style={styles.sub}>
-                Join the cohort and unlock form tracking saved to Stats.
+                {t('auth.createSub')}
               </Text>
               <View style={{ height: 20 }} />
               <UnderlineField
-                label="Full name"
+                label={t('auth.fullName')}
                 value={name}
                 onChangeText={setName}
-                placeholder="Your name"
+                placeholder={t('auth.namePlaceholder')}
                 autoCapitalize="words"
               />
               <UnderlineField
-                label="Email address"
+                label={t('auth.email')}
                 value={signupEmail}
                 onChangeText={setSignupEmail}
-                placeholder="you@university.edu"
+                placeholder={t('auth.emailPlaceholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
               <View style={styles.pwOuter}>
-                <Text style={styles.pwLbl}>Password</Text>
+                <Text style={styles.pwLbl}>{t('auth.password')}</Text>
                 <View
                   style={[
                     styles.inputRow,
@@ -200,7 +207,7 @@ export function AuthGatewayScreen() {
                   <TextInput
                     value={password}
                     onChangeText={setPassword}
-                    placeholder="Create password"
+                    placeholder={t('auth.passwordCreatePlaceholder')}
                     placeholderTextColor={colors.text_muted}
                     secureTextEntry={!showPw}
                     onFocus={() => setPwFocused(true)}
@@ -219,7 +226,7 @@ export function AuthGatewayScreen() {
                 </View>
               </View>
               <PrimaryButton
-                title="Sign Up"
+                title={t('auth.signupBtn')}
                 trailing={
                   <MaterialIcons
                     name="arrow-forward"
@@ -231,10 +238,18 @@ export function AuthGatewayScreen() {
                 onPress={async () => {
                   if (signupEmail.trim() && password.trim() && name.trim()) {
                     try {
-                      await signUp(signupEmail.trim(), password.trim());
-                      nav.navigate("EmailConfirm");
-                    } catch (err) {
-                      console.error("Signup error:", err);
+                      const { needsEmailVerification } = await signUp(
+                        signupEmail.trim(),
+                        password.trim(),
+                        name.trim(),
+                      );
+                      if (needsEmailVerification) {
+                        nav.navigate("EmailConfirm", { email: signupEmail.trim() });
+                      } else {
+                        nav.navigate("MainTabs", { screen: "HomeMain" });
+                      }
+                    } catch {
+                      // error in store
                     }
                   }
                 }}

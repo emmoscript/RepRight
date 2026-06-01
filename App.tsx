@@ -1,3 +1,4 @@
+import "@/i18n";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -16,8 +17,9 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { RootNavigator } from "@/navigation/RootNavigator";
+import { CameraDevicesPrewarm } from "@/components/CameraDevicesPrewarm";
 import { useAuthStore } from "@/store/authStore";
-import { useSessionSyncStore } from "@/store/sessionSyncStore";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -33,9 +35,14 @@ const APP_FONT_MAP = {
 
 export default function App() {
   const [fontsReady, setFontsReady] = useState(false);
+  const authReady = useAuthStore((s) => s.authReady);
+  const prefsReady = useUserPreferencesStore((s) => s.hydrated);
 
-  const restoreSession = useAuthStore((s) => s.restoreSession);
-  const setOnlineStatus = useSessionSyncStore((s) => s.setOnlineStatus);
+  useEffect(() => {
+    useAuthStore.getState().initAuthListener();
+    void useUserPreferencesStore.getState().hydrate();
+    void useAuthStore.getState().restoreSession();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +71,7 @@ export default function App() {
     }
   }, [fontsReady]);
 
-  if (!fontsReady) {
+  if (!fontsReady || !authReady || !prefsReady) {
     return null;
   }
 
@@ -72,6 +79,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="light" />
+        <CameraDevicesPrewarm />
         <RootNavigator />
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,5 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,10 +13,11 @@ import { getAllSessions, type SessionLog } from '@/modules/session';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { useAuthStore } from '@/store/authStore';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
+import { resolveDisplayName } from '@/utils/displayName';
 
-function formatDateShort(iso: string): string {
+function formatDateShort(iso: string, months: string[]): string {
   const d = new Date(iso);
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
 }
 
@@ -46,21 +48,23 @@ function repsRolling7Days(sessions: SessionLog[], anchor: Date, offsetWeeks: num
   }, 0);
 }
 
-function scoreTone(score: number) {
-  if (score >= 90) return { bar: colors.primary_green, headline: colors.primary_green, sub: 'PERFORMANCE' as const };
+function scoreTone(score: number, t: (key: string) => string) {
+  if (score >= 90) return { bar: colors.primary_green, headline: colors.primary_green, sub: t('common.performance') };
   if (score >= 70) {
-    return { bar: colors.accent_green_light, headline: colors.primary_green, sub: 'PERFORMANCE' as const };
+    return { bar: colors.accent_green_light, headline: colors.primary_green, sub: t('common.performance') };
   }
   if (score >= 50) {
-    return { bar: colors.accent_yellow, headline: colors.accent_yellow, sub: 'UNDER TARGET' as const };
+    return { bar: colors.accent_yellow, headline: colors.accent_yellow, sub: t('common.underTarget') };
   }
-  return { bar: colors.accent_red, headline: colors.accent_red, sub: 'UNDER TARGET' as const };
+  return { bar: colors.accent_red, headline: colors.accent_red, sub: t('common.underTarget') };
 }
 
 export function HomeScreen() {
+  const { t, i18n } = useTranslation();
   const nav = useNavigation<MainTabCompositeNav>();
-  const participantId = useAuthStore((s) => s.participantId);
+  const isGuest = useAuthStore((s) => s.isGuest);
   const email = useAuthStore((s) => s.user?.email ?? null);
+  const displayNamePref = useUserPreferencesStore((s) => s.displayName);
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
 
@@ -79,19 +83,21 @@ export function HomeScreen() {
     }, []),
   );
 
+  const shortMonths = useMemo(
+    () => t('months.short', { returnObjects: true }) as string[],
+    [t],
+  );
+
   const greeting = useMemo(() => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
+    if (h < 12) return t('home.greetingMorning');
+    if (h < 18) return t('home.greetingAfternoon');
+    return t('home.greetingEvening');
+  }, [t]);
 
   const displayName = useMemo(
-    () =>
-      email
-        ? email.split('@')[0]?.replace(/\b\w/g, (c: string) => c.toUpperCase()) ?? 'Athlete'
-        : participantId,
-    [email, participantId],
+    () => resolveDisplayName({ displayName: displayNamePref, email, isGuest }),
+    [displayNamePref, email, isGuest, i18n.language],
   );
 
   const latest = sessions[0] ?? null;
@@ -125,10 +131,10 @@ export function HomeScreen() {
           {greeting},{' '}
           <Text style={styles.greetingName}>{displayName}</Text>
         </Text>
-        <Text style={styles.subGreeting}>READY FOR YOUR MORNING LIFT?</Text>
+        <Text style={styles.subGreeting}>{t('home.readyLift')}</Text>
 
         <PrimaryButton
-          title="START DEADLIFT SESSION"
+          title={t('home.startSession')}
           trailing={<SvgPlayIcon color={colors.text_on_green} size={28} />}
           onPress={() => nav.navigate('Workout')}
           style={styles.heroCta as ViewStyle}
@@ -143,22 +149,22 @@ export function HomeScreen() {
 
             <View style={styles.lastTop}>
               <View style={styles.lastTopTxt}>
-                <Text style={styles.lastCardLabel}>LAST SESSION</Text>
+                <Text style={styles.lastCardLabel}>{t('home.lastSession')}</Text>
                 {latest ? (
                   <>
-                    <Text style={styles.lastCardDateLine}>{formatDateShort(latest.date)}</Text>
+                    <Text style={styles.lastCardDateLine}>{formatDateShort(latest.date, shortMonths)}</Text>
                     <Text
                       style={styles.lastCardSummaryLine}
                       numberOfLines={1}
                       adjustsFontSizeToFit
                       minimumFontScale={0.82}
                     >
-                      SUMMARY
+                      {t('common.summary')}
                     </Text>
                   </>
                 ) : (
                   <Text style={styles.lastCardSummaryLine} numberOfLines={2}>
-                    NO SESSION YET
+                    {t('home.noSessionYet')}
                   </Text>
                 )}
               </View>
@@ -172,11 +178,11 @@ export function HomeScreen() {
             <View style={styles.lastBottom}>
               <View style={styles.lastMetrics}>
                 <View style={styles.metricBlock}>
-                  <Text style={styles.metricLab}>SETS</Text>
+                  <Text style={styles.metricLab}>{t('common.sets')}</Text>
                   <Text style={styles.metricVal}>{latest ? lastSets : '—'}</Text>
                 </View>
                 <View style={[styles.metricBlock, styles.metricBlockSpaced]}>
-                  <Text style={styles.metricLab}>REPS</Text>
+                  <Text style={styles.metricLab}>{t('common.reps')}</Text>
                   <Text style={styles.metricVal}>{latest ? lastReps : '—'}</Text>
                 </View>
               </View>
@@ -188,11 +194,11 @@ export function HomeScreen() {
 
           <View style={styles.quickCol}>
             <View style={[styles.miniStat, styles.miniStatSpacing]}>
-              <Text style={styles.miniStatLab}>TOTAL SESSIONS</Text>
+              <Text style={styles.miniStatLab}>{t('home.totalSessions')}</Text>
               <Text style={styles.miniStatValGreen}>{sessionCount}</Text>
             </View>
             <View style={styles.miniStat}>
-              <Text style={styles.miniStatLab}>CURRENT STREAK</Text>
+              <Text style={styles.miniStatLab}>{t('home.currentStreak')}</Text>
               <View style={styles.streakRow}>
                 <Text style={styles.miniStatVal}>12</Text>
                 <Text style={styles.streakEmoji} accessibilityLabel="Streak flame">
@@ -203,22 +209,22 @@ export function HomeScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionEyebrow}>RECENT ACTIVITY</Text>
+        <Text style={styles.sectionEyebrow}>{t('home.recentActivity')}</Text>
         <View style={styles.activityStack}>
           {recent.length > 0 ? (
             recent.map((s) => {
               const sc = Math.round(s.summary.avgScore);
-              const tone = scoreTone(sc);
+              const tone = scoreTone(sc, t);
               const mins = sessionDurationMinutes(s);
-              const subParts = [`${formatDateShort(s.date)}`];
-              if (mins != null) subParts.push(`${mins} MIN`);
+              const subParts = [`${formatDateShort(s.date, shortMonths)}`];
+              if (mins != null) subParts.push(`${mins} ${t('home.min')}`);
               const subLine = subParts.join(' • ');
               return (
                 <View key={s.sessionId} style={styles.activityRow}>
                   <View style={[styles.activityBar, { backgroundColor: tone.bar }]} />
                   <View style={styles.activityMid}>
-                    <Text style={styles.activityTitle}>DEADLIFT</Text>
-                    <Text style={styles.activitySub}>{`FORM SESSION · ${subLine}`}</Text>
+                    <Text style={styles.activityTitle}>{t('common.deadlift')}</Text>
+                    <Text style={styles.activitySub}>{`${t('home.formSession')} · ${subLine}`}</Text>
                   </View>
                   <View style={styles.activityRight}>
                     <Text style={[styles.activityScore, { color: tone.headline }]}>{sc}%</Text>
@@ -231,12 +237,12 @@ export function HomeScreen() {
             <View style={styles.activityRow}>
               <View style={[styles.activityBar, { backgroundColor: colors.border_subtle }]} />
               <View style={styles.activityMid}>
-                <Text style={styles.activityTitle}>NO RECENT SESSIONS</Text>
-                <Text style={styles.activitySub}>START A DEADLIFT RUN TO LOG ACTIVITY HERE</Text>
+                <Text style={styles.activityTitle}>{t('home.noRecentSessions')}</Text>
+                <Text style={styles.activitySub}>{t('home.startToLog')}</Text>
               </View>
               <View style={styles.activityRight}>
                 <Text style={[styles.activityScore, { color: colors.text_muted }]}>—</Text>
-                <Text style={styles.activityPerf}>IDLE</Text>
+                <Text style={styles.activityPerf}>{t('common.idle')}</Text>
               </View>
             </View>
           )}
@@ -251,8 +257,8 @@ export function HomeScreen() {
               <Text style={styles.volPct}>
                 {weeklyPct == null ? '—' : `${weeklyPct >= 0 ? '+' : ''}${weeklyPct.toFixed(1)}%`}
               </Text>
-              <Text style={styles.volCap}>WEEKLY VOLUME INCREASE</Text>
-              <Text style={styles.volHint}>Based on reps logged in rolling 7-day windows.</Text>
+              <Text style={styles.volCap}>{t('home.weeklyVolume')}</Text>
+              <Text style={styles.volHint}>{t('home.weeklyHint')}</Text>
             </View>
             <View style={styles.volBars}>
               {(barHeightsPct.length ? barHeightsPct : [40, 60, 55, 75, 90]).map((h, idx, arr) => {

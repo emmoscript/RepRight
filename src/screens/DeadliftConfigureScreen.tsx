@@ -1,6 +1,7 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,20 +10,22 @@ import { REPS_PER_SET_MAX, REPS_PER_SET_MIN, RepsSlider } from '@/components/Rep
 import { SetPlanRow } from '@/components/SetPlanRow';
 import type { WorkoutStackNav } from '@/navigation/routeTypes';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
-import { clampMass, convertMass, parseMassDraft, type WeightUnit } from '@/utils/weightUnits';
+import { clampMass, parseMassDraft, weightPlaceholder, weightUnitSuffix } from '@/utils/weightUnits';
 
 const SET_OPTS = [2, 3, 4, 5] as const;
 const WORKOUT_BG = require('../../assets/images/man-deadlifting.jpg');
 
 export function DeadliftConfigureScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<WorkoutStackNav>();
   const numSets = useSessionConfigStore((s) => s.setCount);
   const repsPerSet = useSessionConfigStore((s) => s.repsPerSet);
   const customSetPlan = useSessionConfigStore((s) => s.customSetPlan);
   const setPlans = useSessionConfigStore((s) => s.setPlans);
-  const weightUnit = useSessionConfigStore((s) => s.weightUnit);
+  const weightUnit = useUserPreferencesStore((s) => s.weightUnit);
   const weightAmount = useSessionConfigStore((s) => s.weightAmount);
   const patch = useSessionConfigStore((s) => s.patch);
   const setSetCount = useSessionConfigStore((s) => s.setSetCount);
@@ -34,6 +37,16 @@ export function DeadliftConfigureScreen() {
   useEffect(() => {
     patch({ exercise: 'conventional_deadlift' });
   }, [patch]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const prefUnit = useUserPreferencesStore.getState().weightUnit;
+      const configUnit = useSessionConfigStore.getState().weightUnit;
+      if (configUnit !== prefUnit) {
+        void useUserPreferencesStore.getState().setWeightUnit(prefUnit);
+      }
+    }, []),
+  );
 
   useEffect(() => {
     setWeightDraft(String(weightAmount));
@@ -48,25 +61,20 @@ export function DeadliftConfigureScreen() {
     patch({ weightAmount: clampMass(n, weightUnit) });
   }, [weightDraft, weightAmount, weightUnit, patch]);
 
-  const setUnit = (next: WeightUnit) => {
-    if (next === weightUnit) return;
-    const converted = convertMass(weightAmount, weightUnit, next);
-    const convertedPlans = setPlans.map((row) => ({
-      ...row,
-      weightAmount: convertMass(row.weightAmount, weightUnit, next),
-    }));
-    patch({ weightUnit: next, weightAmount: converted, setPlans: convertedPlans });
-  };
-
-  const unitLabel = weightUnit === 'kg' ? 'kg' : 'lb';
+  const unitLabel = weightUnitSuffix(weightUnit);
 
   const planSummary = useMemo(() => {
     if (customSetPlan) {
       const reps = setPlans.map((r) => r.reps).join(' · ');
-      return `${numSets} sets · ${reps} reps`;
+      return t('deadliftConfigure.planCustom', { sets: numSets, repsList: reps });
     }
-    return `${numSets} sets · ${repsPerSet} reps · ${weightAmount} ${unitLabel}`;
-  }, [customSetPlan, numSets, repsPerSet, setPlans, weightAmount, unitLabel]);
+    return t('deadliftConfigure.planSame', {
+      sets: numSets,
+      reps: repsPerSet,
+      weight: weightAmount,
+      unit: unitLabel,
+    });
+  }, [customSetPlan, numSets, repsPerSet, setPlans, weightAmount, unitLabel, t]);
 
   return (
     <View style={styles.root}>
@@ -86,15 +94,15 @@ export function DeadliftConfigureScreen() {
             <Ionicons name="chevron-back" size={24} color={colors.text_primary} />
           </Pressable>
           <View style={styles.topTitles}>
-            <Text style={styles.title}>Deadlift</Text>
-            <Text style={styles.meta}>Configure session</Text>
+            <Text style={styles.title}>{t('deadliftConfigure.title')}</Text>
+            <Text style={styles.meta}>{t('deadliftConfigure.meta')}</Text>
           </View>
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionHeading}>Volume</Text>
+          <Text style={styles.sectionHeading}>{t('deadliftConfigure.volume')}</Text>
 
-          <Text style={styles.fieldLab}>Sets</Text>
+          <Text style={styles.fieldLab}>{t('deadliftConfigure.sets')}</Text>
           <View style={styles.pillRow}>
             {SET_OPTS.map((n) => {
               const on = numSets === n;
@@ -110,14 +118,14 @@ export function DeadliftConfigureScreen() {
             })}
           </View>
 
-          <Text style={[styles.fieldLab, { marginTop: 20 }]}>Rep target</Text>
+          <Text style={[styles.fieldLab, { marginTop: 20 }]}>{t('deadliftConfigure.repTarget')}</Text>
           <View style={styles.planToggleRow}>
             <Pressable
               onPress={() => setCustomSetPlan(false)}
               style={[styles.planSeg, !customSetPlan ? styles.planSegOn : styles.planSegOff]}
             >
               <Text style={[styles.planSegTxt, !customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff]}>
-                Same each set
+                {t('deadliftConfigure.sameEachSet')}
               </Text>
             </Pressable>
             <Pressable
@@ -125,7 +133,7 @@ export function DeadliftConfigureScreen() {
               style={[styles.planSeg, customSetPlan ? styles.planSegOn : styles.planSegOff]}
             >
               <Text style={[styles.planSegTxt, customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff]}>
-                Vary by set
+                {t('deadliftConfigure.varyBySet')}
               </Text>
             </Pressable>
           </View>
@@ -140,40 +148,19 @@ export function DeadliftConfigureScreen() {
               />
             </View>
           ) : (
-            <Text style={styles.customHint}>
-              Set reps (and weight) per row below — e.g. 10 / 8 / 5.
-            </Text>
+            <Text style={styles.customHint}>{t('deadliftConfigure.customHint')}</Text>
           )}
 
           <View style={styles.sectionDivider} />
 
-          <Text style={styles.sectionHeading}>Load</Text>
-          <Text style={styles.fieldLabSub}>Display & enter weights in</Text>
-          <View style={styles.unitToggleRow}>
-            <Pressable
-              onPress={() => setUnit('kg')}
-              style={[styles.unitSeg, weightUnit === 'kg' ? styles.unitSegOn : styles.unitSegOff]}
-            >
-              <Text style={[styles.unitSegTxt, weightUnit === 'kg' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
-                kg
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setUnit('lb')}
-              style={[styles.unitSeg, weightUnit === 'lb' ? styles.unitSegOn : styles.unitSegOff]}
-            >
-              <Text style={[styles.unitSegTxt, weightUnit === 'lb' ? styles.unitSegTxtOn : styles.unitSegTxtOff]}>
-                lb
-              </Text>
-            </Pressable>
-          </View>
+          <Text style={styles.sectionHeading}>{t('deadliftConfigure.load')}</Text>
 
           {!customSetPlan ? (
             <>
-              <Text style={[styles.fieldLab, { marginTop: 20 }]}>Working weight</Text>
+              <Text style={[styles.fieldLab, { marginTop: 14 }]}>{t('deadliftConfigure.workingWeight')}</Text>
               <View style={styles.weightInputShell}>
                 <TextInput
-                  placeholder={weightUnit === 'kg' ? '100' : '225'}
+                  placeholder={weightPlaceholder(weightUnit)}
                   placeholderTextColor={colors.text_muted}
                   value={weightDraft}
                   onChangeText={setWeightDraft}
@@ -192,7 +179,7 @@ export function DeadliftConfigureScreen() {
               {setPlans.map((row, i) => (
                 <SetPlanRow
                   key={i}
-                  setLabel={`Set ${i + 1}`}
+                  setLabel={t('deadliftConfigure.setLabel', { n: i + 1 })}
                   row={row}
                   unitLabel={unitLabel}
                   onChange={(p) => updateSetPlanRow(i, p)}
@@ -202,15 +189,13 @@ export function DeadliftConfigureScreen() {
           )}
 
           <View style={styles.summaryStrip}>
-            <Text style={styles.summaryLab}>Session plan</Text>
+            <Text style={styles.summaryLab}>{t('deadliftConfigure.sessionPlan')}</Text>
             <Text style={styles.summaryVal}>{planSummary}</Text>
           </View>
 
-          <Text style={styles.footerNote}>
-            Reps count automatically. Each set ends at your target or after a few seconds at lockout.
-          </Text>
+          <Text style={styles.footerNote}>{t('deadliftConfigure.footerNote')}</Text>
 
-          <PrimaryButton title="START SESSION →" onPress={() => nav.navigate('LiveSession')} style={styles.startBtn} />
+          <PrimaryButton title={t('deadliftConfigure.startSession')} onPress={() => nav.navigate('LiveSession')} style={styles.startBtn} />
           <View style={{ height: 104 }} />
         </ScrollView>
       </SafeAreaView>
@@ -285,11 +270,6 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.capsWide,
     textTransform: 'uppercase',
   },
-  fieldLabSub: {
-    marginTop: 10,
-    color: colors.text_muted,
-    fontSize: typography.fontSize.bodySm,
-  },
   pillRow: {
     flexDirection: 'row',
     gap: 12,
@@ -332,25 +312,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.bodySm,
     lineHeight: 20,
   },
-  unitToggleRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    alignSelf: 'flex-start',
-  },
-  unitSeg: {
-    minWidth: 72,
-    minHeight: 40,
-    borderRadius: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  unitSegOn: { backgroundColor: colors.primary_green },
-  unitSegOff: { backgroundColor: colors.bg_elevated },
-  unitSegTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.body },
-  unitSegTxtOn: { color: colors.text_on_green },
-  unitSegTxtOff: { color: colors.text_secondary },
   weightInputShell: {
     flexDirection: 'row',
     alignItems: 'center',

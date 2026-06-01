@@ -1,18 +1,15 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-console.log("=== SUPABASE CLIENT INITIALIZATION ===");
-console.log("Supabase URL configured:", !!supabaseUrl);
-console.log("Supabase Anon Key configured:", !!supabaseAnonKey);
-if (!supabaseUrl) console.error("ERROR: EXPO_PUBLIC_SUPABASE_URL is not set!");
-if (!supabaseAnonKey)
-  console.error("ERROR: EXPO_PUBLIC_SUPABASE_ANON_KEY is not set!");
+if (__DEV__) {
+  if (!supabaseUrl) console.warn('[supabase] EXPO_PUBLIC_SUPABASE_URL is not set');
+  if (!supabaseAnonKey) console.warn('[supabase] EXPO_PUBLIC_SUPABASE_ANON_KEY is not set');
+}
 
-// Use AsyncStorage for development (no native compilation needed)
-// For production with secure storage, rebuild dev client or use EAS build
 const AsyncStorageWrapper = {
   getItem: async (key: string) => {
     try {
@@ -25,14 +22,14 @@ const AsyncStorageWrapper = {
     try {
       await AsyncStorage.setItem(key, value);
     } catch {
-      // Error al guardar
+      // ignore storage write failures
     }
   },
   removeItem: async (key: string) => {
     try {
       await AsyncStorage.removeItem(key);
     } catch {
-      // Error al eliminar
+      // ignore storage delete failures
     }
   },
 };
@@ -43,5 +40,16 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    flowType: 'pkce',
   },
 });
+
+export function isEmailConfirmed(user: SupabaseUser | null | undefined): boolean {
+  return !!user?.email_confirmed_at;
+}
+
+export async function getCurrentSession(): Promise<Session | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session;
+}

@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import type { SessionLog } from '@/modules/session';
 
 export type StatsFilterKind = 'week' | 'last' | 'month';
@@ -59,14 +60,7 @@ export function groupSessionsByExercise(
 }
 
 export function exerciseDisplayName(exerciseId: string): string {
-  switch (exerciseId) {
-    case 'conventional_deadlift':
-      return 'Deadlift';
-    case 'squat':
-      return 'Squat';
-    case 'romanian_deadlift':
-      return 'Romanian Deadlift';
-    default:
-      return exerciseId.replace(/_/g, ' ');
-  }
+  const key = `workout.exercise.${exerciseId}.title`;
+  if (i18n.exists(key)) return i18n.t(key);
+  return exerciseId.replace(/_/g, ' ');
 }

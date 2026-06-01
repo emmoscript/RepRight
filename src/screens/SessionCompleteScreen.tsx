@@ -3,6 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { randomUUID } from 'expo-crypto';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View, Platform, TextInput } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
@@ -78,20 +79,20 @@ function ringColor(sc: number) {
   return colors.accent_red;
 }
 
-function precisionTitle(scoreRounded: number) {
-  if (scoreRounded >= 90) return 'ELITE PRECISION';
-  if (scoreRounded >= 80) return 'STRONG PRECISION';
-  if (scoreRounded >= 70) return 'SOLID CONTROL';
-  if (scoreRounded >= 50) return 'NEEDS CLEANUP';
-  return 'HIGH ALERT FORM';
+function precisionTitle(scoreRounded: number, t: (key: string) => string) {
+  if (scoreRounded >= 90) return t('sessionComplete.precisionElite');
+  if (scoreRounded >= 80) return t('sessionComplete.precisionStrong');
+  if (scoreRounded >= 70) return t('sessionComplete.precisionSolid');
+  if (scoreRounded >= 50) return t('sessionComplete.precisionCleanup');
+  return t('sessionComplete.precisionAlert');
 }
 
 type FormBand = 'critical' | 'warning' | 'good';
 
-function bandLabel(band: FormBand) {
-  if (band === 'critical') return 'CRITICAL';
-  if (band === 'warning') return 'WARNING';
-  return 'GOOD';
+function bandLabel(band: FormBand, t: (key: string) => string) {
+  if (band === 'critical') return t('common.critical');
+  if (band === 'warning') return t('common.warning');
+  return t('common.good');
 }
 
 function bandDotColor(band: FormBand) {
@@ -107,17 +108,21 @@ function badgeColors(band: FormBand) {
   return { fg: dot, bg: `${dot}22`, bd: `${dot}40` };
 }
 
-function buildFormInsights(errorIds: Set<string>): Array<{ key: string; label: string; band: FormBand }> {
+function buildFormInsights(
+  errorIds: Set<string>,
+  t: (key: string) => string,
+): Array<{ key: string; label: string; band: FormBand }> {
   const hipCrit = errorIds.has('ERR_001') || errorIds.has('ERR_002');
   const romWarn = errorIds.has('ERR_003') || errorIds.has('ERR_004') || errorIds.has('ERR_005');
   return [
-    { key: 'hip-sway', label: 'Hip Sway', band: hipCrit ? 'critical' : 'good' },
-    { key: 'rom', label: 'Range of Motion', band: romWarn ? 'warning' : 'good' },
-    { key: 'tempo', label: 'Tempo Consistency', band: 'good' },
+    { key: 'hip-sway', label: t('sessionComplete.hipSway'), band: hipCrit ? 'critical' : 'good' },
+    { key: 'rom', label: t('sessionComplete.rangeOfMotion'), band: romWarn ? 'warning' : 'good' },
+    { key: 'tempo', label: t('sessionComplete.tempoConsistency'), band: 'good' },
   ];
 }
 
 export function SessionCompleteScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   /** Frozen once at mount — live store can be cleared if LiveSession remounts underneath. */
   const [review] = useState(captureSessionReviewDisplay);
@@ -204,8 +209,8 @@ export function SessionCompleteScreen() {
 
   const insightRows = useMemo(() => {
     const ids = new Set(uniqueErrors.map((e) => e.errorId));
-    return buildFormInsights(ids);
-  }, [uniqueErrors]);
+    return buildFormInsights(ids, t);
+  }, [uniqueErrors, t]);
   const goHome = () => nav.navigate('MainTabs', { screen: 'HomeMain' });
 
   const onNextSet = () => {
@@ -285,7 +290,7 @@ export function SessionCompleteScreen() {
       <RepRightHeader variant="sessionComplete" />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.h1}>Session Complete</Text>
+        <Text style={styles.h1}>{t('sessionComplete.sessionComplete')}</Text>
 
         {/* Score ring */}
         <View style={styles.ringOuter}>
@@ -328,7 +333,7 @@ export function SessionCompleteScreen() {
                 numberOfLines={1}
                 minimumFontScale={0.75}
               >
-                Performance
+                {t('sessionComplete.recoveryIndex')}
               </Text>
             </View>
           </View>
@@ -336,26 +341,26 @@ export function SessionCompleteScreen() {
 
         <View style={styles.eliteBadge}>
           <MaterialIcons name="verified" size={16} color={colors.primary_green} />
-          <Text style={styles.eliteBadgeTxt}>{precisionTitle(sc)}</Text>
+          <Text style={styles.eliteBadgeTxt}>{precisionTitle(sc, t)}</Text>
         </View>
 
         {/* Stats grid */}
         <View style={styles.grid}>
-          <MiniCard label="Volume" value={volumeDisplay} accentBorder />
+          <MiniCard label={t('sessionComplete.volume')} value={volumeDisplay} accentBorder />
           <MiniCard
-            label="Reps"
+            label={t('common.repsLower')}
             value={`${metrics.totalReps}/${metrics.plannedReps}`}
             accentBorder
           />
-          <MiniCard label="Form" value={`${formSc}%`} accentBorder />
-          <MiniCard label="Completion" value={`${completionSc}%`} accentBorder />
+          <MiniCard label={t('sessionComplete.form')} value={`${formSc}%`} accentBorder />
+          <MiniCard label={t('sessionComplete.completion')} value={`${completionSc}%`} accentBorder />
         </View>
 
         {/* Form adjustments — canonical summary rows */}
         <View style={styles.formCard}>
           <View style={styles.formCardTitleRow}>
             <MaterialIcons name="analytics" size={22} color={colors.primary_green} />
-            <Text style={styles.formCardTitle}>Form Adjustments Detected</Text>
+            <Text style={styles.formCardTitle}>{t('sessionComplete.setInsights')}</Text>
           </View>
           <View style={styles.formCardBody}>
             {insightRows.map((row, idx) => {
@@ -370,7 +375,7 @@ export function SessionCompleteScreen() {
                     <Text style={styles.insightName}>{row.label}</Text>
                   </View>
                   <View style={[styles.bandBadge, { backgroundColor: b.bg, borderColor: b.bd }]}>
-                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>{bandLabel(row.band)}</Text>
+                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>{bandLabel(row.band, t)}</Text>
                   </View>
                 </View>
               );
@@ -382,24 +387,28 @@ export function SessionCompleteScreen() {
           <View style={styles.nextSetBlock}>
             {workoutSetSnapshots.length > 0 && (
               <>
-                <Text style={styles.nextSetSectionTitle}>SETS IN THIS WORKOUT</Text>
+                <Text style={styles.nextSetSectionTitle}>{t('sessionComplete.setInsights')}</Text>
                 {workoutSetSnapshots.map((row) => (
                   <View key={row.setNumber} style={styles.snapshotRow}>
-                    <Text style={styles.snapshotSetLab}>SET {row.setNumber}</Text>
+                    <Text style={styles.snapshotSetLab}>
+                      {t('deadliftConfigure.setLabel', { n: row.setNumber })}
+                    </Text>
                     <Text style={styles.snapshotMeta}>
-                      {fmtWeight(row.weightAmount, row.weightUnit)} · {row.reps} reps · score {row.scoreRounded} ·{' '}
-                      {fmtElapsed(row.elapsedSec)}
+                      {t('sessionComplete.setLine', {
+                        weight: fmtWeight(row.weightAmount, row.weightUnit),
+                        reps: row.reps,
+                        score: row.scoreRounded,
+                        precision: precisionTitle(row.scoreRounded, t),
+                      })}
                     </Text>
                   </View>
                 ))}
               </>
             )}
 
-            <Text style={styles.nextSetSectionTitle}>NEXT: SET {nextSetNumber}</Text>
-            <Text style={styles.nextSetHint}>
-              Pre-filled from your plan. Adjust if the bar or target reps change.
+            <Text style={styles.nextSetSectionTitle}>
+              {t('sessionComplete.nextSet')}: {t('deadliftConfigure.setLabel', { n: nextSetNumber })}
             </Text>
-            <Text style={styles.weightFieldHint}>{`Target reps`}</Text>
             <View style={styles.nextRepsRow}>
               <Pressable
                 onPress={() => setNextRepsDraft((r) => clampSetReps(r - 1))}
@@ -417,7 +426,7 @@ export function SessionCompleteScreen() {
                 <Text style={styles.nextRepBtnTxt}>+</Text>
               </Pressable>
             </View>
-            <Text style={styles.weightFieldHint}>{`Weight (${weightUnit === 'kg' ? 'kg' : 'lb'})`}</Text>
+            <Text style={styles.weightFieldHint}>{t('sessionComplete.weightLabel', { unit: weightUnit === 'kg' ? 'kg' : 'lb' })}</Text>
             <TextInput
               value={nextWeightDraft}
               onChangeText={setNextWeightDraft}
@@ -433,12 +442,12 @@ export function SessionCompleteScreen() {
               style={styles.nextWeightInput}
             />
 
-            <PrimaryButton title="START NEXT SET" variant="ghost" style={styles.secondaryCta} onPress={onNextSet} />
+            <PrimaryButton title={t('sessionComplete.nextSetBtn')} variant="ghost" style={styles.secondaryCta} onPress={onNextSet} />
           </View>
         )}
 
         <PrimaryButton
-          title="SAVE & CONTINUE"
+          title={saved ? t('sessionComplete.savedGoHome') : t('sessionComplete.saveSession')}
           style={[styles.cta, canAdvanceToNextSet && styles.ctaAfterSecondary]}
           onPress={() => void onSave()}
         />

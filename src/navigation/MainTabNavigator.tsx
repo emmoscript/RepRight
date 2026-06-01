@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,6 +20,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const TAB_BAR_BASE = 64;
 
 export function MainTabNavigator() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const tabBarHeight = TAB_BAR_BASE + Math.max(insets.bottom, 10);
@@ -45,7 +47,7 @@ export function MainTabNavigator() {
         name="HomeMain"
         component={HomeScreen}
         options={{
-          title: 'Home',
+          title: t('tabs.home'),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
               allowFontScaling={false}
@@ -60,7 +62,7 @@ export function MainTabNavigator() {
         name="Workout"
         component={WorkoutStackNavigator}
         options={{
-          title: 'Workout',
+          title: t('tabs.workout'),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
               allowFontScaling={false}
@@ -75,7 +77,7 @@ export function MainTabNavigator() {
         name="StatsMain"
         component={StatsScreen}
         options={{
-          title: 'Stats',
+          title: t('tabs.stats'),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
               allowFontScaling={false}
@@ -90,7 +92,7 @@ export function MainTabNavigator() {
         name="ProfileMain"
         component={ProfileScreen}
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, focused, size }) => (
             <Ionicons
               allowFontScaling={false}

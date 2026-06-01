@@ -3,6 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -19,13 +20,16 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
 import { UnderlineField } from '@/components/UnderlineField';
 import type { RootStackParamList } from '@/navigation/routeTypes';
+import { useAuthStore } from '@/store/authStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function SignupScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
+  const signUp = useAuthStore((s) => s.signUp);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,30 +48,30 @@ export function SignupScreen() {
           rightSlot={<MaterialIcons name="fitness-center" size={22} color={colors.primary_green} />}
         />
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-          <Text style={styles.title}>Create account</Text>
-          <Text style={styles.sub}>Join the thesis study cohort and unlock form tracking.</Text>
+          <Text style={styles.title}>{t('auth.createTitle')}</Text>
+          <Text style={styles.sub}>{t('auth.createSub')}</Text>
 
           <View style={{ height: 20 }} />
 
           <UnderlineField
-            label="Full name"
+            label={t('auth.fullName')}
             value={name}
             onChangeText={setName}
-            placeholder="Your name"
+            placeholder={t('auth.namePlaceholder')}
             autoCapitalize="words"
           />
           <UnderlineField
-            label="Email address"
+            label={t('auth.email')}
             value={email}
             onChangeText={setEmail}
-            placeholder="you@university.edu"
+            placeholder={t('auth.emailPlaceholder')}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
           />
 
           <View style={styles.pwOuter}>
-            <Text style={styles.pwLbl}>Password</Text>
+            <Text style={styles.pwLbl}>{t('auth.password')}</Text>
             <View
               style={[
                 styles.inputRow,
@@ -77,7 +81,7 @@ export function SignupScreen() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Create password"
+                placeholder={t('auth.passwordCreatePlaceholder')}
                 placeholderTextColor={colors.text_muted}
                 secureTextEntry={!showPw}
                 onFocus={() => setPwFocused(true)}
@@ -91,9 +95,21 @@ export function SignupScreen() {
           </View>
 
           <PrimaryButton
-            title="Sign Up →"
+            title={t('auth.signupBtn')}
             style={{ marginTop: 32 }}
-            onPress={() => nav.navigate('EmailConfirm')}
+            onPress={async () => {
+              if (!email.trim() || !password.trim() || !name.trim()) return;
+              try {
+                const { needsEmailVerification } = await signUp(email.trim(), password.trim(), name.trim());
+                if (needsEmailVerification) {
+                  nav.navigate('EmailConfirm', { email: email.trim() });
+                } else {
+                  nav.navigate('MainTabs', { screen: 'HomeMain' });
+                }
+              } catch {
+                // error in store
+              }
+            }}
           />
 
           <View style={styles.foot}>

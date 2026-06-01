@@ -1,4 +1,22 @@
+import i18n from '@/i18n';
+
 export type WeightUnit = 'kg' | 'lb';
+
+/** Short suffix for weight fields (kg / lb). */
+export function weightUnitSuffix(unit: WeightUnit): string {
+  return unit === 'kg' ? 'kg' : 'lb';
+}
+
+/** Profile / settings label for the measurement system. */
+export function weightSystemLabel(unit: WeightUnit): string {
+  return unit === 'kg' ? i18n.t('common.metric') : i18n.t('common.imperial');
+}
+
+/** Placeholder example weight for inputs. */
+export function weightPlaceholder(unit: WeightUnit): string {
+  return unit === 'kg' ? '100' : '225';
+}
+
 
 /** Exact IEEE conversion — display rounded per caller. */
 export const LB_PER_KG = 2.2046226218;

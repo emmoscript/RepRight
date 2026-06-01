@@ -2,6 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EXERCISE_CATALOG } from '@/constants/exercises';
@@ -11,6 +12,7 @@ import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
 export function WorkoutScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<WorkoutStackNav>();
 
   return (
@@ -18,12 +20,13 @@ export function WorkoutScreen() {
       <SafeAreaView style={styles.safe} edges={[]}>
         <RepRightHeader />
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Workout</Text>
-          <Text style={styles.meta}>Choose an exercise to configure and start</Text>
+          <Text style={styles.title}>{t('workout.title')}</Text>
+          <Text style={styles.meta}>{t('workout.meta')}</Text>
 
-          <Text style={styles.sectionLab}>Exercises</Text>
+          <Text style={styles.sectionLab}>{t('workout.exercises')}</Text>
           {EXERCISE_CATALOG.map((ex) => {
             const locked = !ex.available;
+            const baseKey = `workout.exercise.${ex.id}`;
             return (
               <Pressable
                 key={ex.id}
@@ -34,7 +37,9 @@ export function WorkoutScreen() {
                 style={[styles.card, locked ? styles.cardLocked : styles.cardActive]}
               >
                 <View style={styles.cardTop}>
-                  <Text style={[styles.cardTitle, locked && styles.cardTitleMuted]}>{ex.title}</Text>
+                  <Text style={[styles.cardTitle, locked && styles.cardTitleMuted]}>
+                    {t(`${baseKey}.title`)}
+                  </Text>
                   {locked ? (
                     <Ionicons name="lock-closed-outline" color={colors.text_muted} size={22} />
                   ) : (
@@ -47,10 +52,12 @@ export function WorkoutScreen() {
                     locked ? styles.trackLabMuted : styles.trackLabLive,
                   ]}
                 >
-                  {ex.trackingLabel}
+                  {t(`${baseKey}.tracking`)}
                 </Text>
-                <Text style={[styles.cardSub, locked && styles.cardSubMuted]}>{ex.subtitle}</Text>
-                {!locked && <Text style={styles.cardCta}>Configure session →</Text>}
+                <Text style={[styles.cardSub, locked && styles.cardSubMuted]}>
+                  {t(`${baseKey}.subtitle`)}
+                </Text>
+                {!locked && <Text style={styles.cardCta}>{t('workout.configureSession')}</Text>}
               </Pressable>
             );
           })}

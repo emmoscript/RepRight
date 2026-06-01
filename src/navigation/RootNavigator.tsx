@@ -1,9 +1,14 @@
 import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { useAuthDeepLink } from '@/hooks/useAuthDeepLink';
 import { MainTabNavigator } from '@/navigation/MainTabNavigator';
+import { flushPendingAuthNavigation, navigationRef } from '@/navigation/navigationRef';
 import type { RootStackParamList, MainTabParamList } from '@/navigation/routeTypes';
+import { useAuthStore } from '@/store/authStore';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { DemoScreen } from '@/screens/DemoScreen';
+import { WelcomeScreen } from '@/screens/WelcomeScreen';
 import { AuthGatewayScreen } from '@/screens/AuthGatewayScreen';
 import { LoginScreen } from '@/screens/LoginScreen';
 import { SignupScreen } from '@/screens/SignupScreen';
@@ -39,11 +44,26 @@ const theme: Theme = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+function AuthLinkHandler() {
+  useAuthDeepLink();
+  return null;
+}
+
+function resolveInitialRoute(isLoggedIn: boolean, onboardingCompleted: boolean): keyof RootStackParamList {
+  if (isLoggedIn) return 'MainTabs';
+  if (onboardingCompleted) return 'Welcome';
+  return 'Demo';
+}
+
 export function RootNavigator() {
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const onboardingCompleted = useUserPreferencesStore((s) => s.onboardingCompleted);
+
   return (
-    <NavigationContainer theme={theme}>
+    <NavigationContainer ref={navigationRef} theme={theme} onReady={flushPendingAuthNavigation}>
+      <AuthLinkHandler />
       <Stack.Navigator
-        initialRouteName="Demo"
+        initialRouteName={resolveInitialRoute(isLoggedIn, onboardingCompleted)}
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg_v3 },
           headerTintColor: colors.text_primary,
@@ -53,6 +73,7 @@ export function RootNavigator() {
         }}
       >
         <Stack.Screen name="Demo" component={DemoScreen} />
+        <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="AuthGateway" component={AuthGatewayScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Signup" component={SignupScreen} />

@@ -1,305 +1,612 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Image,
-  KeyboardAvoidingView,
-  Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCameraPermission, useCameraDevices } from 'react-native-vision-camera';
+
+import { warmUpCameraEnumeration } from '@/hooks/useResolvedCamera';
 
 import { Icon, ICONS } from '@/components/Icon';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { SvgArrowForwardIcon, SvgBoltIcon, SvgInfoOutlineIcon } from '@/components/icons/SvgUiIcons';
+import { GetStartedPanel } from '@/components/onboarding/GetStartedPanel';
+import { LanguageCard } from '@/components/onboarding/LanguageCard';
+import { OnboardingNavBar } from '@/components/onboarding/OnboardingNavBar';
+import { OnboardingProgressBar } from '@/components/onboarding/OnboardingProgressBar';
 import type { RootStackParamList } from '@/navigation/routeTypes';
+import { useAuthStore } from '@/store/authStore';
+import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
 const DEMO_IMAGE = require('../../assets/images/movenet-demo-image.png');
+const GYM_IMAGE = require('../../assets/images/woman-deadlift.jpg');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type TFn = ReturnType<typeof useTranslation>['t'];
 
-const HOW_STEPS = [
-  {
-    num: '01',
-    title: 'Position Device',
-    body: 'Place your phone 5–7 feet away with a full-body view from the side.',
-  },
-  {
-    num: '02',
-    title: 'Perform Reps',
-    body: 'Execute your set as normal. The AI detects start and end points automatically.',
-  },
-  {
-    num: '03',
-    title: 'Get Analysis',
-    body: 'Receive instant feedback on depth, pathing, and tempo.',
-  },
-] as const;
+const STEP_COUNT = 4;
+
+/** Vertical rhythm — matches mock margin-mobile (20) + section spacing. */
+const PAD_H = 20;
+const HEADER_TOP = 8;
+const PROGRESS_GAP = 16;
+const CONTENT_TOP = 24;
+const CONTENT_BOTTOM = 32;
 
 export function DemoScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
 
+  const enterAsGuest = useAuthStore((s) => s.enterAsGuest);
+  const onboardingCompleted = useUserPreferencesStore((s) => s.onboardingCompleted);
+  const language = useUserPreferencesStore((s) => s.language);
+  const setLanguage = useUserPreferencesStore((s) => s.setLanguage);
+  const completeOnboarding = useUserPreferencesStore((s) => s.completeOnboarding);
+
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const cameraDevices = useCameraDevices();
+  const [step, setStep] = useState(0);
+
+  const requestCam = useCallback(async () => {
+    await requestPermission();
+    await warmUpCameraEnumeration();
+  }, [requestPermission]);
+
+  useEffect(() => {
+    if (step !== 2) return;
+    void requestCam();
+  }, [step, requestCam]);
+
+  useEffect(() => {
+    if (onboardingCompleted) {
+      nav.replace('Welcome');
+    }
+  }, [onboardingCompleted, nav]);
+
+  const goNext = useCallback(() => {
+    setStep((s) => Math.min(s + 1, STEP_COUNT - 1));
+  }, []);
+
+  const goPrev = useCallback(() => {
+    setStep((s) => Math.max(s - 1, 0));
+  }, []);
+
+  const finishAndNavigate = useCallback(
+    async (dest: 'guest' | 'login' | 'signup') => {
+      await completeOnboarding();
+      if (dest === 'guest') {
+        enterAsGuest();
+        nav.navigate('MainTabs', { screen: 'HomeMain' });
+      } else if (dest === 'login') {
+        nav.navigate('Login');
+      } else {
+        nav.navigate('Signup');
+      }
+    },
+    [completeOnboarding, enterAsGuest, nav],
+  );
+
+  const isFirstStep = step === 0;
+  const isLastStep = step === STEP_COUNT - 1;
+  const isCameraStep = step === 2;
+  const progress = (step + 1) / STEP_COUNT;
+  const canContinueCamera = hasPermission && cameraDevices.length > 0;
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.flex}
-    >
-      <SafeAreaView style={styles.topNavSafe} edges={['top']}>
-        <View style={styles.topNav} collapsable={false}>
-          <SvgBoltIcon color={colors.primary_green} size={26} />
-          <Text style={styles.topNavWord}>RepRight</Text>
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <View style={styles.header}>
+        <View style={styles.progressWrap}>
+          <OnboardingProgressBar progress={progress} />
         </View>
-      </SafeAreaView>
+        <View style={styles.topBar}>
+          <Icon name={ICONS.barbell} size={22} color={colors.primary_green} />
+          <Text style={styles.stepLabel}>
+            {t('onboarding.stepOf', { current: step + 1, total: STEP_COUNT })}
+          </Text>
+          <View style={styles.topSpacer} />
+        </View>
+      </View>
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-        contentContainerStyle={styles.scrollInner}
         style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <Text style={styles.title}>Demo mode</Text>
-        <Text style={styles.subtitle}>
-          Explore the full app and test AI analysis without starting a persisted workout log.
-        </Text>
+          {step === 0 ? <WelcomeSlide t={t} /> : null}
+          {step === 1 ? (
+            <LanguageSlide t={t} language={language} onChange={(lang) => void setLanguage(lang)} />
+          ) : null}
+          {step === 2 ? (
+            <CameraSlide
+              t={t}
+              hasPermission={hasPermission}
+              deviceCount={cameraDevices.length}
+              onRequest={requestCam}
+            />
+          ) : null}
+          {step === 3 ? (
+            <GetStartedPanel
+              onCreate={() => void finishAndNavigate('signup')}
+              onLogin={() => void finishAndNavigate('login')}
+              onGuest={() => void finishAndNavigate('guest')}
+            />
+          ) : null}
+        </ScrollView>
 
-        <View style={styles.featureOuter}>
-          <View style={styles.visCard}>
-            <Image source={DEMO_IMAGE} style={styles.demoImageFull} resizeMode="cover" />
-          </View>
-
-          <View style={styles.featureBodyPad}>
-            <View style={styles.featureRow}>
-              <View style={styles.featureIconCirc} collapsable={false}>
-                <Icon name={ICONS.videocamOutline} size={26} color={colors.primary_green} />
-              </View>
-              <View style={styles.featureTextCol}>
-                <Text style={styles.featureTitle}>Real-time computer vision</Text>
-                <Text style={styles.featureBody}>
-                  MoveNet Lightning tracks pose keypoints from the camera for instant form cues on each rep — no extra
-                  wearables required.
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <Text style={styles.howTitle}>How it works</Text>
-        <View style={styles.howCard}>
-          {HOW_STEPS.map((step, idx) => (
-            <View key={step.num} style={[styles.howStep, idx < HOW_STEPS.length - 1 && styles.howStepSep]}>
-              <Text style={styles.stepNum}>{step.num}</Text>
-              <View style={styles.howTxtCol}>
-                <Text style={styles.howStepTitle}>{step.title}</Text>
-                <Text style={styles.howStepBody}>{step.body}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.infoNote}>
-          <View style={styles.infoIconWrap}>
-            <SvgInfoOutlineIcon color={colors.text_secondary} size={22} />
-          </View>
-          <Text style={styles.infoNoteTxt}>
-            Sign in to save sessions and see them in Stats. Demo browsing does not persist history on this device.
-          </Text>
-        </View>
-
-        <View style={{ height: 120 }} />
-      </ScrollView>
-
-      <SafeAreaView style={styles.footer} edges={['bottom']}>
-        <PrimaryButton
-          title="START DEMO"
-          trailing={<SvgArrowForwardIcon size={22} color={colors.text_on_green} />}
-          style={styles.ctaPrimary}
-          onPress={() => nav.navigate('MainTabs', { screen: 'HomeMain' })}
+      <View style={styles.footer}>
+        <OnboardingNavBar
+          onBack={goPrev}
+          onContinue={goNext}
+          backDisabled={isFirstStep}
+          continueDisabled={isCameraStep && !canContinueCamera}
+          showContinue={!isLastStep}
         />
-        <PrimaryButton title="BACK" variant="ghost" onPress={() => nav.navigate('AuthGateway')} style={styles.ctaGhost} />
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+      </View>
+
+      <View pointerEvents="none" style={styles.glowTop} />
+      <View pointerEvents="none" style={styles.glowBottom} />
+    </SafeAreaView>
+  );
+}
+
+function WelcomeSlide({ t }: { t: TFn }) {
+  return (
+    <View style={styles.slide}>
+      <View style={styles.logoBox}>
+        <Text style={styles.logoMark}>RR</Text>
+      </View>
+
+      <Text style={styles.headlineXl}>RepRight</Text>
+      <Text style={styles.tagline}>
+        {t('onboarding.welcomeTaglineLead')}{' '}
+        <Text style={styles.taglineAccent}>{t('onboarding.welcomeTaglineAccent')}</Text>
+      </Text>
+      <Text style={styles.bodyCenter}>{t('onboarding.welcomeBody')}</Text>
+
+      <View style={styles.heroVideo}>
+        <Image source={DEMO_IMAGE} style={styles.heroImg} resizeMode="cover" />
+        <View style={styles.heroGradient} />
+        <View style={styles.detectFrame}>
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
+          <View style={styles.detectBadge}>
+            <Text style={styles.detectBadgeTxt}>{t('onboarding.formDetected')}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function LanguageSlide({
+  t,
+  language,
+  onChange,
+}: {
+  t: TFn;
+  language: 'en' | 'es';
+  onChange: (lang: 'en' | 'es') => void;
+}) {
+  return (
+    <View style={styles.slide}>
+      <View style={styles.langHeader}>
+        <Text style={styles.headlineLg}>{t('onboarding.languageTitleBilingual')}</Text>
+        <Text style={styles.bodyLeft}>{t('onboarding.languageSub')}</Text>
+      </View>
+
+      <View style={styles.langGrid}>
+        <LanguageCard
+          flag="🇺🇸"
+          label={t('common.english')}
+          selected={language === 'en'}
+          onPress={() => onChange('en')}
+        />
+        <LanguageCard
+          flag="🇩🇴"
+          label={t('common.spanish')}
+          selected={language === 'es'}
+          onPress={() => onChange('es')}
+        />
+      </View>
+
+      <View style={styles.atmoImageWrap}>
+        <Image source={GYM_IMAGE} style={styles.atmoImage} resizeMode="cover" />
+      </View>
+    </View>
+  );
+}
+
+function CameraSlide({
+  t,
+  hasPermission,
+  deviceCount,
+  onRequest,
+}: {
+  t: TFn;
+  hasPermission: boolean;
+  deviceCount: number;
+  onRequest: () => void;
+}) {
+  const ready = hasPermission && deviceCount > 0;
+  const waiting = hasPermission && deviceCount === 0;
+
+  return (
+    <View style={[styles.slide, styles.slideCenter]}>
+      <View style={styles.camIconWrap}>
+        <View style={styles.camGlow} />
+        <View style={styles.camCircle}>
+          <Ionicons name="camera-outline" size={56} color={colors.primary_green} />
+        </View>
+      </View>
+
+      <Text style={styles.headlineLgCenter}>{t('onboarding.cameraTitleLong')}</Text>
+      <Text style={styles.bodyCenter}>
+        {waiting ? t('liveSession.cameraWarmingHint') : t('onboarding.cameraSub')}
+      </Text>
+
+      <Pressable
+        onPress={() => void onRequest()}
+        disabled={ready}
+        style={({ pressed }) => [
+          styles.camAllowBtn,
+          ready && styles.camAllowGranted,
+          pressed && !ready && styles.pressed,
+        ]}
+      >
+        <Ionicons
+          name={ready ? 'checkmark-circle' : 'videocam-outline'}
+          size={22}
+          color={ready ? colors.primary_green : colors.text_on_green}
+        />
+        <Text style={[styles.camAllowTxt, ready && styles.camAllowTxtGranted]}>
+          {ready
+            ? t('onboarding.cameraGranted')
+            : waiting
+              ? t('liveSession.openingCamera')
+              : t('onboarding.enableCamera')}
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg_surface_alt },
-
-  scroll: { flex: 1 },
-  scrollInner: {
-    paddingHorizontal: 24,
-    paddingTop: 10,
-    paddingBottom: 8,
-    maxWidth: 480,
-    width: '100%',
-    alignSelf: 'center',
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg_v3,
   },
-
-  topNavSafe: {
-    backgroundColor: colors.bg_surface_alt,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border_subtle,
+  header: {
+    backgroundColor: colors.bg_v3,
   },
-  topNav: {
+  progressWrap: {
+    paddingHorizontal: PAD_H,
+    paddingTop: HEADER_TOP,
+    paddingBottom: PROGRESS_GAP,
+  },
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    height: 52,
-    backgroundColor: colors.bg_surface_alt,
+    justifyContent: 'space-between',
+    paddingHorizontal: PAD_H,
+    paddingBottom: 12,
   },
-  topNavWord: {
-    marginLeft: 8,
-    fontFamily: typography.fontFamily.display,
-    color: colors.primary_green,
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.6,
+  stepLabel: {
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodySm,
+    color: colors.text_secondary,
+    letterSpacing: 0.3,
+  },
+  topSpacer: { width: 22 },
+  scroll: { flex: 1 },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: PAD_H,
+    paddingTop: CONTENT_TOP,
+    paddingBottom: CONTENT_BOTTOM,
+  },
+  slide: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
+  slideCenter: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border_subtle,
+    backgroundColor: colors.bg_v3,
+    paddingTop: 4,
+  },
+  actionStack: {
+    marginTop: 24,
+    gap: 12,
+  },
+  guestBlock: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 6,
+  },
+  guestLink: {
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodySm,
+    color: colors.text_secondary,
+    letterSpacing: 0.3,
+  },
+  guestHint: {
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 10,
+    color: colors.text_muted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  glowTop: {
+    position: 'absolute',
+    top: '18%',
+    right: -80,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(39,195,79,0.06)',
+  },
+  glowBottom: {
+    position: 'absolute',
+    bottom: '22%',
+    left: -60,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(39,195,79,0.05)',
   },
 
-  title: {
-    marginTop: 8,
-    textAlign: 'center',
-    fontFamily: typography.fontFamily.display,
-    fontSize: typography.fontSize.cardHeading,
-    fontWeight: '700',
-    color: colors.text_primary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  logoBox: {
+    alignSelf: 'center',
+    width: 112,
+    height: 112,
+    borderRadius: 28,
+    backgroundColor: colors.surface_container_high,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(132,149,133,0.25)',
   },
-  subtitle: {
-    marginTop: 12,
+  logoMark: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: 40,
+    fontWeight: '700',
+    color: colors.primary_green,
+    letterSpacing: -2,
+  },
+  headlineXl: {
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.6,
+    color: colors.on_surface,
+    marginBottom: 8,
+  },
+  headlineLg: {
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.3,
+    color: colors.on_surface,
+    marginBottom: 8,
+  },
+  headlineLgCenter: {
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: 24,
+    lineHeight: 30,
+    color: colors.on_surface,
+    marginBottom: 12,
+    maxWidth: 320,
+  },
+  tagline: {
+    textAlign: 'center',
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.titleSm,
+    lineHeight: 32,
+    color: colors.text_secondary,
+    marginBottom: 12,
+  },
+  taglineAccent: {
+    color: colors.on_surface,
+  },
+  bodyCenter: {
     textAlign: 'center',
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.body,
-    color: colors.text_secondary,
     lineHeight: 24,
+    color: colors.text_secondary,
+    maxWidth: 340,
+    alignSelf: 'center',
+  },
+  bodyLeft: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.body,
+    lineHeight: 24,
+    color: colors.text_secondary,
+  },
+  heroVideo: {
+    marginTop: 32,
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surface_container,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(132,149,133,0.3)',
+  },
+  heroImg: { width: '100%', height: '100%', opacity: 0.55 },
+  heroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+    backgroundColor: 'rgba(13,13,13,0.75)',
+  },
+  heroGradientStrong: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(13,13,13,0.55)',
+  },
+  detectFrame: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  corner: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderColor: 'rgba(39,195,79,0.55)',
+  },
+  cornerTL: { top: '22%', left: '22%', borderTopWidth: 2, borderLeftWidth: 2 },
+  cornerTR: { top: '22%', right: '22%', borderTopWidth: 2, borderRightWidth: 2 },
+  cornerBL: { bottom: '22%', left: '22%', borderBottomWidth: 2, borderLeftWidth: 2 },
+  cornerBR: { bottom: '22%', right: '22%', borderBottomWidth: 2, borderRightWidth: 2 },
+  detectBadge: {
+    position: 'absolute',
+    top: '26%',
+    left: '26%',
+    backgroundColor: colors.primary_green,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  detectBadgeTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 10,
+    color: colors.text_on_green,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
 
-  featureOuter: {
-    marginTop: 28,
-    borderRadius: 14,
-    backgroundColor: colors.surface_low,
-    paddingTop: 0,
-    paddingBottom: 0,
+  langHeader: { marginBottom: 32 },
+  langGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  atmoImageWrap: {
+    marginTop: 32,
+    borderRadius: 12,
     overflow: 'hidden',
+    height: 120,
+    opacity: 0.45,
   },
-  visCard: {
-    width: '100%',
-    height: 268,
-    backgroundColor: colors.bg_high,
-    marginBottom: 0,
-  },
-  demoImageFull: {
+  atmoImage: {
     width: '100%',
     height: '100%',
   },
-  featureBodyPad: {
-    paddingHorizontal: 22,
-    paddingTop: 20,
-    paddingBottom: 22,
-  },
-  featureRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  featureIconCirc: {
-    marginRight: 14,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.bg_high,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(39,195,79,0.35)',
+
+  camIconWrap: {
+    marginBottom: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureTextCol: { flex: 1, minWidth: 0 },
-  featureTitle: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.body,
-    color: colors.text_primary,
-    marginBottom: 4,
+  camGlow: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(39,195,79,0.12)',
   },
-  featureBody: {
-    fontFamily: typography.fontFamily.regular,
-    fontSize: typography.fontSize.bodySm,
-    color: colors.text_secondary,
-    lineHeight: 21,
+  camCircle: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: 1,
+    borderColor: colors.outline_variant,
+    backgroundColor: colors.surface_container,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  howTitle: {
-    marginTop: 36,
-    marginBottom: 16,
-    fontFamily: typography.fontFamily.display,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 3.2,
-    textTransform: 'uppercase',
-    color: colors.primary_green,
-  },
-  howCard: {
-    borderRadius: 14,
-    backgroundColor: colors.surface_v3,
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  howStep: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 18 },
-  howStepSep: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border_subtle },
-  stepNum: {
-    marginRight: 20,
-    minWidth: 40,
-    fontFamily: typography.fontFamily.display,
-    fontSize: 32,
-    lineHeight: 34,
-    color: colors.skeleton_muted_v3,
-    letterSpacing: -1,
-  },
-  howTxtCol: { flex: 1, minWidth: 0 },
-  howStepTitle: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.body,
-    color: colors.text_primary,
-    marginBottom: 4,
-  },
-  howStepBody: {
-    fontFamily: typography.fontFamily.regular,
-    fontSize: typography.fontSize.bodySm,
-    color: colors.text_secondary,
-    lineHeight: 21,
-  },
-
-  infoNote: {
-    marginTop: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    backgroundColor: colors.surface_low,
+  camAllowBtn: {
+    marginTop: 32,
+    width: '100%',
+    maxWidth: 360,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary_green,
+    borderRadius: 8,
+    minHeight: 56,
+    paddingHorizontal: 20,
   },
-  infoIconWrap: { marginRight: 14 },
-  infoNoteTxt: {
-    flex: 1,
-    fontFamily: typography.fontFamily.regular,
-    fontSize: typography.fontSize.captions,
-    color: colors.text_secondary,
-    fontStyle: 'italic',
-    lineHeight: 20,
+  camAllowGranted: {
+    backgroundColor: colors.surface_container_high,
+    borderWidth: 1,
+    borderColor: colors.secondary_green,
+  },
+  camAllowTxt: {
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodySm,
+    color: colors.text_on_green,
+    letterSpacing: 0.3,
+  },
+  camAllowTxtGranted: {
+    color: colors.primary_green,
   },
 
-  footer: {
-    backgroundColor: 'rgba(32,31,31,0.94)',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 6 : 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border_subtle,
-    maxWidth: 520,
+  getStartedHero: {
     width: '100%',
-    alignSelf: 'center',
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surface_container,
+    marginBottom: 24,
   },
-  ctaPrimary: { marginTop: 4, marginBottom: 4 },
-  ctaGhost: { marginTop: 12 },
+  getStartedCopy: {
+    gap: 12,
+    alignItems: 'center',
+  },
+
+  pill: {
+    borderRadius: 999,
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  pillPrimary: {
+    backgroundColor: colors.primary_green,
+  },
+  pillOutline: {
+    borderWidth: 1,
+    borderColor: colors.outline,
+  },
+  pillLabel: {
+    fontFamily: typography.fontFamily.semibold,
+    fontSize: typography.fontSize.bodySm,
+    letterSpacing: 0.3,
+  },
+  pillLabelPrimary: {
+    color: colors.text_on_green,
+  },
+  pillLabelOutline: {
+    color: colors.on_surface,
+  },
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
 });

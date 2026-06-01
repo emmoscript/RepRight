@@ -8,6 +8,8 @@
  *  - Trigger only if error persists for ≥ 3 consecutive frames (enforced by caller)
  */
 
+import i18n from '@/i18n';
+
 import { AnalysisResult, ErrorId, type BiomechanicalError } from './analyzer';
 import { colors } from '../theme/colors';
 
@@ -28,32 +30,12 @@ export interface FeedbackOutput {
   audioMessage: string | null;
 }
 
-interface ErrorMeta {
-  message: string;
-  severity: 'critical' | 'warning';
-}
-
-const ERROR_META: Record<ErrorId, ErrorMeta> = {
-  ERR_001: {
-    message: 'Engage your lats. Drive chest up.',
-    severity: 'critical',
-  },
-  ERR_002: {
-    message: 'Lower your hips. Set your back angle first.',
-    severity: 'critical',
-  },
-  ERR_003: {
-    message: 'Keep the bar close. Drag it up your legs.',
-    severity: 'warning',
-  },
-  ERR_004: {
-    message: "Stand tall. Don't lean back at the top.",
-    severity: 'warning',
-  },
-  ERR_005: {
-    message: 'Shoulders over the bar. Shift weight forward.',
-    severity: 'warning',
-  },
+const ERROR_SEVERITY: Record<ErrorId, 'critical' | 'warning'> = {
+  ERR_001: 'critical',
+  ERR_002: 'critical',
+  ERR_003: 'warning',
+  ERR_004: 'warning',
+  ERR_005: 'warning',
 };
 
 /** Live-session doc: critical = red bg + white text; warning = amber + dark text. */
@@ -85,21 +67,22 @@ export function generateFeedback(
     return b.confidence - a.confidence;
   })[0];
 
-  const meta = ERROR_META[topError.errorId];
+  const severity = ERROR_SEVERITY[topError.errorId];
+  const message = i18n.t(`formErrors.${topError.errorId}`);
   const canPlayAudio = Date.now() - lastFeedbackTimestamp > AUDIO_THROTTLE_MS;
-  const isCritical = meta.severity === 'critical';
+  const isCritical = severity === 'critical';
 
   return {
     topError,
     activeBanner: {
       errorId: topError.errorId,
-      message: meta.message,
+      message,
       backgroundColor: isCritical ? BANNER_CRITICAL_BG : BANNER_WARNING_BG,
       textColor: isCritical ? BANNER_CRITICAL_TXT : BANNER_WARNING_TXT,
-      severity: meta.severity,
+      severity,
     },
     keypointColors: {},  // TODO: Map affected keypoints to error color
     triggerHaptic: isCritical,
-    audioMessage: canPlayAudio ? meta.message : null,
+    audioMessage: canPlayAudio ? message : null,
   };
 }
