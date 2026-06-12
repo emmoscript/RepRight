@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -18,8 +18,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { LanguageSegment } from '@/components/LanguageSegment';
 import { RepRightHeader } from '@/components/RepRightHeader';
+import { pushProfileToSupabase } from '@/lib/profileSync';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { resetToWelcome } from '@/navigation/navigationRef';
 import { useAuthStore } from '@/store/authStore';
@@ -38,6 +38,7 @@ export function ProfileScreen() {
   const isGuest = useAuthStore((s) => s.isGuest);
   const participantId = useAuthStore((s) => s.participantId);
   const email = useAuthStore((s) => s.user?.email ?? null);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const isLoading = useAuthStore((s) => s.isLoading);
   const signOut = useAuthStore((s) => s.signOut);
 
@@ -67,6 +68,10 @@ export function ProfileScreen() {
 
   const initials = display.slice(0, 2).toUpperCase();
 
+  const pushProfile = useCallback(async () => {
+    if (userId) await pushProfileToSupabase(userId);
+  }, [userId]);
+
   const handleSignOut = async () => {
     await signOut();
     resetToWelcome();
@@ -81,8 +86,16 @@ export function ProfileScreen() {
     const trimmed = nameDraft.trim();
     if (!trimmed) return;
     await setDisplayName(trimmed);
+    await pushProfile();
     setNameModalOpen(false);
   };
+
+  const handleLanguageChange = useCallback(
+    (lang: 'en' | 'es') => {
+      void setLanguage(lang).then(pushProfile);
+    },
+    [setLanguage, pushProfile],
+  );
 
   const pickProfilePhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -171,15 +184,30 @@ export function ProfileScreen() {
 
         <View style={styles.settingsBlock}>
           <View style={styles.unitsCard}>
-            <Text style={styles.unitsTitle}>{t('profile.languageTitle')}</Text>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="language-outline" size={20} color={colors.primary_green} />
+              <Text style={styles.unitsTitle}>{t('profile.languageTitle')}</Text>
+            </View>
             <Text style={styles.unitsSub}>{t('profile.languageSub')}</Text>
             <View style={styles.segmentRow}>
-              <LanguageSegment value={language} onChange={(lang) => void setLanguage(lang)} />
+              <SegmentButton
+                label={t('common.english')}
+                selected={language === 'en'}
+                onPress={() => handleLanguageChange('en')}
+              />
+              <SegmentButton
+                label={t('common.spanish')}
+                selected={language === 'es'}
+                onPress={() => handleLanguageChange('es')}
+              />
             </View>
           </View>
 
           <View style={styles.unitsCard}>
-            <Text style={styles.unitsTitle}>{t('profile.unitsTitle')}</Text>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="barbell-outline" size={20} color={colors.primary_green} />
+              <Text style={styles.unitsTitle}>{t('profile.unitsTitle')}</Text>
+            </View>
             <Text style={styles.unitsSub}>
               {t('profile.unitsSub', { system: systemLabel, suffix: unitSuffix })}
             </Text>
@@ -187,12 +215,12 @@ export function ProfileScreen() {
               <SegmentButton
                 label={t('common.imperialLb')}
                 selected={weightUnit === 'lb'}
-                onPress={() => void setWeightUnit('lb')}
+                onPress={() => void setWeightUnit('lb').then(pushProfile)}
               />
               <SegmentButton
                 label={t('common.metricKg')}
                 selected={weightUnit === 'kg'}
-                onPress={() => void setWeightUnit('kg')}
+                onPress={() => void setWeightUnit('kg').then(pushProfile)}
               />
             </View>
           </View>
@@ -201,7 +229,7 @@ export function ProfileScreen() {
             label={t('profile.voiceFeedback')}
             subtitle={t('profile.voiceFeedbackSub')}
             value={audioFeedbackEnabled}
-            onChange={(next) => void setAudioFeedbackEnabled(next)}
+            onChange={(next) => void setAudioFeedbackEnabled(next).then(pushProfile)}
           />
         </View>
 
@@ -388,6 +416,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   unitsTitle: {
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.body,
@@ -490,6 +523,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     flexDirection: 'row',
     gap: 10,
+    alignSelf: 'stretch',
   },
   segmentBtn: {
     flex: 1,

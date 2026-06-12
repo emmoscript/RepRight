@@ -1,7 +1,6 @@
 import { createNavigationContainerRef } from '@react-navigation/native';
 
 import type { RootStackParamList } from '@/navigation/routeTypes';
-import { useAuthStore } from '@/store/authStore';
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -38,7 +37,7 @@ export function resetToMainTabs() {
 }
 
 /** Call from NavigationContainer onReady — flushes auth redirect if navigator mounted late. */
-export function flushPendingAuthNavigation() {
+export function flushPendingAuthNavigation(isLoggedIn: boolean) {
   if (!navigationRef.isReady()) return;
 
   if (pendingWelcome) {
@@ -46,7 +45,7 @@ export function flushPendingAuthNavigation() {
     return;
   }
 
-  if (!pendingMainTabs && !useAuthStore.getState().isLoggedIn) return;
+  if (!pendingMainTabs && !isLoggedIn) return;
 
   const root = navigationRef.getRootState();
   const active = root?.routes[root.index ?? 0]?.name;

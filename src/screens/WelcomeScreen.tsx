@@ -26,11 +26,11 @@ export function WelcomeScreen() {
   }, [enterAsGuest, nav]);
 
   const onLogin = useCallback(() => {
-    nav.navigate('Login');
+    nav.navigate('AuthGateway', { mode: 'login' });
   }, [nav]);
 
   const onCreate = useCallback(() => {
-    nav.navigate('Signup');
+    nav.navigate('AuthGateway', { mode: 'signup' });
   }, [nav]);
 
   return (

@@ -85,10 +85,18 @@
     "namePlaceholder": "Your name",
     "forgotPassword": "Forgot password?",
     "loginBtn": "Log In",
+    "loggingIn": "Logging in…",
+    "fillLoginFields": "Please enter email and password.",
+    "passwordResetSent": "Password reset link sent. Check your email (also watch the 2/hour limit).",
+    "passwordResetNeedEmail": "Enter your email above, then tap Forgot password.",
     "signupBtn": "Sign Up",
+    "signingUp": "Signing up…",
+    "fillAllFields": "Please fill in name, email, and password.",
     "orContinue": "Or continue with",
     "google": "Google",
-    "apple": "Apple"
+    "googleContinue": "Continue with Google",
+    "googleSignUp": "Sign up with Google",
+    "googleHint": "Creates an account if you're new, or signs you in if you've used Google before."
   },
   "emailConfirm": {
     "title": "Check your email",
@@ -101,6 +109,8 @@
     "resendLink": "Resend link",
     "resendIn": "Resend in {{seconds}}s",
     "backToSignIn": "Back to sign in",
+    "signInAfterVerify": "Email verified? Sign in with your password below. (Verifying on another device does not log in this phone automatically.)",
+    "notVerifiedYet": "Email not confirmed yet. Open the verification link in your inbox — ideally on this phone.",
     "expiresHint": "Link expires for your security",
     "openOnPhone": "Open the link on this phone"
   },

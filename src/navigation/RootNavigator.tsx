@@ -10,8 +10,6 @@ import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { DemoScreen } from '@/screens/DemoScreen';
 import { WelcomeScreen } from '@/screens/WelcomeScreen';
 import { AuthGatewayScreen } from '@/screens/AuthGatewayScreen';
-import { LoginScreen } from '@/screens/LoginScreen';
-import { SignupScreen } from '@/screens/SignupScreen';
 import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
 import { LiveSessionScreen } from '@/screens/LiveSessionScreen';
 import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
@@ -60,7 +58,11 @@ export function RootNavigator() {
   const onboardingCompleted = useUserPreferencesStore((s) => s.onboardingCompleted);
 
   return (
-    <NavigationContainer ref={navigationRef} theme={theme} onReady={flushPendingAuthNavigation}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={theme}
+      onReady={() => flushPendingAuthNavigation(isLoggedIn)}
+    >
       <AuthLinkHandler />
       <Stack.Navigator
         initialRouteName={resolveInitialRoute(isLoggedIn, onboardingCompleted)}
@@ -75,8 +77,6 @@ export function RootNavigator() {
         <Stack.Screen name="Demo" component={DemoScreen} />
         <Stack.Screen name="Welcome" component={WelcomeScreen} />
         <Stack.Screen name="AuthGateway" component={AuthGatewayScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="EmailConfirm" component={EmailConfirmScreen} />
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
         <Stack.Screen name="LiveSession" component={LiveSessionScreen} options={{ gestureEnabled: false }} />

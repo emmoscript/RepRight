@@ -87,9 +87,9 @@ export function DemoScreen() {
         enterAsGuest();
         nav.navigate('MainTabs', { screen: 'HomeMain' });
       } else if (dest === 'login') {
-        nav.navigate('Login');
+        nav.navigate('AuthGateway', { mode: 'login' });
       } else {
-        nav.navigate('Signup');
+        nav.navigate('AuthGateway', { mode: 'signup' });
       }
     },
     [completeOnboarding, enterAsGuest, nav],

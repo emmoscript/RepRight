@@ -1,11 +1,16 @@
+import { displayNameFromMetadata, pullProfileFromSupabase } from '@/lib/profileSync';
 import { getAuthRedirectUri } from '@/lib/authRedirect';
 import { createSessionFromAuthUrl } from '@/lib/authDeepLink';
-import { isEmailConfirmed, supabase } from '@/lib/supabaseClient';
+import { signInWithOAuthProvider } from '@/lib/oauthSignIn';
+import { isEmailConfirmed, isSupabaseConfigured, supabase } from '@/lib/supabaseClient';
 import { resetToMainTabs, resetToWelcome } from '@/navigation/navigationRef';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import {
   EmailNotConfirmedError,
+  formatAuthErrorMessage,
+  isOAuthCancelledError,
   isSupabaseEmailNotConfirmedMessage,
+  normalizeAuthEmail,
 } from '@/utils/authErrors';
 import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { create } from 'zustand';
@@ -29,6 +34,8 @@ type AuthState = {
 
   signUp: (email: string, password: string, displayName?: string) => Promise<{ needsEmailVerification: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   enterAsGuest: () => void;
   restoreSession: () => Promise<void>;
@@ -42,17 +49,24 @@ type AuthState = {
 const randomParticipant = () => `P${String(Math.floor(Math.random() * 900) + 100)}`;
 
 const syncDisplayNameFromAuthUser = async (metadata: Record<string, unknown> | undefined) => {
-  const raw = metadata?.full_name;
-  if (typeof raw === 'string' && raw.trim()) {
-    await useUserPreferencesStore.getState().setDisplayName(raw.trim());
+  const name = displayNameFromMetadata(metadata);
+  if (name) {
+    await useUserPreferencesStore.getState().setDisplayName(name);
   }
 };
+
+function authProviderFromUser(authUser: SupabaseUser): User['auth_provider'] {
+  const provider = authUser.app_metadata?.provider;
+  if (provider === 'google') return 'google';
+  if (provider === 'apple') return 'apple';
+  return 'email';
+}
 
 function mapUser(authUser: SupabaseUser): User {
   return {
     id: authUser.id,
     email: authUser.email ?? null,
-    auth_provider: 'email',
+    auth_provider: authProviderFromUser(authUser),
   };
 }
 
@@ -68,6 +82,7 @@ function applyVerifiedSession(set: (partial: Partial<AuthState>) => void, sessio
     pendingVerificationEmail: null,
     error: null,
   });
+  void pullProfileFromSupabase(authUser.id);
   return true;
 }
 
@@ -98,11 +113,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signUp: async (email, password, displayName) => {
     set({ isLoading: true, error: null });
+    const normalizedEmail = normalizeAuthEmail(email);
     try {
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
       const trimmedName = displayName?.trim() ?? '';
       const redirectTo = getAuthRedirectUri();
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
           emailRedirectTo: redirectTo,
@@ -110,7 +131,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        if (__DEV__) {
+          console.error('[auth] signUp failed', {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+          });
+        }
+        throw error;
+      }
 
       if (trimmedName) {
         await useUserPreferencesStore.getState().setDisplayName(trimmedName);
@@ -122,18 +152,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return { needsEmailVerification: false };
       }
 
-      // Do not keep a partial session — access only after the email link is opened.
+      // Keep an unconfirmed session when Supabase returns one — lets "I've verified" refresh tokens.
+      if (data.session && data.user) {
+        set({
+          isLoggedIn: false,
+          isGuest: false,
+          user: null,
+          pendingVerificationEmail: normalizedEmail,
+          error: null,
+        });
+        return { needsEmailVerification: true };
+      }
+
       await supabase.auth.signOut();
       set({
         isLoggedIn: false,
         isGuest: false,
         user: null,
-        pendingVerificationEmail: email,
+        pendingVerificationEmail: normalizedEmail,
         error: null,
       });
       return { needsEmailVerification: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign up failed';
+      if (__DEV__) {
+        console.error('[auth] signUp exception', err);
+      }
+      const message = formatAuthErrorMessage(err);
       set({ error: message, isLoading: false });
       throw err;
     } finally {
@@ -143,12 +187,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signIn: async (email, password) => {
     set({ isLoading: true, error: null });
+    const normalizedEmail = normalizeAuthEmail(email);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
 
       if (error) {
+        if (__DEV__) {
+          console.error('[auth] signIn failed', {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+          });
+        }
         if (isSupabaseEmailNotConfirmedMessage(error.message)) {
-          set({ pendingVerificationEmail: email, isLoading: false });
+          set({ pendingVerificationEmail: normalizedEmail, isLoading: false });
           throw new EmailNotConfirmedError();
         }
         throw error;
@@ -160,7 +217,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       if (!isEmailConfirmed(data.user)) {
         await supabase.auth.signOut();
-        set({ pendingVerificationEmail: email, isLoading: false });
+        set({ pendingVerificationEmail: normalizedEmail, isLoading: false });
         throw new EmailNotConfirmedError();
       }
 
@@ -169,9 +226,63 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       resetToMainTabs();
     } catch (err) {
       if (!(err instanceof EmailNotConfirmedError)) {
-        const message = err instanceof Error ? err.message : 'Sign in failed';
-        set({ error: message, isLoading: false });
+        set({ error: formatAuthErrorMessage(err), isLoading: false });
       }
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  signInWithGoogle: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
+
+      const session = await signInWithOAuthProvider('google');
+      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+      const ok = applyVerifiedSession(set, session);
+      if (ok) resetToMainTabs();
+    } catch (err) {
+      if (isOAuthCancelledError(err)) return;
+      if (__DEV__) {
+        console.error('[auth] Google sign-in failed', err);
+      }
+      set({ error: formatAuthErrorMessage(err), isLoading: false });
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  requestPasswordReset: async (email) => {
+    set({ isLoading: true, error: null });
+    const normalizedEmail = normalizeAuthEmail(email);
+    try {
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: getAuthRedirectUri(),
+      });
+      if (error) {
+        if (__DEV__) {
+          console.error('[auth] password reset failed', {
+            message: error.message,
+            status: error.status,
+            code: error.code,
+          });
+        }
+        throw error;
+      }
+    } catch (err) {
+      set({ error: formatAuthErrorMessage(err), isLoading: false });
       throw err;
     } finally {
       set({ isLoading: false });
@@ -219,8 +330,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (ok) resetToMainTabs();
       return ok;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Email verification failed';
-      set({ error: message });
+      if (isOAuthCancelledError(err)) return false;
+      set({ error: formatAuthErrorMessage(err) });
       return false;
     } finally {
       set({ isLoading: false });
@@ -230,16 +341,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshVerificationStatus: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) throw error;
-      const session = data.session;
-      if (!session?.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      let session = sessionData.session;
+      if (!session) {
+        if (__DEV__) console.log('[auth] refreshVerificationStatus: no local session — sign in required');
         return false;
       }
-      if (!isEmailConfirmed(session.user)) {
+
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session) {
+        session = refreshed.session;
+      }
+
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+
+      const user = userData.user ?? session.user;
+      if (!user || !isEmailConfirmed(user)) {
+        if (__DEV__) console.log('[auth] refreshVerificationStatus: email not confirmed yet');
         return false;
       }
-      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+
+      await syncDisplayNameFromAuthUser(user.user_metadata);
       return applyVerifiedSession(set, session);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not verify status';

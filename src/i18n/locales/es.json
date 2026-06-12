@@ -85,10 +85,18 @@
     "namePlaceholder": "Tu nombre",
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "loginBtn": "Entrar",
+    "loggingIn": "Entrando…",
+    "fillLoginFields": "Ingresa correo y contraseña.",
+    "passwordResetSent": "Enlace enviado. Revisa tu correo (límite: 2 emails/hora).",
+    "passwordResetNeedEmail": "Escribe tu correo arriba y pulsa Olvidaste tu contraseña.",
     "signupBtn": "Registrarse",
+    "signingUp": "Registrando…",
+    "fillAllFields": "Completa nombre, correo y contraseña.",
     "orContinue": "O continúa con",
     "google": "Google",
-    "apple": "Apple"
+    "googleContinue": "Continuar con Google",
+    "googleSignUp": "Registrarse con Google",
+    "googleHint": "Crea una cuenta si eres nuevo, o inicia sesión si ya usaste Google antes."
   },
   "emailConfirm": {
     "title": "Revisa tu correo",
@@ -101,6 +109,8 @@
     "resendLink": "Reenviar enlace",
     "resendIn": "Reenviar en {{seconds}}s",
     "backToSignIn": "Volver a entrar",
+    "signInAfterVerify": "¿Correo verificado? Entra con tu contraseña abajo. (Verificar en otro dispositivo no inicia sesión en este teléfono.)",
+    "notVerifiedYet": "Correo aún no confirmado. Abre el enlace del correo — idealmente en este teléfono.",
     "expiresHint": "El enlace expira por seguridad",
     "openOnPhone": "Abre el enlace en este teléfono"
   },

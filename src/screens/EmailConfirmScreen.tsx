@@ -83,8 +83,10 @@ export function EmailConfirmScreen() {
     const ok = await refreshVerificationStatus();
     if (ok) {
       resetToMainTabs();
+      return;
     }
-  }, [clearError, refreshVerificationStatus]);
+    nav.navigate('AuthGateway', { email, fromEmailVerify: true });
+  }, [clearError, email, nav, refreshVerificationStatus]);
 
   const openMailApp = useCallback(() => {
     void Linking.openURL('mailto:');

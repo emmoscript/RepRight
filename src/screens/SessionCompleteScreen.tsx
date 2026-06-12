@@ -23,6 +23,7 @@ import {
     type SessionLog,
     type SessionSetSummary,
 } from "@/modules/session";
+import { mapErrorsForSupabase } from "@/lib/mapErrorsForSupabase";
 import type { RootStackParamList } from "@/navigation/routeTypes";
 import { useAuthStore } from "@/store/authStore";
 import { useSessionConfigStore } from "@/store/sessionConfigStore";
@@ -330,38 +331,39 @@ export function SessionCompleteScreen() {
     // Save to local AsyncStorage for backward compatibility
     await saveSession(log);
 
-    // Sync to Supabase with weight data
-    try {
-      console.log("\n=== SESSION COMPLETE: Syncing to Supabase ===");
-      console.log("Exercise:", exercise);
-      console.log("Set count:", plannedSetCount);
-      console.log("Weight amount:", weightAmount);
+    // Sync to Supabase when logged in (guests stay local-only)
+    const { isLoggedIn, user } = useAuthStore.getState();
+    if (isLoggedIn && user) {
+      try {
+        const syncErrors = mapErrorsForSupabase(uniqueErrors);
+        const {
+          startSession: syncStartSession,
+          addErrors: syncAddErrors,
+          completeSession: completeSessionSync,
+        } = useSessionSyncStore.getState();
 
-      const {
-        startSession: syncStartSession,
-        completeSession: completeSessionSync,
-      } = useSessionSyncStore.getState();
-
-      // Create session in sync store
-      const syncStoreSessionId = await syncStartSession(
-        exercise,
-        weightAmount || null,
-      );
-      console.log("Sync store session created:", syncStoreSessionId);
-
-      // Complete the session and sync to Supabase
-      await completeSessionSync(
-        syncStoreSessionId,
-        plannedSetCount,
-        weightAmount || null,
-      );
-      console.log("✅ Session synced to Supabase successfully");
-    } catch (err) {
-      console.error(
-        "⚠️ Error syncing to Supabase:",
-        err instanceof Error ? err.message : String(err),
-      );
-      // Don't block the UI if Supabase sync fails - session is still saved locally
+        const syncStoreSessionId = await syncStartSession(
+          exercise,
+          weightAmount || null,
+          startedAt,
+        );
+        await syncAddErrors(syncStoreSessionId, syncErrors);
+        await completeSessionSync(syncStoreSessionId, plannedSetCount, weightAmount || null, {
+          weightUnit,
+          totalReps: metrics.totalReps,
+          formScore: metrics.formScore,
+          completionPct: metrics.completionPct,
+          avgScore: metrics.overallScore,
+          startedAtMs: startedAt,
+        });
+      } catch (err) {
+        if (__DEV__) {
+          console.warn(
+            "Supabase session sync failed:",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
+      }
     }
 
     setSaved(true);

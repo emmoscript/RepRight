@@ -42,6 +42,18 @@ export default function App() {
     useAuthStore.getState().initAuthListener();
     void useUserPreferencesStore.getState().hydrate();
     void useAuthStore.getState().restoreSession();
+    if (__DEV__) {
+      void import('@/lib/supabaseClient').then(({ pingSupabase }) => {
+        void pingSupabase().then((r) => {
+          console.log(`[supabase] ping ${r.ok ? 'OK' : 'FAILED'}: ${r.detail}`);
+          if (!r.ok && r.detail.includes('Network request failed')) {
+            console.warn(
+              '[supabase] Device cannot reach your project URL. In Supabase Dashboard → Settings → API, copy Project URL again. Open that URL in the phone browser — if it fails, the project is paused or DNS is broken (not an app bug).',
+            );
+          }
+        });
+      });
+    }
   }, []);
 
   useEffect(() => {

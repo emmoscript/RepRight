@@ -1,10 +1,11 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -27,14 +28,38 @@ import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type AuthGatewayRoute = RouteProp<RootStackParamList, 'AuthGateway'>;
 
 export function AuthGatewayScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
+  const route = useRoute<AuthGatewayRoute>();
   const signIn = useAuthStore((s) => s.signIn);
+  const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
   const signUp = useAuthStore((s) => s.signUp);
+  const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
+  const clearError = useAuthStore((s) => s.clearError);
 
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = route.params;
+    if (params?.mode) {
+      setMode(params.mode);
+    }
+    if (params?.email) {
+      setLoginEmail(params.email);
+      setSignupEmail(params.email);
+      setMode('login');
+    }
+    if (params?.fromEmailVerify) {
+      setInfoMessage(t('emailConfirm.signInAfterVerify'));
+    }
+  }, [route.params, t]);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -44,6 +69,91 @@ export function AuthGatewayScreen() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [pwFocused, setPwFocused] = useState(false);
+
+  const handleLogin = useCallback(async () => {
+    Keyboard.dismiss();
+    clearError();
+    setFieldError(null);
+
+    const trimmedEmail = loginEmail.trim();
+    const trimmedPassword = loginPassword.trim();
+    if (!trimmedEmail || !trimmedPassword) {
+      setFieldError(t("auth.fillLoginFields"));
+      return;
+    }
+
+    try {
+      await signIn(trimmedEmail, trimmedPassword);
+      nav.navigate("MainTabs", { screen: "HomeMain" });
+    } catch (err) {
+      if (isEmailNotConfirmedError(err)) {
+        resetToEmailConfirm(trimmedEmail);
+        nav.navigate("EmailConfirm", { email: trimmedEmail });
+      }
+    }
+  }, [clearError, loginEmail, loginPassword, nav, signIn, t]);
+
+  const handleForgotPassword = useCallback(async () => {
+    Keyboard.dismiss();
+    clearError();
+    setFieldError(null);
+    setInfoMessage(null);
+
+    const trimmedEmail = loginEmail.trim();
+    if (!trimmedEmail) {
+      setFieldError(t('auth.passwordResetNeedEmail'));
+      return;
+    }
+
+    try {
+      await requestPasswordReset(trimmedEmail);
+      setInfoMessage(t('auth.passwordResetSent'));
+    } catch {
+      // error in store
+    }
+  }, [clearError, loginEmail, requestPasswordReset, t]);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    Keyboard.dismiss();
+    clearError();
+    setFieldError(null);
+    setInfoMessage(null);
+    try {
+      await signInWithGoogle();
+      nav.navigate('MainTabs', { screen: 'HomeMain' });
+    } catch {
+      // error in store (cancelled = silent)
+    }
+  }, [clearError, nav, signInWithGoogle]);
+
+  const handleSignup = useCallback(async () => {
+    Keyboard.dismiss();
+    clearError();
+    setFieldError(null);
+
+    const trimmedName = name.trim();
+    const trimmedEmail = signupEmail.trim();
+    const trimmedPassword = password.trim();
+    if (!trimmedName || !trimmedEmail || !trimmedPassword) {
+      setFieldError(t("auth.fillAllFields"));
+      return;
+    }
+
+    try {
+      const { needsEmailVerification } = await signUp(
+        trimmedEmail,
+        trimmedPassword,
+        trimmedName,
+      );
+      if (needsEmailVerification) {
+        nav.navigate("EmailConfirm", { email: trimmedEmail });
+      } else {
+        nav.navigate("MainTabs", { screen: "HomeMain" });
+      }
+    } catch {
+      // error message stored in authStore
+    }
+  }, [clearError, name, nav, password, signUp, signupEmail, t]);
 
   return (
     <KeyboardAvoidingView
@@ -62,13 +172,18 @@ export function AuthGatewayScreen() {
           }
         />
         <ScrollView
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           contentContainerStyle={styles.scroll}>
           <View style={styles.modeRow}>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: mode === "login" }}
-              onPress={() => setMode("login")}
+              onPress={() => {
+                setMode("login");
+                setFieldError(null);
+                setInfoMessage(null);
+                clearError();
+              }}
               style={[styles.modeChip, mode === "login" && styles.modeChipOn]}>
               <Text
                 style={[
@@ -81,7 +196,12 @@ export function AuthGatewayScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: mode === "signup" }}
-              onPress={() => setMode("signup")}
+              onPress={() => {
+                setMode("signup");
+                setFieldError(null);
+                setInfoMessage(null);
+                clearError();
+              }}
               style={[styles.modeChip, mode === "signup" && styles.modeChipOn]}>
               <Text
                 style={[
@@ -119,11 +239,15 @@ export function AuthGatewayScreen() {
                   autoCapitalize="none"
                 />
               </View>
-              <Pressable style={styles.forgotWrap} accessibilityRole="button">
+              <Pressable style={styles.forgotWrap} accessibilityRole="button" onPress={handleForgotPassword}>
                 <Text style={styles.forgotTxt}>{t('auth.forgotPassword')}</Text>
               </Pressable>
+              {infoMessage ? <Text style={styles.infoText}>{infoMessage}</Text> : null}
+              {(fieldError || error) ? (
+                <Text style={styles.errorText}>{fieldError ?? error}</Text>
+              ) : null}
               <PrimaryButton
-                title={t('auth.loginBtn')}
+                title={isLoading ? t("auth.loggingIn") : t("auth.loginBtn")}
                 trailing={
                   <MaterialIcons
                     name="arrow-forward"
@@ -132,43 +256,9 @@ export function AuthGatewayScreen() {
                   />
                 }
                 style={{ marginTop: 28 }}
-                onPress={async () => {
-                  if (loginEmail.trim() && loginPassword.trim()) {
-                    try {
-                      await signIn(loginEmail.trim(), loginPassword.trim());
-                      nav.navigate("MainTabs", { screen: "HomeMain" });
-                    } catch (err) {
-                      if (isEmailNotConfirmedError(err)) {
-                        resetToEmailConfirm(loginEmail.trim());
-                        nav.navigate("EmailConfirm", { email: loginEmail.trim() });
-                      }
-                    }
-                  }
-                }}
+                onPress={handleLogin}
+                disabled={isLoading}
               />
-              <View style={styles.divWrap}>
-                <View style={styles.divLine} />
-                <Text style={styles.divTxt}>{t('auth.orContinue')}</Text>
-                <View style={styles.divLine} />
-              </View>
-              <View style={styles.socialRow}>
-                <Pressable style={styles.socialChip} accessibilityRole="button">
-                  <Ionicons
-                    name="logo-google"
-                    size={20}
-                    color={colors.text_primary}
-                  />
-                  <Text style={styles.socialLab}>{t('auth.google')}</Text>
-                </Pressable>
-                <Pressable style={styles.socialChip} accessibilityRole="button">
-                  <Ionicons
-                    name="logo-apple"
-                    size={22}
-                    color={colors.text_primary}
-                  />
-                  <Text style={styles.socialLab}>{t('auth.apple')}</Text>
-                </Pressable>
-              </View>
             </>
           ) : (
             <>
@@ -225,8 +315,12 @@ export function AuthGatewayScreen() {
                   </Pressable>
                 </View>
               </View>
+              {(fieldError || error) ? (
+                <Text style={styles.errorText}>{fieldError ?? error}</Text>
+              ) : null}
+
               <PrimaryButton
-                title={t('auth.signupBtn')}
+                title={isLoading ? t("auth.signingUp") : t("auth.signupBtn")}
                 trailing={
                   <MaterialIcons
                     name="arrow-forward"
@@ -234,28 +328,32 @@ export function AuthGatewayScreen() {
                     color={colors.text_on_green}
                   />
                 }
-                style={{ marginTop: 32 }}
-                onPress={async () => {
-                  if (signupEmail.trim() && password.trim() && name.trim()) {
-                    try {
-                      const { needsEmailVerification } = await signUp(
-                        signupEmail.trim(),
-                        password.trim(),
-                        name.trim(),
-                      );
-                      if (needsEmailVerification) {
-                        nav.navigate("EmailConfirm", { email: signupEmail.trim() });
-                      } else {
-                        nav.navigate("MainTabs", { screen: "HomeMain" });
-                      }
-                    } catch {
-                      // error in store
-                    }
-                  }
-                }}
+                style={{ marginTop: fieldError || error ? 12 : 32 }}
+                onPress={handleSignup}
+                disabled={isLoading}
               />
             </>
           )}
+
+          <View style={styles.divWrap}>
+            <View style={styles.divLine} />
+            <Text style={styles.divTxt}>{t('auth.orContinue')}</Text>
+            <View style={styles.divLine} />
+          </View>
+          {mode === 'signup' ? (
+            <Text style={styles.googleHint}>{t('auth.googleHint')}</Text>
+          ) : null}
+          <Pressable
+            style={[styles.socialChip, styles.socialChipSolo, isLoading && styles.socialChipDisabled]}
+            accessibilityRole="button"
+            disabled={isLoading}
+            onPress={() => void handleGoogleSignIn()}
+          >
+            <Ionicons name="logo-google" size={20} color={colors.text_primary} />
+            <Text style={styles.socialLab}>
+              {mode === 'signup' ? t('auth.googleSignUp') : t('auth.googleContinue')}
+            </Text>
+          </Pressable>
 
           <View style={{ height: 24 }} />
         </ScrollView>
@@ -309,6 +407,20 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   forgotWrap: { alignSelf: "flex-end", paddingVertical: 8 },
+  errorText: {
+    marginTop: 8,
+    color: colors.accent_red,
+    fontSize: typography.fontSize.bodySm,
+    fontFamily: typography.fontFamily.medium,
+    lineHeight: 20,
+  },
+  infoText: {
+    marginTop: 8,
+    color: colors.primary_green,
+    fontSize: typography.fontSize.bodySm,
+    fontFamily: typography.fontFamily.medium,
+    lineHeight: 20,
+  },
   forgotTxt: {
     color: colors.primary_green,
     fontFamily: typography.fontFamily.medium,
@@ -325,7 +437,6 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.medium,
     fontSize: 11,
   },
-  socialRow: { flexDirection: "row", justifyContent: "center" },
   socialChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -337,6 +448,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border_subtle,
   },
+  socialChipSolo: {
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    marginHorizontal: 0,
+    minHeight: 48,
+  },
+  googleHint: {
+    marginBottom: 12,
+    textAlign: 'center',
+    color: colors.text_muted,
+    fontSize: typography.fontSize.captions,
+    fontFamily: typography.fontFamily.regular,
+    lineHeight: 18,
+  },
+  socialChipDisabled: { opacity: 0.45 },
   socialLab: {
     marginLeft: 8,
     fontFamily: typography.fontFamily.semibold,
