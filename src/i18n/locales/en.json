@@ -96,7 +96,9 @@
     "google": "Google",
     "googleContinue": "Continue with Google",
     "googleSignUp": "Sign up with Google",
-    "googleHint": "Creates an account if you're new, or signs you in if you've used Google before."
+    "oauthHint": "Creates an account if you're new, or signs you in if you've used this provider before.",
+    "appleContinue": "Continue with Apple",
+    "appleSignUp": "Sign up with Apple"
   },
   "emailConfirm": {
     "title": "Check your email",

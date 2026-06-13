@@ -101,7 +101,8 @@ Download the `.ipa` from Expo → open **Transporter** on a Mac → deliver to A
 - [ ] `.env` / Supabase URL + anon key set in EAS **Secrets** if needed (`eas secret:create`)  
 - [ ] Google OAuth redirect URLs include production bundle / scheme if used on iOS  
 - [ ] Camera + Photo Library usage strings in `Info.plist` (already set)  
-- [ ] Test on a **physical iPhone** (simulator has no real camera / TFLite path differs)  
+- [ ] **Sign in with Apple** enabled on App ID + Supabase — see [`docs/APPLE_SIGN_IN_SETUP.md`](APPLE_SIGN_IN_SETUP.md)  
+- [ ] Test on a **physical iPhone**  
 - [ ] Privacy manifest: `ios/RepRight/PrivacyInfo.xcprivacy` present  
 
 ---

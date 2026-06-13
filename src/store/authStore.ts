@@ -1,3 +1,4 @@
+import { signInWithAppleNative } from '@/lib/appleSignIn';
 import { displayNameFromMetadata, pullProfileFromSupabase } from '@/lib/profileSync';
 import { resolveAnonymousGuestLabel } from '@/lib/anonymousGuest';
 import { getAuthRedirectUri } from '@/lib/authRedirect';
@@ -36,6 +37,7 @@ type AuthState = {
   signUp: (email: string, password: string, displayName?: string) => Promise<{ needsEmailVerification: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   enterAsGuest: () => Promise<void>;
@@ -272,6 +274,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (isOAuthCancelledError(err)) return;
       if (__DEV__) {
         console.error('[auth] Google sign-in failed', err);
+      }
+      set({ error: formatAuthErrorMessage(err), isLoading: false });
+      throw err;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  signInWithApple: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
+
+      const session = await signInWithAppleNative();
+      await syncDisplayNameFromAuthUser(session.user.user_metadata);
+      const ok = applyVerifiedSession(set, session);
+      if (ok) resetToMainTabs();
+    } catch (err) {
+      if (isOAuthCancelledError(err)) return;
+      if (__DEV__) {
+        console.error('[auth] Apple sign-in failed', err);
       }
       set({ error: formatAuthErrorMessage(err), isLoading: false });
       throw err;

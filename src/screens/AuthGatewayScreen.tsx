@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 import { RepRightHeader } from "@/components/RepRightHeader";
 import { UnderlineField } from "@/components/UnderlineField";
 import type { RootStackParamList } from "@/navigation/routeTypes";
@@ -36,6 +37,7 @@ export function AuthGatewayScreen() {
   const route = useRoute<AuthGatewayRoute>();
   const signIn = useAuthStore((s) => s.signIn);
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
+  const signInWithApple = useAuthStore((s) => s.signInWithApple);
   const signUp = useAuthStore((s) => s.signUp);
   const requestPasswordReset = useAuthStore((s) => s.requestPasswordReset);
   const isLoading = useAuthStore((s) => s.isLoading);
@@ -112,6 +114,19 @@ export function AuthGatewayScreen() {
       // error in store
     }
   }, [clearError, loginEmail, requestPasswordReset, t]);
+
+  const handleAppleSignIn = useCallback(async () => {
+    Keyboard.dismiss();
+    clearError();
+    setFieldError(null);
+    setInfoMessage(null);
+    try {
+      await signInWithApple();
+      nav.navigate('MainTabs', { screen: 'HomeMain' });
+    } catch {
+      // error in store (cancelled = silent)
+    }
+  }, [clearError, nav, signInWithApple]);
 
   const handleGoogleSignIn = useCallback(async () => {
     Keyboard.dismiss();
@@ -340,20 +355,12 @@ export function AuthGatewayScreen() {
             <Text style={styles.divTxt}>{t('auth.orContinue')}</Text>
             <View style={styles.divLine} />
           </View>
-          {mode === 'signup' ? (
-            <Text style={styles.googleHint}>{t('auth.googleHint')}</Text>
-          ) : null}
-          <Pressable
-            style={[styles.socialChip, styles.socialChipSolo, isLoading && styles.socialChipDisabled]}
-            accessibilityRole="button"
+          <SocialAuthButtons
+            mode={mode}
             disabled={isLoading}
-            onPress={() => void handleGoogleSignIn()}
-          >
-            <Ionicons name="logo-google" size={20} color={colors.text_primary} />
-            <Text style={styles.socialLab}>
-              {mode === 'signup' ? t('auth.googleSignUp') : t('auth.googleContinue')}
-            </Text>
-          </Pressable>
+            onGooglePress={() => void handleGoogleSignIn()}
+            onApplePress={() => void handleAppleSignIn()}
+          />
 
           <View style={{ height: 24 }} />
         </ScrollView>
@@ -436,38 +443,6 @@ const styles = StyleSheet.create({
     color: colors.text_muted,
     fontFamily: typography.fontFamily.medium,
     fontSize: 11,
-  },
-  socialChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: colors.surface_v3,
-    borderWidth: 1,
-    borderColor: colors.border_subtle,
-  },
-  socialChipSolo: {
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    marginHorizontal: 0,
-    minHeight: 48,
-  },
-  googleHint: {
-    marginBottom: 12,
-    textAlign: 'center',
-    color: colors.text_muted,
-    fontSize: typography.fontSize.captions,
-    fontFamily: typography.fontFamily.regular,
-    lineHeight: 18,
-  },
-  socialChipDisabled: { opacity: 0.45 },
-  socialLab: {
-    marginLeft: 8,
-    fontFamily: typography.fontFamily.semibold,
-    fontSize: 13,
-    color: colors.text_primary,
   },
 
   pwLbl: {

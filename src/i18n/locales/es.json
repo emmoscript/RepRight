@@ -96,7 +96,9 @@
     "google": "Google",
     "googleContinue": "Continuar con Google",
     "googleSignUp": "Registrarse con Google",
-    "googleHint": "Crea una cuenta si eres nuevo, o inicia sesión si ya usaste Google antes."
+    "oauthHint": "Crea una cuenta si eres nuevo, o inicia sesión si ya usaste este proveedor.",
+    "appleContinue": "Continuar con Apple",
+    "appleSignUp": "Registrarse con Apple"
   },
   "emailConfirm": {
     "title": "Revisa tu correo",

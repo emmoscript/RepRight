@@ -12,6 +12,7 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.unibe.repright",
+    usesAppleSignIn: true,
     infoPlist: {
       NSCameraUsageDescription:
         "RepRight needs camera access to analyze your deadlift form in real time.",
@@ -37,6 +38,7 @@ const config: ExpoConfig = {
   plugins: [
     "./plugins/withAndroidKeepScreenOn.cjs",
     "expo-dev-client",
+    "expo-apple-authentication",
     // expo-font / expo-asset need expo-file-system native filesystem bindings at runtime (e.g. AppDirectories).
     "expo-file-system",
     "expo-asset",
