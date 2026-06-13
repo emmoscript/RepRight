@@ -268,7 +268,27 @@
     "precisionSolid": "SOLID CONTROL",
     "precisionCleanup": "NEEDS CLEANUP",
     "precisionAlert": "HIGH ALERT FORM",
-    "setLine": "{{weight}} · {{reps}} reps · score {{score}} · {{precision}}"
+    "setLine": "{{weight}} · {{reps}} reps · score {{score}} · {{precision}}",
+    "formBreakdown": "Form breakdown",
+    "formBreakdownEmpty": "No form errors detected this set — solid work.",
+    "focusTitle": "Focus areas",
+    "setRepLabel": "Set {{set}} · Rep {{rep}}",
+    "setSetupLabel": "Set {{set}} · Setup"
+  },
+  "formErrorTitles": {
+    "ERR_001": "Lumbar rounding",
+    "ERR_002": "Hips too high at pull",
+    "ERR_003": "Bar drift from body",
+    "ERR_004": "Hyperextension at lockout",
+    "ERR_005": "Shoulder behind bar"
+  },
+  "formPhases": {
+    "setup": "Setup",
+    "pull_initiation": "Pull start",
+    "mid_pull": "Mid pull",
+    "lockout": "Lockout",
+    "descent": "Descent",
+    "unknown": "During lift"
   },
   "stats": {
     "title": "Rep log",

@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 
+import { FormBreakdownCard } from "@/components/session/FormBreakdownCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { RepRightHeader } from "@/components/RepRightHeader";
 import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from "@/components/RepsSlider";
@@ -103,55 +104,6 @@ function precisionTitle(scoreRounded: number, t: (key: string) => string) {
   if (scoreRounded >= 70) return t("sessionComplete.precisionSolid");
   if (scoreRounded >= 50) return t("sessionComplete.precisionCleanup");
   return t("sessionComplete.precisionAlert");
-}
-
-type FormBand = "critical" | "warning" | "good";
-
-function bandLabel(band: FormBand, t: (key: string) => string) {
-  if (band === "critical") return t("common.critical");
-  if (band === "warning") return t("common.warning");
-  return t("common.good");
-}
-
-function bandDotColor(band: FormBand) {
-  if (band === "critical") return colors.accent_red;
-  if (band === "warning") return "#FF9100";
-  return colors.primary_green;
-}
-
-function badgeColors(band: FormBand) {
-  const dot = bandDotColor(band);
-  if (band === "good") return { fg: dot, bg: `${dot}14`, bd: `${dot}33` };
-  if (band === "critical") return { fg: dot, bg: `${dot}1A`, bd: `${dot}33` };
-  return { fg: dot, bg: `${dot}22`, bd: `${dot}40` };
-}
-
-function buildFormInsights(
-  errorIds: Set<string>,
-  t: (key: string) => string,
-): Array<{ key: string; label: string; band: FormBand }> {
-  const hipCrit = errorIds.has("ERR_001") || errorIds.has("ERR_002");
-  const romWarn =
-    errorIds.has("ERR_003") ||
-    errorIds.has("ERR_004") ||
-    errorIds.has("ERR_005");
-  return [
-    {
-      key: "hip-sway",
-      label: t("sessionComplete.hipSway"),
-      band: hipCrit ? "critical" : "good",
-    },
-    {
-      key: "rom",
-      label: t("sessionComplete.rangeOfMotion"),
-      band: romWarn ? "warning" : "good",
-    },
-    {
-      key: "tempo",
-      label: t("sessionComplete.tempoConsistency"),
-      band: "good",
-    },
-  ];
 }
 
 export function SessionCompleteScreen() {
@@ -249,10 +201,6 @@ export function SessionCompleteScreen() {
     });
   }, [errors]);
 
-  const insightRows = useMemo(() => {
-    const ids = new Set(uniqueErrors.map((e) => e.errorId));
-    return buildFormInsights(ids, t);
-  }, [uniqueErrors, t]);
   const goHome = () => nav.navigate("MainTabs", { screen: "HomeMain" });
 
   const onNextSet = () => {
@@ -465,51 +413,7 @@ export function SessionCompleteScreen() {
           />
         </View>
 
-        {/* Form adjustments — canonical summary rows */}
-        <View style={styles.formCard}>
-          <View style={styles.formCardTitleRow}>
-            <MaterialIcons
-              name="analytics"
-              size={22}
-              color={colors.primary_green}
-            />
-            <Text style={styles.formCardTitle}>
-              {t("sessionComplete.setInsights")}
-            </Text>
-          </View>
-          <View style={styles.formCardBody}>
-            {insightRows.map((row, idx) => {
-              const b = badgeColors(row.band);
-              return (
-                <View
-                  key={row.key}
-                  style={[
-                    styles.insightRow,
-                    idx < insightRows.length - 1 && styles.insightRowSep,
-                  ]}>
-                  <View style={styles.insightLeft}>
-                    <View
-                      style={[
-                        styles.insightDot,
-                        { backgroundColor: bandDotColor(row.band) },
-                      ]}
-                    />
-                    <Text style={styles.insightName}>{row.label}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.bandBadge,
-                      { backgroundColor: b.bg, borderColor: b.bd },
-                    ]}>
-                    <Text style={[styles.bandBadgeTxt, { color: b.fg }]}>
-                      {bandLabel(row.band, t)}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </View>
+        <FormBreakdownCard errors={errors} />
 
         {canAdvanceToNextSet && (
           <View style={styles.nextSetBlock}>

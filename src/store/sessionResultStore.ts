@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { BiomechanicalError } from '@/modules/analyzer';
+import type { RecordedFormError } from '@/types/recordedFormError';
 import type { SessionReviewSnapshot } from '@/utils/sessionScore';
 import type { WeightUnit } from '@/utils/weightUnits';
 
@@ -15,7 +15,7 @@ export type WorkoutSetSnapshot = {
 
 type SessionResultState = {
   startedAt: number;
-  errors: BiomechanicalError[];
+  errors: RecordedFormError[];
   /** Captured when ending live session (for summary UI). */
   lastSetReps: number;
   lastSetElapsedSec: number;
@@ -26,7 +26,7 @@ type SessionResultState = {
   /** Immutable summary for Session Complete (survives LiveSession remount / clearResults races). */
   sessionReview: SessionReviewSnapshot | null;
   setStartedAt: (t: number) => void;
-  addErrors: (e: BiomechanicalError[]) => void;
+  addErrors: (e: RecordedFormError[]) => void;
   setLastSetSummary: (reps: number, elapsedSec: number) => void;
   setSessionReview: (review: SessionReviewSnapshot) => void;
   appendWorkoutSetSnapshot: (row: WorkoutSetSnapshot) => void;

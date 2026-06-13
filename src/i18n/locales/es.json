@@ -268,7 +268,27 @@
     "precisionSolid": "CONTROL SÓLIDO",
     "precisionCleanup": "NECESITA AJUSTE",
     "precisionAlert": "ALERTA DE FORMA",
-    "setLine": "{{weight}} · {{reps}} reps · score {{score}} · {{precision}}"
+    "setLine": "{{weight}} · {{reps}} reps · score {{score}} · {{precision}}",
+    "formBreakdown": "Desglose de forma",
+    "formBreakdownEmpty": "Sin errores de forma en esta serie — buen trabajo.",
+    "focusTitle": "Áreas de enfoque",
+    "setRepLabel": "Serie {{set}} · Rep {{rep}}",
+    "setSetupLabel": "Serie {{set}} · Posición inicial"
+  },
+  "formErrorTitles": {
+    "ERR_001": "Redondeo lumbar",
+    "ERR_002": "Cadera muy alta al iniciar",
+    "ERR_003": "Barra alejada del cuerpo",
+    "ERR_004": "Hiperextensión al cerrar",
+    "ERR_005": "Hombros detrás de la barra"
+  },
+  "formPhases": {
+    "setup": "Posición inicial",
+    "pull_initiation": "Inicio del tirón",
+    "mid_pull": "Tirón medio",
+    "lockout": "Cierre",
+    "descent": "Descenso",
+    "unknown": "Durante el levantamiento"
   },
   "stats": {
     "title": "Registro de reps",

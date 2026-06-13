@@ -1,6 +1,11 @@
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import * as Speech from 'expo-speech';
+import {
+  formErrorRecordKey,
+  hasFormErrorRecord,
+  hasFormErrorRecorded,
+} from '@/utils/formBreakdown';
 import { speakFeedbackMessage } from '@/utils/speechFeedback';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +38,7 @@ import {
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 
 import { useResolvedCamera } from '@/hooks/useResolvedCamera';
+import type { RecordedFormError } from '@/types/recordedFormError';
 
 import {
   SvgCameraReverseOutline,
@@ -249,6 +255,7 @@ export function LiveSessionScreen() {
   const audioOnRef = useRef(useUserPreferencesStore.getState().audioFeedbackEnabled);
   const [reps, setReps] = useState(0);
   const repsRef = useRef(0);
+  const currentSetNumberRef = useRef(currentSetNumber);
   const [elapsedSec, setElapsedSec] = useState(0);
   /** Full-workout quit (discard in-progress); not used for finishing the current set. */
   const [showQuitWorkoutModal, setShowQuitWorkoutModal] = useState(false);
@@ -315,7 +322,7 @@ export function LiveSessionScreen() {
   );
   /** Biomechanical cue streak per errorId → banner after stable detection. */
   const formErrStreakByIdRef = useRef<Map<ErrorId, number>>(new Map());
-  const FORM_ERR_STREAK_TARGET = 2;
+  const FORM_ERR_STREAK_TARGET = 3;
   /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
   const lastFormAudioAtRef = useRef(0);
   /** One `addErrors` per `errorId` per session (summary / Session Complete). */
@@ -408,6 +415,10 @@ export function LiveSessionScreen() {
   useEffect(() => {
     repsRef.current = reps;
   }, [reps]);
+
+  useEffect(() => {
+    currentSetNumberRef.current = currentSetNumber;
+  }, [currentSetNumber]);
 
   const finishCurrentSet = useCallback(() => {
     clearAutoFinishTimers();
@@ -1011,9 +1022,11 @@ export function LiveSessionScreen() {
           ? 1
           : FORM_ERR_STREAK_TARGET;
       const formAnalysisLive = fb.topError != null;
-      const hipSwayTaken =
-        recordedFormErrIdsRef.current.has('ERR_001') ||
-        recordedFormErrIdsRef.current.has('ERR_002');
+      const setNum = currentSetNumberRef.current;
+      const repNum = analysis.phase === 'setup' ? 0 : Math.max(1, repsRef.current);
+      const hipSwayOnRep =
+        hasFormErrorRecord(recordedFormErrIdsRef.current, 'ERR_001', setNum, repNum) ||
+        hasFormErrorRecord(recordedFormErrIdsRef.current, 'ERR_002', setNum, repNum);
       const isHipSway =
         fb.topError?.errorId === 'ERR_001' || fb.topError?.errorId === 'ERR_002';
       const showBn =
@@ -1025,18 +1038,36 @@ export function LiveSessionScreen() {
       const skipRecord =
         (fb.topError != null &&
           fb.topError.errorId === 'ERR_005' &&
-          recordedFormErrIdsRef.current.has('ERR_001')) ||
-        (isHipSway && hipSwayTaken && fb.topError != null &&
-          !recordedFormErrIdsRef.current.has(fb.topError.errorId));
+          hasFormErrorRecorded(recordedFormErrIdsRef.current, 'ERR_001')) ||
+        (isHipSway &&
+          hipSwayOnRep &&
+          fb.topError != null &&
+          !hasFormErrorRecord(
+            recordedFormErrIdsRef.current,
+            fb.topError.errorId,
+            setNum,
+            repNum,
+          ));
+
+      const recordKey =
+        fb.topError != null
+          ? formErrorRecordKey(fb.topError.errorId, setNum, repNum)
+          : '';
 
       if (
         showBn &&
         fb.topError &&
         !skipRecord &&
-        !recordedFormErrIdsRef.current.has(fb.topError.errorId)
+        !recordedFormErrIdsRef.current.has(recordKey)
       ) {
-        recordedFormErrIdsRef.current.add(fb.topError.errorId);
-        addErrors([fb.topError]);
+        recordedFormErrIdsRef.current.add(recordKey);
+        const recorded: RecordedFormError = {
+          ...fb.topError,
+          setNumber: setNum,
+          repNumber: repNum,
+          phase: analysis.phase,
+        };
+        addErrors([recorded]);
         sessionTrace.formErrorRecorded(fb.topError.errorId, repsRef.current, analysis.phase);
         if (fb.topError.severity === 'critical') {
           void impactAsync(ImpactFeedbackStyle.Medium);
