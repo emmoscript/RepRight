@@ -118,7 +118,11 @@
     "greetingMorning": "Good morning",
     "greetingAfternoon": "Good afternoon",
     "greetingEvening": "Good evening",
-    "readyLift": "READY FOR YOUR MORNING LIFT?",
+    "greetingNight": "Good night",
+    "readyLiftMorning": "READY FOR YOUR MORNING LIFT?",
+    "readyLiftAfternoon": "READY FOR THIS AFTERNOON'S LIFT?",
+    "readyLiftEvening": "READY FOR YOUR EVENING LIFT?",
+    "readyLiftNight": "READY FOR A LIFT TONIGHT?",
     "startSession": "START DEADLIFT SESSION",
     "lastSession": "LAST SESSION",
     "noSessionYet": "NO SESSION YET",
@@ -130,7 +134,17 @@
     "startToLog": "START A DEADLIFT RUN TO LOG ACTIVITY HERE",
     "weeklyVolume": "WEEKLY VOLUME INCREASE",
     "weeklyHint": "Based on reps logged in rolling 7-day windows.",
-    "min": "MIN"
+    "min": "MIN",
+    "surveyPrompt": {
+      "kicker": "Universidad Iberoamericana (UNIBE)",
+      "title": "How much do you know about deadlift?",
+      "body": "You just tried RepRight. As part of the Universidad Iberoamericana (UNIBE) study, we invite you to a short questionnaire — 10 multiple-choice questions, about 3 minutes — on safe deadlift technique. Your answers are confidential and help us evaluate the app.",
+      "accountLabel": "Your account",
+      "emailHint": "In the questionnaire, use the same email you used to sign in to the app.",
+      "cta": "Take questionnaire",
+      "opening": "Opening…",
+      "later": "Not now"
+    }
   },
   "profile": {
     "guestParticipant": "Guest participant",

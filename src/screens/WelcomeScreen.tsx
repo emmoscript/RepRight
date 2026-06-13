@@ -21,8 +21,10 @@ export function WelcomeScreen() {
   const enterAsGuest = useAuthStore((s) => s.enterAsGuest);
 
   const onGuest = useCallback(() => {
-    enterAsGuest();
-    nav.navigate('MainTabs', { screen: 'HomeMain' });
+    void (async () => {
+      await enterAsGuest();
+      nav.navigate('MainTabs', { screen: 'HomeMain' });
+    })();
   }, [enterAsGuest, nav]);
 
   const onLogin = useCallback(() => {

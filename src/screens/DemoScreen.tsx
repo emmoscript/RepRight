@@ -84,7 +84,7 @@ export function DemoScreen() {
     async (dest: 'guest' | 'login' | 'signup') => {
       await completeOnboarding();
       if (dest === 'guest') {
-        enterAsGuest();
+        await enterAsGuest();
         nav.navigate('MainTabs', { screen: 'HomeMain' });
       } else if (dest === 'login') {
         nav.navigate('AuthGateway', { mode: 'login' });

@@ -4,17 +4,23 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BiomechSurveyPrompt } from '@/components/BiomechSurveyPrompt';
 import { Icon, ICONS } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
 import { SvgPlayIcon, SvgTrendingUpIcon } from '@/components/icons/SvgUiIcons';
 import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
+import {
+  markBiomechSurveyPrompted,
+  shouldShowBiomechSurveyPrompt,
+} from '@/constants/researchSurvey';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { useAuthStore } from '@/store/authStore';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { resolveDisplayName } from '@/utils/displayName';
+import { timeGreetingI18nKey, timeGreetingPeriod, timeReadyLiftI18nKey } from '@/utils/timeGreeting';
 
 function formatDateShort(iso: string, months: string[]): string {
   const d = new Date(iso);
@@ -67,18 +73,29 @@ export function HomeScreen() {
   const displayNamePref = useUserPreferencesStore((s) => s.displayName);
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
+  const [surveyPromptVisible, setSurveyPromptVisible] = useState(false);
+  const [greetingTick, setGreetingTick] = useState(() => Date.now());
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      setGreetingTick(Date.now());
+      const clockId = setInterval(() => setGreetingTick(Date.now()), 60_000);
+
       void (async () => {
         const list = await getAllSessions();
         if (!active) return;
         const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
         setSessions(sorted);
+
+        if (sorted.length >= 1 && (await shouldShowBiomechSurveyPrompt(sorted.length))) {
+          await markBiomechSurveyPrompted(sorted.length);
+          if (active) setSurveyPromptVisible(true);
+        }
       })();
       return () => {
         active = false;
+        clearInterval(clockId);
       };
     }, []),
   );
@@ -88,12 +105,20 @@ export function HomeScreen() {
     [t],
   );
 
-  const greeting = useMemo(() => {
-    const h = new Date().getHours();
-    if (h < 12) return t('home.greetingMorning');
-    if (h < 18) return t('home.greetingAfternoon');
-    return t('home.greetingEvening');
-  }, [t]);
+  const greetingPeriod = useMemo(
+    () => timeGreetingPeriod(new Date(greetingTick).getHours()),
+    [greetingTick],
+  );
+
+  const greeting = useMemo(
+    () => t(timeGreetingI18nKey(greetingPeriod)),
+    [t, greetingPeriod],
+  );
+
+  const readyLift = useMemo(
+    () => t(timeReadyLiftI18nKey(greetingPeriod)),
+    [t, greetingPeriod],
+  );
 
   const displayName = useMemo(
     () => resolveDisplayName({ displayName: displayNamePref, email, isGuest }),
@@ -112,10 +137,16 @@ export function HomeScreen() {
     const anchor = new Date();
     const cur = repsRolling7Days(sessions, anchor, 0);
     const prev = repsRolling7Days(sessions, anchor, 1);
-    if (prev <= 0 && cur <= 0) return null;
-    if (prev <= 0 && cur > 0) return 100;
+    if (prev <= 0 && cur <= 0) return 0;
+    if (cur <= 0) return 0;
+    if (prev <= 0) return 100;
     return ((cur - prev) / prev) * 100;
   }, [sessions]);
+
+  const weeklyPctLabel = useMemo(() => {
+    if (weeklyPct === 0) return '0%';
+    return `${weeklyPct >= 0 ? '+' : ''}${weeklyPct.toFixed(1)}%`;
+  }, [weeklyPct]);
 
   const barHeightsPct = useMemo(() => {
     const chunk = sessions.slice(0, 5).map((s) => s.summary.totalReps);
@@ -127,11 +158,9 @@ export function HomeScreen() {
     <SafeAreaView style={styles.safe} edges={[]}>
       <RepRightHeader />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.greeting}>
-          {greeting},{' '}
-          <Text style={styles.greetingName}>{displayName}</Text>
-        </Text>
-        <Text style={styles.subGreeting}>{t('home.readyLift')}</Text>
+        <Text style={styles.greeting}>{greeting}</Text>
+        <Text style={styles.greetingName}>{displayName}</Text>
+        <Text style={styles.subGreeting}>{readyLift}</Text>
 
         <PrimaryButton
           title={t('home.startSession')}
@@ -254,9 +283,7 @@ export function HomeScreen() {
           </View>
           <View style={styles.volInner}>
             <View style={styles.volLeft}>
-              <Text style={styles.volPct}>
-                {weeklyPct == null ? '—' : `${weeklyPct >= 0 ? '+' : ''}${weeklyPct.toFixed(1)}%`}
-              </Text>
+              <Text style={styles.volPct}>{weeklyPctLabel}</Text>
               <Text style={styles.volCap}>{t('home.weeklyVolume')}</Text>
               <Text style={styles.volHint}>{t('home.weeklyHint')}</Text>
             </View>
@@ -284,6 +311,13 @@ export function HomeScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <BiomechSurveyPrompt
+        visible={surveyPromptVisible}
+        isGuest={isGuest}
+        accountEmail={email}
+        onDismiss={() => setSurveyPromptVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -302,7 +336,15 @@ const styles = StyleSheet.create({
     letterSpacing: -0.9,
     fontWeight: '700',
   },
-  greetingName: { color: colors.text_primary },
+  greetingName: {
+    marginTop: 4,
+    color: colors.text_primary,
+    fontSize: typography.fontSize.hero - 6,
+    fontFamily: typography.fontFamily.display,
+    lineHeight: (typography.fontSize.hero - 6) * 1.06,
+    letterSpacing: -0.9,
+    fontWeight: '700',
+  },
   subGreeting: {
     marginTop: 10,
     color: colors.text_secondary,

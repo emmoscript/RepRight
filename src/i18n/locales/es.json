@@ -117,8 +117,12 @@
   "home": {
     "greetingMorning": "Buenos días",
     "greetingAfternoon": "Buenas tardes",
-    "greetingEvening": "Buenas noches",
-    "readyLift": "¿LISTO PARA TU SERIE DE HOY?",
+    "greetingEvening": "Buenas tardes",
+    "greetingNight": "Buenas noches",
+    "readyLiftMorning": "¿LISTO PARA TU SERIE DE LA MAÑANA?",
+    "readyLiftAfternoon": "¿LISTO PARA TU SERIE DE LA TARDE?",
+    "readyLiftEvening": "¿LISTO PARA TU SERIE DE ESTA NOCHE?",
+    "readyLiftNight": "¿AÚN A TIEMPO DE ENTRENAR ESTA NOCHE?",
     "startSession": "INICIAR SESIÓN DE PESO MUERTO",
     "lastSession": "ÚLTIMA SESIÓN",
     "noSessionYet": "SIN SESIONES AÚN",
@@ -130,7 +134,17 @@
     "startToLog": "INICIA UN PESO MUERTO PARA VER ACTIVIDAD AQUÍ",
     "weeklyVolume": "AUMENTO DE VOLUMEN SEMANAL",
     "weeklyHint": "Basado en reps registradas en ventanas de 7 días.",
-    "min": "MIN"
+    "min": "MIN",
+    "surveyPrompt": {
+      "kicker": "Universidad Iberoamericana (UNIBE)",
+      "title": "¿Cuánto sabes sobre peso muerto?",
+      "body": "Acabas de probar RepRight. Como parte del estudio de la Universidad Iberoamericana (UNIBE), te invitamos a un cuestionario breve — 10 preguntas de opción múltiple, unos 3 minutos — sobre técnica segura del peso muerto. Tus respuestas son confidenciales y nos ayudan a evaluar la app.",
+      "accountLabel": "Tu cuenta",
+      "emailHint": "En el cuestionario, usa el mismo correo con el que entraste a la app.",
+      "cta": "Responder cuestionario",
+      "opening": "Abriendo…",
+      "later": "Ahora no"
+    }
   },
   "profile": {
     "guestParticipant": "Participante invitado",

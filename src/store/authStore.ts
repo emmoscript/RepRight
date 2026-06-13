@@ -1,4 +1,5 @@
 import { displayNameFromMetadata, pullProfileFromSupabase } from '@/lib/profileSync';
+import { resolveAnonymousGuestLabel } from '@/lib/anonymousGuest';
 import { getAuthRedirectUri } from '@/lib/authRedirect';
 import { createSessionFromAuthUrl } from '@/lib/authDeepLink';
 import { signInWithOAuthProvider } from '@/lib/oauthSignIn';
@@ -37,7 +38,7 @@ type AuthState = {
   signInWithGoogle: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  enterAsGuest: () => void;
+  enterAsGuest: () => Promise<void>;
   restoreSession: () => Promise<void>;
   initAuthListener: () => void;
   resendConfirmationEmail: (email: string) => Promise<void>;
@@ -70,6 +71,10 @@ function mapUser(authUser: SupabaseUser): User {
   };
 }
 
+function researchIdentityFromUser(authUser: SupabaseUser): string {
+  return authUser.email?.trim() || authUser.id;
+}
+
 function applyVerifiedSession(set: (partial: Partial<AuthState>) => void, session: Session) {
   const authUser = session.user;
   if (!isEmailConfirmed(authUser)) {
@@ -79,6 +84,7 @@ function applyVerifiedSession(set: (partial: Partial<AuthState>) => void, sessio
     isLoggedIn: true,
     isGuest: false,
     user: mapUser(authUser),
+    participantId: researchIdentityFromUser(authUser),
     pendingVerificationEmail: null,
     error: null,
   });
@@ -100,15 +106,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  enterAsGuest: () => {
-    set({
-      isGuest: true,
-      isLoggedIn: false,
-      user: null,
-      pendingVerificationEmail: null,
-      participantId: randomParticipant(),
-      error: null,
-    });
+  enterAsGuest: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const label = await resolveAnonymousGuestLabel();
+      set({
+        isGuest: true,
+        isLoggedIn: false,
+        user: null,
+        pendingVerificationEmail: null,
+        participantId: label,
+        error: null,
+        isLoading: false,
+      });
+    } catch {
+      set({
+        isGuest: true,
+        isLoggedIn: false,
+        user: null,
+        pendingVerificationEmail: null,
+        participantId: 'Invitado anónimo',
+        error: null,
+        isLoading: false,
+      });
+    }
   },
 
   signUp: async (email, password, displayName) => {

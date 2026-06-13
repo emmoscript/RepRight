@@ -1,6 +1,7 @@
 import { useIsFocused, useNavigation, useRoute, type NavigationProp, type RouteProp } from '@react-navigation/native';
 import { impactAsync, ImpactFeedbackStyle } from 'expo-haptics';
 import * as Speech from 'expo-speech';
+import { speakFeedbackMessage } from '@/utils/speechFeedback';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -1043,7 +1044,7 @@ export function LiveSessionScreen() {
       }
 
       if (showBn && fb.audioMessage && audioOnRef.current) {
-        Speech.speak(fb.audioMessage);
+        speakFeedbackMessage(fb.audioMessage);
         lastFormAudioAtRef.current = Date.now();
       }
 
