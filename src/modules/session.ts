@@ -8,6 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { WeightUnit } from '@/utils/weightUnits';
+import type { RecordedFormError } from '@/types/recordedFormError';
 
 export interface RepLog {
   repNumber: number;
@@ -38,6 +39,8 @@ export interface SessionLog {
   /** e.g. conventional_deadlift — one log groups all sets from a workout. */
   exercise: string;
   setSummaries: SessionSetSummary[];
+  /** Rep-level form errors with set/rep/phase (saved from live session). */
+  formErrors?: RecordedFormError[];
   sets: {
     setNumber: number;
     reps: RepLog[];

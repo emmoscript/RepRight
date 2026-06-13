@@ -15,7 +15,10 @@ const config: ExpoConfig = {
     infoPlist: {
       NSCameraUsageDescription:
         "RepRight needs camera access to analyze your deadlift form in real time.",
+      NSPhotoLibraryUsageDescription:
+        "RepRight uses your photo library to set a profile picture.",
     },
+    buildNumber: "1",
   },
   android: {
     package: "com.unibe.repright",

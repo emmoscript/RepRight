@@ -1,4 +1,5 @@
 import type { BiomechanicalError, ErrorId } from '@/modules/analyzer';
+import type { SessionLog } from '@/modules/session';
 import type { RecordedFormError } from '@/types/recordedFormError';
 
 export function normalizeRecordedFormError(error: BiomechanicalError): RecordedFormError {
@@ -65,6 +66,30 @@ export function groupFormErrorsByRep(errors: BiomechanicalError[]): FormBreakdow
   });
 }
 
+/** Pull stored form errors from a saved session log (new + legacy formats). */
+export function extractFormErrorsFromSessionLog(log: SessionLog): BiomechanicalError[] {
+  if (log.formErrors?.length) return log.formErrors;
+  const legacy: BiomechanicalError[] = [];
+  for (const st of log.sets ?? []) {
+    for (const rep of st.reps ?? []) {
+      for (const e of rep.errors ?? []) {
+        legacy.push(
+          normalizeRecordedFormError({
+            errorId: e.errorId as BiomechanicalError['errorId'],
+            severity: 'warning',
+            confidence: 0.5,
+            frameTimestamp: rep.startTimestamp,
+            setNumber: st.setNumber,
+            repNumber: rep.repNumber,
+            phase: 'unknown',
+          } as RecordedFormError),
+        );
+      }
+    }
+  }
+  return legacy;
+}
+
 /** Most frequent error types in the session (for focus summary). */
 export function focusErrorIds(errors: BiomechanicalError[]): ErrorId[] {
   const counts = new Map<ErrorId, number>();
@@ -75,4 +100,17 @@ export function focusErrorIds(errors: BiomechanicalError[]): ErrorId[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id);
+}
+
+export type SessionFormFocusSummary = {
+  /** Top 1–2 error types to show on list cards. */
+  previewIds: ErrorId[];
+  /** Total distinct error types in the session. */
+  totalUnique: number;
+};
+
+/** Compact focus summary for Stats session cards. */
+export function summarizeSessionFormFocus(log: SessionLog): SessionFormFocusSummary {
+  const ids = focusErrorIds(extractFormErrorsFromSessionLog(log));
+  return { previewIds: ids.slice(0, 2), totalUnique: ids.length };
 }

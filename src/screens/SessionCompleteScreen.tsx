@@ -32,6 +32,7 @@ import { useSessionResultStore } from "@/store/sessionResultStore";
 import { useSessionSyncStore } from "@/store/sessionSyncStore";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
+import { focusErrorIds, normalizeRecordedFormError } from "@/utils/formBreakdown";
 import {
     deriveSessionReviewDisplay,
     type SessionReviewDisplay,
@@ -56,7 +57,7 @@ function captureSessionReviewDisplay(): SessionReviewDisplay {
     currentSetNumber: resultState.currentSetNumber,
     lastSetReps: resultState.lastSetReps,
     lastSetElapsedSec: resultState.lastSetElapsedSec,
-    errors: [...resultState.errors],
+    errors: [...resultState.workoutFormErrors, ...resultState.errors],
     workoutSetSnapshots: [...resultState.workoutSetSnapshots],
     planSlice: {
       customSetPlan: configState.customSetPlan,
@@ -238,12 +239,14 @@ export function SessionCompleteScreen() {
       elapsedSec: row.elapsedSec,
       formScore: row.formScore,
     }));
+    const allFormErrors = errors.map(normalizeRecordedFormError);
     const log: SessionLog = {
       sessionId,
       participantId,
       date: new Date().toISOString(),
       exercise,
       setSummaries,
+      formErrors: allFormErrors,
       sets: setSummaries.map((st) => ({
         setNumber: st.setNumber,
         reps: [
@@ -272,7 +275,7 @@ export function SessionCompleteScreen() {
         formScore: metrics.formScore,
         completionPct: metrics.completionPct,
         avgScore: metrics.overallScore,
-        mostFrequentError: errors[0]?.errorId ?? null,
+        mostFrequentError: focusErrorIds(errors)[0] ?? null,
       },
     };
 

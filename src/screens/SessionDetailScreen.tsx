@@ -1,28 +1,22 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FormBreakdownCard } from '@/components/session/FormBreakdownCard';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { getSession, type SessionLog } from '@/modules/session';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
+import { extractFormErrorsFromSessionLog } from '@/utils/formBreakdown';
 import { exerciseDisplayName } from '@/utils/statsFilters';
+import { weightUnitSuffix } from '@/utils/weightUnits';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'SessionDetail'>;
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-function fmtElapsed(sec: number) {
-  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-}
 
 function scoreColor(sc: number) {
   if (sc >= 90) return colors.primary_green;
@@ -40,6 +34,7 @@ function legacySummary(log: SessionLog) {
 }
 
 export function SessionDetailScreen() {
+  const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const route = useRoute<Route>();
   const [log, setLog] = useState<SessionLog | null>(null);
@@ -48,10 +43,20 @@ export function SessionDetailScreen() {
     void getSession(route.params.sessionId).then(setLog);
   }, [route.params.sessionId]);
 
+  const shortMonths = useMemo(
+    () => t('months.short', { returnObjects: true }) as string[],
+    [t],
+  );
+
+  const formErrors = useMemo(
+    () => (log ? extractFormErrorsFromSessionLog(log) : []),
+    [log],
+  );
+
   if (!log) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.loading}>Loading…</Text>
+        <Text style={styles.loading}>{t('sessionDetail.loading')}</Text>
       </SafeAreaView>
     );
   }
@@ -71,57 +76,85 @@ export function SessionDetailScreen() {
 
   const accent = scoreColor(summary.avgScore);
 
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    const month = shortMonths[d.getMonth()] ?? '';
+    return `${month} ${d.getDate()}, ${d.getFullYear()} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const fmtElapsed = (sec: number) =>
+    `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+
+  const fmtWeight = (amount: number, unit: string) => {
+    const rounded = Math.round(amount * 10) / 10;
+    const body = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1);
+    return `${body} ${weightUnitSuffix(unit === 'kg' ? 'kg' : 'lb')}`;
+  };
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable onPress={() => nav.goBack()} style={styles.backBtn} accessibilityLabel="Go back">
+          <Pressable
+            onPress={() => nav.goBack()}
+            style={styles.backBtn}
+            accessibilityLabel={t('sessionDetail.goBack')}
+          >
             <Ionicons name="chevron-back" size={24} color={colors.text_primary} />
           </Pressable>
-          <Text style={styles.topTitle}>Session detail</Text>
+          <Text style={styles.topTitle}>{t('sessionDetail.title')}</Text>
           <View style={styles.backBtnSpacer} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.exercise}>{exerciseDisplayName(log.exercise || 'conventional_deadlift')}</Text>
+          <Text style={styles.exercise}>
+            {exerciseDisplayName(log.exercise || 'conventional_deadlift')}
+          </Text>
           <Text style={styles.date}>{fmtDate(log.date)}</Text>
 
           <View style={styles.scoreCard}>
-            <Text style={styles.scoreLab}>Performance</Text>
-            <Text style={[styles.scoreNum, { color: accent }]}>{Math.round(summary.avgScore)}%</Text>
+            <Text style={styles.scoreLab}>{t('sessionDetail.performance')}</Text>
+            <Text style={[styles.scoreNum, { color: accent }]}>
+              {Math.round(summary.avgScore)}%
+            </Text>
             <View style={styles.scoreRow}>
-              <MetricChip label="Form" value={`${Math.round(summary.formScore)}%`} />
-              <MetricChip label="Reps" value={`${summary.totalReps}/${summary.plannedReps}`} />
-              <MetricChip label="Completion" value={`${Math.round(summary.completionPct)}%`} />
+              <MetricChip label={t('sessionComplete.form')} value={`${Math.round(summary.formScore)}%`} />
+              <View style={styles.metricDivider} />
+              <MetricChip
+                label={t('common.reps')}
+                value={`${summary.totalReps}/${summary.plannedReps}`}
+              />
+              <View style={styles.metricDivider} />
+              <MetricChip
+                label={t('sessionComplete.completion')}
+                value={`${Math.round(summary.completionPct)}%`}
+              />
             </View>
           </View>
 
-          <Text style={styles.sectionLab}>Sets</Text>
+          <Text style={styles.sectionLab}>{t('sessionDetail.sets')}</Text>
           {sets.map((row) => {
             const repOk = row.repsCompleted >= row.repsPlanned;
             return (
               <View key={row.setNumber} style={styles.setRow}>
-                <View style={styles.setRowTop}>
-                  <Text style={styles.setNum}>Set {row.setNumber}</Text>
-                  <Text style={[styles.setReps, !repOk && styles.setRepsWarn]}>
-                    {row.repsCompleted}/{row.repsPlanned} reps
+                <View style={styles.setRowLeft}>
+                  <Text style={styles.setNum}>
+                    {t('deadliftConfigure.setLabel', { n: row.setNumber })}
+                  </Text>
+                  <Text style={styles.setMeta}>
+                    {row.weightAmount > 0 ? `${fmtWeight(row.weightAmount, row.weightUnit)} · ` : ''}
+                    {t('sessionComplete.form')} {row.formScore}%
+                    {row.elapsedSec > 0 ? ` · ${fmtElapsed(row.elapsedSec)}` : ''}
                   </Text>
                 </View>
-                <Text style={styles.setMeta}>
-                  {row.weightAmount > 0 ? `${row.weightAmount} ${row.weightUnit} · ` : ''}
-                  Form {row.formScore}%
-                  {row.elapsedSec > 0 ? ` · ${fmtElapsed(row.elapsedSec)}` : ''}
+                <Text style={[styles.setReps, !repOk && styles.setRepsWarn]}>
+                  {row.repsCompleted}/{row.repsPlanned} {t('common.repsLower')}
                 </Text>
               </View>
             );
           })}
 
-          {summary.mostFrequentError ? (
-            <>
-              <Text style={styles.sectionLab}>Top issue</Text>
-              <Text style={styles.errorTxt}>{summary.mostFrequentError}</Text>
-            </>
-          ) : null}
+          <FormBreakdownCard errors={formErrors} variant="compact" style={styles.breakdownCard} />
 
           <View style={{ height: 48 }} />
         </ScrollView>
@@ -194,16 +227,40 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.display,
     fontSize: 48,
   },
-  scoreRow: { flexDirection: 'row', gap: 10, marginTop: 16, flexWrap: 'wrap' },
-  chip: {
+  scoreRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginTop: 16,
     backgroundColor: colors.bg_elevated,
     borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    minWidth: 88,
+    overflow: 'hidden',
   },
-  chipLab: { color: colors.text_muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
-  chipVal: { marginTop: 4, color: colors.text_primary, fontFamily: typography.fontFamily.bold, fontSize: 15 },
+  metricDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border_subtle,
+    marginVertical: 10,
+  },
+  chip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+  },
+  chipLab: {
+    color: colors.text_muted,
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
+  chipVal: {
+    marginTop: 4,
+    color: colors.text_primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 15,
+    textAlign: 'center',
+  },
   sectionLab: {
     marginTop: 28,
     marginBottom: 10,
@@ -213,16 +270,30 @@ const styles = StyleSheet.create({
     letterSpacing: typography.letterSpacing.capsWide,
     textTransform: 'uppercase',
   },
+  breakdownCard: {
+    marginTop: 28,
+  },
   setRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.bg_elevated,
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
   },
-  setRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  setRowLeft: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
   setNum: { color: colors.text_primary, fontFamily: typography.fontFamily.bold, fontSize: 16 },
-  setReps: { color: colors.primary_green, fontFamily: typography.fontFamily.bold, fontSize: 15 },
+  setReps: {
+    color: colors.primary_green,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 15,
+    textAlign: 'right',
+    flexShrink: 0,
+  },
   setRepsWarn: { color: colors.accent_yellow },
   setMeta: { marginTop: 6, color: colors.text_secondary, fontSize: 13 },
-  errorTxt: { color: colors.text_secondary, fontSize: 14, fontFamily: typography.fontFamily.medium },
 });

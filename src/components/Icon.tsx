@@ -32,6 +32,7 @@ export const ICONS = {
   videocam: 'videocam' as const,
   videocamOutline: 'videocam-outline' as const,
   arrowForward: 'arrow-forward' as const,
+  chevronForward: 'chevron-forward' as const,
   arrowForwardCircle: 'arrow-forward-circle' as const,
   informationOutline: 'information-circle-outline' as const,
   informationCircle: 'information-circle' as const,

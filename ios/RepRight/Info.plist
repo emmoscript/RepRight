@@ -53,6 +53,8 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>RepRight needs camera access to analyze your deadlift form in real time.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>RepRight uses your photo library to set a profile picture.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>RCTRootViewBackgroundColor</key>

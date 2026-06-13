@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RepRightHeader } from '@/components/RepRightHeader';
+import { Icon, ICONS } from '@/components/Icon';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
 import { colors } from '@/theme/colors';
@@ -23,6 +24,7 @@ import {
   groupSessionsByExercise,
   type StatsFilterKind,
 } from '@/utils/statsFilters';
+import { summarizeSessionFormFocus } from '@/utils/formBreakdown';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -32,15 +34,30 @@ function sessionPerformance(log: SessionLog): number {
   return Math.round(log.summary.avgScore);
 }
 
-function sessionRepsLabel(log: SessionLog): string {
+function sessionRepsCompleted(log: SessionLog): { done: number; planned: number } {
   const s = log.summary;
-  const planned = s.plannedReps ?? s.totalReps;
-  return `${s.totalReps}/${planned} reps`;
+  return { done: s.totalReps, planned: s.plannedReps ?? s.totalReps };
 }
 
 function fmtCardDate(iso: string, months: string[]): string {
   const d = new Date(iso);
-  return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function fmtCardTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function sessionFormFocusChipText(
+  focus: ReturnType<typeof summarizeSessionFormFocus>,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const { previewIds, totalUnique } = focus;
+  if (totalUnique === 0) return t('stats.cleanForm');
+  const issues = previewIds.map((id) => t(`formErrorTitles.${id}`)).join(' · ');
+  if (totalUnique <= 2) return issues;
+  return t('stats.formIssuesMore', { issues, count: totalUnique - 2 });
 }
 
 function scoreAccent(sc: number) {
@@ -137,30 +154,15 @@ export function StatsScreen() {
             return (
               <View key={exerciseId} style={styles.section}>
                 <Text style={styles.secTitle}>{t('stats.sessionsTitle', { exercise: title })}</Text>
-                {visible.map((item) => {
-                  const sc = sessionPerformance(item);
-                  const accent = scoreAccent(sc);
-                  const setCount = item.setSummaries?.length ?? item.sets.length;
-                  return (
-                    <Pressable
-                      key={item.sessionId}
-                      onPress={() => nav.navigate('SessionDetail', { sessionId: item.sessionId })}
-                      style={({ pressed }) => [
-                        styles.card,
-                        { borderLeftColor: sc >= 70 ? colors.primary_green : colors.accent_red },
-                        pressed && styles.cardPressed,
-                      ]}
-                    >
-                      <Text style={styles.cardDate}>{fmtCardDate(item.date, longMonths)}</Text>
-                      <Text style={styles.cardMuted}>
-                        {t('stats.setCount', { count: setCount, reps: sessionRepsLabel(item) })}
-                      </Text>
-                      <View style={[styles.badge, { backgroundColor: accent + '18', borderColor: accent + '30' }]}>
-                        <Text style={[styles.badgeTxt, { color: accent }]}>{sc}%</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
+                {visible.map((item) => (
+                  <SessionCard
+                    key={item.sessionId}
+                    item={item}
+                    longMonths={longMonths}
+                    onPress={() => nav.navigate('SessionDetail', { sessionId: item.sessionId })}
+                    t={t}
+                  />
+                ))}
                 {hasMore ? (
                   <Pressable onPress={() => toggleExpanded(exerciseId)} style={styles.seeMoreBtn}>
                     <Text style={styles.seeMoreTxt}>
@@ -192,6 +194,91 @@ function Pill(props: { tab: string; selected: boolean; onPress: () => void }) {
   );
 }
 
+function SessionCard(props: {
+  item: SessionLog;
+  longMonths: string[];
+  onPress: () => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const { item, longMonths, onPress, t } = props;
+  const sc = sessionPerformance(item);
+  const accent = scoreAccent(sc);
+  const setCount = item.setSummaries?.length ?? item.sets.length;
+  const reps = sessionRepsCompleted(item);
+  const focus = summarizeSessionFormFocus(item);
+  const focusText = sessionFormFocusChipText(focus, t);
+  const hasFormIssues = focus.totalUnique > 0;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      accessibilityRole="button"
+    >
+      <View style={[styles.cardAccentTop, { backgroundColor: accent }]} />
+
+      <View style={styles.cardBody}>
+        <View style={styles.cardTopRow}>
+          <View style={styles.cardMeta}>
+            <Text style={styles.cardTime}>{fmtCardTime(item.date)}</Text>
+            <Text style={styles.cardDate}>{fmtCardDate(item.date, longMonths)}</Text>
+          </View>
+          <View style={styles.cardChevron}>
+            <Icon name={ICONS.chevronForward} size={18} color={colors.text_muted} />
+          </View>
+        </View>
+
+        <View style={styles.cardMetrics}>
+          <MetricCell
+            label={t('stats.scoreLabel')}
+            value={`${sc}%`}
+            valueColor={accent}
+            highlight
+          />
+          <View style={styles.metricDivider} />
+          <MetricCell label={t('common.sets')} value={String(setCount)} />
+          <View style={styles.metricDivider} />
+          <MetricCell label={t('common.reps')} value={`${reps.done}/${reps.planned}`} />
+        </View>
+
+        <View
+          style={[
+            styles.focusChip,
+            hasFormIssues ? styles.focusChipWarn : styles.focusChipOk,
+          ]}
+        >
+          <Icon
+            name={hasFormIssues ? ICONS.warning : ICONS.checkmark}
+            size={14}
+            color={hasFormIssues ? colors.accent_yellow : colors.primary_green}
+          />
+          <Text
+            style={[styles.focusChipTxt, hasFormIssues ? styles.focusChipTxtWarn : styles.focusChipTxtOk]}
+            numberOfLines={2}
+          >
+            {focusText}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function MetricCell(props: {
+  label: string;
+  value: string;
+  valueColor?: string;
+  highlight?: boolean;
+}) {
+  const { label, value, valueColor = colors.text_primary, highlight = false } = props;
+  return (
+    <View style={[styles.metricCell, highlight && styles.metricCellHighlight]}>
+      <Text style={styles.metricCellLab}>{label}</Text>
+      <Text style={[styles.metricCellVal, { color: valueColor }]}>{value}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg_v3 },
   scroll: { paddingHorizontal: 24, paddingBottom: 32 },
@@ -206,19 +293,25 @@ const styles = StyleSheet.create({
   meta: { marginTop: 8, color: colors.text_muted, fontSize: typography.fontSize.bodySm },
   filt: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     marginTop: 20,
     marginBottom: 8,
   },
   pillBase: {
-    paddingVertical: 9,
-    paddingHorizontal: 16,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: 999,
   },
   pillOn: { backgroundColor: colors.primary_green },
   pillOff: { backgroundColor: colors.bg_high },
-  pillTxt: { fontFamily: typography.fontFamily.display, fontSize: typography.fontSize.captionCaps + 2, letterSpacing: 1.6 },
+  pillTxt: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.captionCaps,
+    letterSpacing: 1.2,
+    textAlign: 'center',
+  },
   pillTxtOff: { color: colors.text_secondary, textTransform: 'uppercase' },
   pillTxtOn: { color: colors.text_on_green, textTransform: 'uppercase' },
   peakCard: {
@@ -259,47 +352,135 @@ const styles = StyleSheet.create({
   section: { marginTop: 28 },
   secTitle: {
     marginBottom: 14,
-    color: colors.text_primary,
-    fontFamily: typography.fontFamily.bold,
-    fontSize: 16,
+    color: colors.text_secondary,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 11,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
   },
   card: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.bg_elevated,
-    borderRadius: 14,
-    padding: 18,
+    backgroundColor: colors.surface_v3,
+    borderRadius: 16,
     marginBottom: 12,
-    borderLeftWidth: 5,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border_subtle,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: colors.border_subtle,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border_subtle,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border_subtle,
   },
-  cardPressed: { opacity: 0.88 },
-  cardDate: {
+  cardPressed: { opacity: 0.92, transform: [{ scale: 0.992 }] },
+  cardAccentTop: {
+    height: 3,
+    width: '100%',
+  },
+  cardBody: {
+    paddingTop: 14,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  cardMeta: {
     flex: 1,
-    minWidth: '40%',
-    fontFamily: typography.fontFamily.bold,
+    minWidth: 0,
+    paddingRight: 12,
+  },
+  cardChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.bg_high,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTime: {
+    color: colors.text_muted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 10,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+    textAlign: 'left',
+  },
+  cardDate: {
+    fontFamily: typography.fontFamily.display,
     color: colors.text_primary,
     fontSize: 17,
+    letterSpacing: -0.4,
+    textAlign: 'left',
   },
-  cardMuted: { width: '100%', color: colors.text_secondary, fontSize: 13, marginBottom: -4 },
-  badge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
+  cardMetrics: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginTop: 14,
+    backgroundColor: colors.bg_high,
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 72,
   },
-  badgeTxt: {
-    fontFamily: typography.fontFamily.bold,
-    fontSize: typography.fontSize.captions,
-    letterSpacing: 0.5,
+  metricCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
   },
+  metricCellHighlight: {
+    backgroundColor: colors.bg_elevated,
+  },
+  metricCellLab: {
+    color: colors.text_muted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  metricCellVal: {
+    marginTop: 6,
+    color: colors.text_primary,
+    fontFamily: typography.fontFamily.display,
+    fontSize: 20,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  metricDivider: {
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border_subtle,
+    marginVertical: 12,
+  },
+  focusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    minHeight: 36,
+  },
+  focusChipOk: {
+    backgroundColor: colors.green_subtle_bg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.primary_green + '33',
+  },
+  focusChipWarn: {
+    backgroundColor: colors.warning_subtle,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.accent_yellow + '33',
+  },
+  focusChipTxt: {
+    flexShrink: 1,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 11,
+    lineHeight: 15,
+    textAlign: 'left',
+  },
+  focusChipTxtOk: { color: colors.accent_green_light },
+  focusChipTxtWarn: { color: colors.text_secondary },
   seeMoreBtn: {
     alignSelf: 'flex-start',
     paddingVertical: 10,

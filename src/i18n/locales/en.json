@@ -300,8 +300,21 @@
     "empty": "No sessions in this period — complete a live lift to populate the rep log.",
     "sessionsTitle": "{{exercise}} sessions",
     "setCount": "{{count}} set(s) · {{reps}}",
+    "cleanForm": "Clean form",
+    "formFocus": "Focus: {{issues}}",
+    "formFocusMore": "Focus: {{issues}} +{{count}} more",
+    "formIssuesMore": "{{issues}} +{{count}} more",
+    "scoreLabel": "Score",
     "showLess": "Show less",
     "seeAll": "See all ({{count}})"
+  },
+  "sessionDetail": {
+    "title": "Session detail",
+    "loading": "Loading…",
+    "goBack": "Go back",
+    "performance": "Performance",
+    "sets": "Sets",
+    "moreFormIssues": "+ {{count}} more rep(s) with notes"
   },
   "formErrors": {
     "ERR_001": "Engage your lats. Drive chest up.",

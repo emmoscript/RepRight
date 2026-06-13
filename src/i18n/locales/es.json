@@ -300,8 +300,21 @@
     "empty": "Sin sesiones en este periodo — completa un levantamiento en vivo para llenar el registro.",
     "sessionsTitle": "Sesiones de {{exercise}}",
     "setCount": "{{count}} serie(s) · {{reps}}",
+    "cleanForm": "Técnica limpia",
+    "formFocus": "Enfoque: {{issues}}",
+    "formFocusMore": "Enfoque: {{issues}} +{{count}} más",
+    "formIssuesMore": "{{issues}} +{{count}} más",
+    "scoreLabel": "Puntuación",
     "showLess": "Ver menos",
     "seeAll": "Ver todo ({{count}})"
+  },
+  "sessionDetail": {
+    "title": "Detalle de sesión",
+    "loading": "Cargando…",
+    "goBack": "Volver",
+    "performance": "Rendimiento",
+    "sets": "Series",
+    "moreFormIssues": "+ {{count}} rep(s) más con notas"
   },
   "formErrors": {
     "ERR_001": "Activa dorsales. Sube el pecho.",

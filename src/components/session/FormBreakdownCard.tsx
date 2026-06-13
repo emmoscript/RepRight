@@ -9,6 +9,8 @@ import { typography } from '@/theme/typography';
 import type { RecordedFormError } from '@/types/recordedFormError';
 import { focusErrorIds, groupFormErrorsByRep } from '@/utils/formBreakdown';
 
+const COMPACT_GROUP_LIMIT = 4;
+
 function severityColor(severity: RecordedFormError['severity']): string {
   if (severity === 'critical') return colors.accent_red;
   if (severity === 'warning') return colors.accent_yellow;
@@ -17,16 +19,21 @@ function severityColor(severity: RecordedFormError['severity']): string {
 
 type Props = {
   errors: BiomechanicalError[];
+  variant?: 'full' | 'compact';
+  style?: object;
 };
 
-export function FormBreakdownCard({ errors }: Props) {
+export function FormBreakdownCard({ errors, variant = 'full', style }: Props) {
   const { t } = useTranslation();
   const groups = groupFormErrorsByRep(errors);
   const focus = focusErrorIds(errors);
+  const compact = variant === 'compact';
+  const visibleGroups = compact ? groups.slice(0, COMPACT_GROUP_LIMIT) : groups;
+  const hiddenCount = compact ? Math.max(0, groups.length - COMPACT_GROUP_LIMIT) : 0;
 
   if (groups.length === 0) {
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, style]}>
         <View style={styles.titleRow}>
           <MaterialIcons name="analytics" size={22} color={colors.primary_green} />
           <Text style={styles.title}>{t('sessionComplete.formBreakdown')}</Text>
@@ -37,24 +44,25 @@ export function FormBreakdownCard({ errors }: Props) {
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, compact && styles.cardCompact, style]}>
       <View style={styles.titleRow}>
         <MaterialIcons name="analytics" size={22} color={colors.primary_green} />
         <Text style={styles.title}>{t('sessionComplete.formBreakdown')}</Text>
       </View>
 
       {focus.length > 0 ? (
-        <View style={styles.focusBlock}>
+        <View style={[styles.focusBlock, compact && styles.focusBlockCompact]}>
           <Text style={styles.focusTitle}>{t('sessionComplete.focusTitle')}</Text>
-          {focus.slice(0, 3).map((id) => (
-            <Text key={id} style={styles.focusLine}>
-              · {t(`formErrorTitles.${id}`)}
-            </Text>
-          ))}
+          <Text style={styles.focusLine} numberOfLines={compact ? 2 : 3}>
+            {focus
+              .slice(0, compact ? 2 : 3)
+              .map((id) => t(`formErrorTitles.${id}`))
+              .join(' · ')}
+          </Text>
         </View>
       ) : null}
 
-      {groups.map((group) => (
+      {visibleGroups.map((group) => (
         <View
           key={`${group.setNumber}-${group.repNumber}`}
           style={styles.repBlock}
@@ -68,10 +76,21 @@ export function FormBreakdownCard({ errors }: Props) {
                 })}
           </Text>
           {group.errors.map((err) => (
-            <FormErrorRow key={`${err.errorId}-${err.frameTimestamp}`} error={err} t={t} />
+            <FormErrorRow
+              key={`${err.errorId}-${err.frameTimestamp}`}
+              error={err}
+              t={t}
+              compact={compact}
+            />
           ))}
         </View>
       ))}
+
+      {hiddenCount > 0 ? (
+        <Text style={styles.moreHint}>
+          {t('sessionDetail.moreFormIssues', { count: hiddenCount })}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -79,13 +98,14 @@ export function FormBreakdownCard({ errors }: Props) {
 function FormErrorRow({
   error,
   t,
+  compact,
 }: {
   error: RecordedFormError;
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  compact: boolean;
 }) {
   const dot = severityColor(error.severity);
-  const phaseKey = `formPhases.${error.phase}` as const;
-  const phaseLabel = t(phaseKey);
+  const phaseLabel = t(`formPhases.${error.phase}`);
 
   return (
     <View style={styles.errorRow}>
@@ -93,7 +113,9 @@ function FormErrorRow({
       <View style={styles.errorBody}>
         <Text style={styles.errorTitle}>{t(`formErrorTitles.${error.errorId}`)}</Text>
         <Text style={styles.errorMeta}>{phaseLabel}</Text>
-        <Text style={styles.errorFix}>{t(`formErrors.${error.errorId}`)}</Text>
+        {!compact ? (
+          <Text style={styles.errorFix}>{t(`formErrors.${error.errorId}`)}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -105,6 +127,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg_elevated,
     borderRadius: 12,
     padding: 18,
+  },
+  cardCompact: {
+    marginTop: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -125,24 +150,30 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   focusBlock: {
-    marginBottom: 14,
-    padding: 12,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderRadius: 10,
     backgroundColor: colors.surface_v3,
+  },
+  focusBlockCompact: {
+    marginBottom: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
   },
   focusTitle: {
     color: colors.text_muted,
     fontFamily: typography.fontFamily.bold,
-    fontSize: 11,
-    letterSpacing: 1.2,
+    fontSize: 10,
+    letterSpacing: 1.1,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 3,
   },
   focusLine: {
     color: colors.text_primary,
     fontFamily: typography.fontFamily.medium,
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 16,
   },
   repBlock: {
     marginTop: 10,
@@ -191,5 +222,11 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     fontSize: 13,
     lineHeight: 19,
+  },
+  moreHint: {
+    marginTop: 8,
+    color: colors.text_muted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: 12,
   },
 });

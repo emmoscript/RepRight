@@ -435,7 +435,7 @@ export function LiveSessionScreen() {
       currentSetNumber: resultState.currentSetNumber,
       lastSetReps: repCount,
       lastSetElapsedSec: elapsed,
-      errors: [...resultState.errors],
+      errors: [...resultState.workoutFormErrors, ...resultState.errors],
       workoutSetSnapshots: [...resultState.workoutSetSnapshots],
       planSlice: {
         customSetPlan: configState.customSetPlan,

@@ -23,6 +23,8 @@ type SessionResultState = {
   currentSetNumber: number;
   /** Finished sets earlier in this workout row (shown before advancing). */
   workoutSetSnapshots: WorkoutSetSnapshot[];
+  /** Form errors from sets already completed in this workout row. */
+  workoutFormErrors: RecordedFormError[];
   /** Immutable summary for Session Complete (survives LiveSession remount / clearResults races). */
   sessionReview: SessionReviewSnapshot | null;
   setStartedAt: (t: number) => void;
@@ -42,6 +44,7 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
   lastSetElapsedSec: 0,
   currentSetNumber: 1,
   workoutSetSnapshots: [],
+  workoutFormErrors: [],
   sessionReview: null,
   setStartedAt: (t) => set({ startedAt: t }),
   addErrors: (e) => set((s) => ({ errors: s.errors.concat(e) })),
@@ -55,6 +58,7 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
   advanceToNextSet: () =>
     set((s) => ({
       currentSetNumber: s.currentSetNumber + 1,
+      workoutFormErrors: [...s.workoutFormErrors, ...s.errors],
       errors: [],
       lastSetReps: 0,
       lastSetElapsedSec: 0,
@@ -65,6 +69,7 @@ export const useSessionResultStore = create<SessionResultState>((set) => ({
     set({
       startedAt: Date.now(),
       errors: [],
+      workoutFormErrors: [],
       lastSetReps: 0,
       lastSetElapsedSec: 0,
       currentSetNumber: 1,
