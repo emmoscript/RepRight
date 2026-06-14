@@ -1,12 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SUPPORT_EMAIL } from '@/constants/legal';
+import { getDiagReport, hydrateCrashDiag } from '@/lib/crashDiag';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
@@ -16,10 +17,21 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function SupportScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
+  const [diagPreview, setDiagPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    void hydrateCrashDiag().then(() => setDiagPreview(getDiagReport()));
+  }, []);
 
   const openEmail = () => {
     const subject = encodeURIComponent('RepRight Support');
     void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}`);
+  };
+
+  const shareDiagnostics = () => {
+    const report = getDiagReport();
+    setDiagPreview(report);
+    void Share.share({ message: report, title: 'RepRight diagnostics' });
   };
 
   return (
@@ -58,6 +70,21 @@ export function SupportScreen() {
           <Ionicons name="school-outline" size={28} color={colors.primary_green} />
           <Text style={styles.cardTitle}>{t('support.researchTitle')}</Text>
           <Text style={styles.cardBody}>{t('support.researchBody')}</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Ionicons name="bug-outline" size={28} color={colors.primary_green} />
+          <Text style={styles.cardTitle}>{t('support.diagTitle')}</Text>
+          <Text style={styles.cardBody}>{t('support.diagBody')}</Text>
+          <Pressable style={styles.emailBtn} accessibilityRole="button" onPress={shareDiagnostics}>
+            <Text style={styles.emailTxt}>{t('support.diagShare')}</Text>
+            <Ionicons name="share-outline" size={16} color={colors.primary_green} />
+          </Pressable>
+          {diagPreview ? (
+            <Text style={styles.diagPreview} selectable numberOfLines={8}>
+              {diagPreview}
+            </Text>
+          ) : null}
         </View>
 
         <Text style={styles.footer}>{t('support.footer')}</Text>
@@ -112,6 +139,13 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.medium,
     fontSize: typography.fontSize.body,
     color: colors.primary_green,
+  },
+  diagPreview: {
+    marginTop: 12,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: 11,
+    color: colors.text_muted,
+    lineHeight: 16,
   },
   footer: {
     marginTop: 8,

@@ -1,8 +1,9 @@
 import 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
-import { installGlobalErrorHandler } from './src/lib/lastError';
+import { hydrateCrashDiag, installCrashDiagnostics } from './src/lib/crashDiag';
 import App from './App';
 
-installGlobalErrorHandler();
+installCrashDiagnostics();
+void hydrateCrashDiag();
 
 registerRootComponent(App);

@@ -13,12 +13,16 @@ import {
   InteractionManager,
   LayoutChangeEvent,
   Linking,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
 } from 'react-native';
+
+import { LiveSessionErrorBoundary } from '@/components/LiveSessionErrorBoundary';
+import { diagBreadcrumb } from '@/lib/crashDiag';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera, type Orientation } from 'react-native-vision-camera';
@@ -315,7 +319,14 @@ export function LiveSessionScreen() {
   const [modelInitDone, setModelInitDone] = useState(false);
   /** Defer camera pipeline until navigation + ScrollView teardown finish (iOS Release Reanimated crash). */
   const [pipelineReady, setPipelineReady] = useState(false);
+  /** iOS Release: preview-only camera first, then remount with frame processor (avoids FP + transition race). */
+  const [inferMounted, setInferMounted] = useState(false);
   const [searchDotPhase, setSearchDotPhase] = useState(0);
+
+  useEffect(() => {
+    diagBreadcrumb('live_session:mount', { continuedWorkout });
+    return () => diagBreadcrumb('live_session:unmount');
+  }, [continuedWorkout]);
   const [cameraWarmupExpired, setCameraWarmupExpired] = useState(false);
   const [liveFormBanner, setLiveFormBanner] = useState<{
     message: string;
@@ -472,7 +483,10 @@ export function LiveSessionScreen() {
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        if (!cancelled) setPipelineReady(true);
+        if (!cancelled) {
+          setPipelineReady(true);
+          diagBreadcrumb('live_session:pipeline_ready');
+        }
       });
     });
     return () => {
@@ -481,6 +495,26 @@ export function LiveSessionScreen() {
       setPipelineReady(false);
     };
   }, [isFocused, modelInitDone, cameraGranted, device]);
+
+  /** iOS Release: preview camera first, then remount with frame processor after settle delay. */
+  useEffect(() => {
+    const canMount = cameraGranted && device != null && modelInitDone && pipelineReady;
+    const wantsInfer = modelReady && !useMock;
+    if (!canMount || !wantsInfer) {
+      setInferMounted(false);
+      return;
+    }
+    if (Platform.OS === 'ios' && !__DEV__) {
+      setInferMounted(false);
+      const t = setTimeout(() => {
+        setInferMounted(true);
+        diagBreadcrumb('live_session:infer_mount');
+      }, 700);
+      return () => clearTimeout(t);
+    }
+    setInferMounted(true);
+    diagBreadcrumb('live_session:infer_mount');
+  }, [cameraGranted, device, modelInitDone, pipelineReady, modelReady, useMock]);
 
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -520,6 +554,7 @@ export function LiveSessionScreen() {
         setUseMock(__DEV__ && !ready);
         sessionTrace.model(ready ? 'ready' : 'unavailable', { ok, ready });
         if (__DEV__ && !ready) sessionTrace.model('mock_fallback');
+        diagBreadcrumb('live_session:model_init', { ok, ready });
       } finally {
         setModelInitDone(true);
       }
@@ -1362,6 +1397,9 @@ export function LiveSessionScreen() {
   // ── Derived values ─────────────────────────────────────────────────────────
   const showStop = sessionActive && (flow === 'active' || flow === 'pose_lost');
   const enableInference = modelReady && !useMock;
+  const pipelineInferOn =
+    enableInference && (Platform.OS !== 'ios' || __DEV__ || inferMounted);
+  const pipelineKey = pipelineInferOn ? 'infer' : 'preview';
 
   const poseValid = uiPose != null && isPoseValid(uiPose);
   const skColor =
@@ -1420,13 +1458,15 @@ export function LiveSessionScreen() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
+    <LiveSessionErrorBoundary onBack={() => navigation.goBack()}>
     <View style={styles.root} onLayout={onLayout}>
       {canMountCamera && device ? (
         <LiveSessionCameraPipeline
+          key={pipelineKey}
           device={device}
           isActive={isFocused && canMountCamera}
           portraitVideoAspectRatio={portraitVideoAspectRatio}
-          enableInference={enableInference}
+          enableInference={pipelineInferOn}
           onFrameBytesRef={onResizedFrameRef}
         />
       ) : (
@@ -1700,6 +1740,7 @@ export function LiveSessionScreen() {
         </Pressable>
       ) : null}
     </View>
+    </LiveSessionErrorBoundary>
   );
 }
 

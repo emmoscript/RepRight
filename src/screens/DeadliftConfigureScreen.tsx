@@ -2,13 +2,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, InteractionManager, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { REPS_PER_SET_MAX, REPS_PER_SET_MIN, RepsSlider } from '@/components/RepsSlider';
 import { SetPlanRow } from '@/components/SetPlanRow';
 import type { WorkoutStackNav } from '@/navigation/routeTypes';
+import { diagBreadcrumb } from '@/lib/crashDiag';
 import { useSessionConfigStore } from '@/store/sessionConfigStore';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { colors } from '@/theme/colors';
@@ -75,6 +76,16 @@ export function DeadliftConfigureScreen() {
       unit: unitLabel,
     });
   }, [customSetPlan, numSets, repsPerSet, setPlans, weightAmount, unitLabel, t]);
+
+  const startLiveSession = useCallback(() => {
+    diagBreadcrumb('deadlift_configure:start_session_tap');
+    InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        diagBreadcrumb('deadlift_configure:navigate_live_session');
+        nav.navigate('LiveSession');
+      });
+    });
+  }, [nav]);
 
   return (
     <View style={styles.root}>
@@ -195,7 +206,7 @@ export function DeadliftConfigureScreen() {
 
           <Text style={styles.footerNote}>{t('deadliftConfigure.footerNote')}</Text>
 
-          <PrimaryButton title={t('deadliftConfigure.startSession')} onPress={() => nav.navigate('LiveSession')} style={styles.startBtn} />
+          <PrimaryButton title={t('deadliftConfigure.startSession')} onPress={startLiveSession} style={styles.startBtn} />
           <View style={{ height: 104 }} />
         </ScrollView>
       </SafeAreaView>

@@ -208,6 +208,9 @@
     "helpBody": "Para el análisis de forma, coloca el teléfono a 1,5–2 m con vista lateral completa del cuerpo. Usa buena iluminación y mantén la barra en cuadro. La retroalimentación generada por la app puede ser imprecisa y no debe usarse como sustituto de entrenamiento profesional ni asesoramiento médico.",
     "researchTitle": "Proyecto de investigación",
     "researchBody": "RepRight se desarrolla en la Universidad Iberoamericana (UNIBE) para investigación académica sobre análisis de forma del ejercicio con visión por computadora en el dispositivo.",
+    "diagTitle": "Diagnóstico de crashes",
+    "diagBody": "Si la app crasheó, ábrela de nuevo y pulsa Compartir diagnóstico. Pega el reporte en tu email de soporte — incluye el mensaje JS exacto y los pasos de la sesión.",
+    "diagShare": "Compartir diagnóstico",
     "footer": "RepRight · UNIBE · Santo Domingo, República Dominicana"
   },
   "workout": {

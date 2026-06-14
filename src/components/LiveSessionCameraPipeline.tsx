@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 import { Worklets, useSharedValue as useWorkletSharedValue } from 'react-native-worklets-core';
 import {
@@ -9,6 +9,8 @@ import {
   type Orientation,
 } from 'react-native-vision-camera';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
+
+import { diagBreadcrumb } from '@/lib/crashDiag';
 
 const INFER_INTERVAL_MS = 72;
 
@@ -37,6 +39,11 @@ export function LiveSessionCameraPipeline({
   enableInference,
   onFrameBytesRef,
 }: Props) {
+  useEffect(() => {
+    diagBreadcrumb('live_session:camera_pipeline_mount', { enableInference });
+    return () => diagBreadcrumb('live_session:camera_pipeline_unmount');
+  }, [enableInference]);
+
   const format = useCameraFormat(device, [
     { videoAspectRatio: portraitVideoAspectRatio },
     { fps: 30 },
