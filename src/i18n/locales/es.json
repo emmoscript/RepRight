@@ -99,7 +99,8 @@
     "googleSignUp": "Registrarse con Google",
     "oauthHint": "Crea una cuenta si eres nuevo, o inicia sesión si ya usaste este proveedor.",
     "appleContinue": "Continuar con Apple",
-    "appleSignUp": "Registrarse con Apple"
+    "appleSignUp": "Registrarse con Apple",
+    "legalAgreeDisclaimer": "Al continuar, aceptas nuestros Términos de Uso y Política de Privacidad."
   },
   "emailConfirm": {
     "title": "Revisa tu correo",

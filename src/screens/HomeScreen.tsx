@@ -11,6 +11,7 @@ import { RepRightHeader } from '@/components/RepRightHeader';
 import { SvgPlayIcon, SvgTrendingUpIcon } from '@/components/icons/SvgUiIcons';
 import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
+import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
 import {
   markBiomechSurveyPrompted,
   shouldShowBiomechSurveyPrompt,
@@ -70,6 +71,7 @@ export function HomeScreen() {
   const { t, i18n } = useTranslation();
   const nav = useNavigation<MainTabCompositeNav>();
   const isGuest = useAuthStore((s) => s.isGuest);
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const email = useAuthStore((s) => s.user?.email ?? null);
   const displayNamePref = useUserPreferencesStore((s) => s.displayName);
 
@@ -84,6 +86,9 @@ export function HomeScreen() {
       const clockId = setInterval(() => setGreetingTick(Date.now()), 60_000);
 
       void (async () => {
+        if (isLoggedIn) {
+          await pullAndMergeCloudSessions();
+        }
         const list = await getAllSessions();
         if (!active) return;
         const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
@@ -98,7 +103,7 @@ export function HomeScreen() {
         active = false;
         clearInterval(clockId);
       };
-    }, []),
+    }, [isLoggedIn]),
   );
 
   const shortMonths = useMemo(

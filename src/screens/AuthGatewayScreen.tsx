@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AuthLegalFooter } from "@/components/auth/AuthLegalFooter";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 import { RepRightHeader } from "@/components/RepRightHeader";
@@ -361,6 +362,8 @@ export function AuthGatewayScreen() {
             onGooglePress={() => void handleGoogleSignIn()}
             onApplePress={() => void handleAppleSignIn()}
           />
+
+          <AuthLegalFooter />
 
           <View style={{ height: 24 }} />
         </ScrollView>

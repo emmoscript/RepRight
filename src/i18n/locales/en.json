@@ -99,7 +99,8 @@
     "googleSignUp": "Sign up with Google",
     "oauthHint": "Creates an account if you're new, or signs you in if you've used this provider before.",
     "appleContinue": "Continue with Apple",
-    "appleSignUp": "Sign up with Apple"
+    "appleSignUp": "Sign up with Apple",
+    "legalAgreeDisclaimer": "By continuing, you agree to our Terms of Use and Privacy Policy."
   },
   "emailConfirm": {
     "title": "Check your email",

@@ -141,6 +141,33 @@ export async function saveSession(session: SessionLog): Promise<void> {
   }
 }
 
+/** True if two logs describe the same workout (local id or started_at + exercise). */
+export function sessionsMatch(a: SessionLog, b: SessionLog): boolean {
+  if (a.sessionId === b.sessionId) return true;
+  if (a.exercise !== b.exercise) return false;
+  const aMs = new Date(a.date).getTime();
+  const bMs = new Date(b.date).getTime();
+  return Math.abs(aMs - bMs) < 90_000;
+}
+
+/** Import cloud sessions into local storage; skips duplicates. Returns count added. */
+export async function mergeCloudSessions(imports: SessionLog[]): Promise<number> {
+  if (imports.length === 0) return 0;
+
+  const existing = await getAllSessions();
+  let added = 0;
+
+  for (const incoming of imports) {
+    const duplicate = existing.some((local) => sessionsMatch(local, incoming));
+    if (duplicate) continue;
+    await saveSession(incoming);
+    existing.push(incoming);
+    added += 1;
+  }
+
+  return added;
+}
+
 export async function getSession(sessionId: string): Promise<SessionLog | null> {
   const session = await getSessionById(sessionId);
   if (!session) return null;

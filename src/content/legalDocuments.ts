@@ -66,13 +66,13 @@ const privacyEn: LegalDocument = {
       paragraphs: [
         'Account and synced workout data are kept while your account is active.',
         'Local session history on your device remains until you delete the app, clear app data, or delete your account.',
-        'When you delete your account (Profile → Delete account), we remove your profile, synced sessions, and statistics from our servers.',
+        'When you delete your account (Profile → Danger zone → Delete account), we remove your profile, synced sessions, and statistics from our servers.',
       ],
     },
     {
       title: 'Your rights and account deletion',
       paragraphs: [
-        'You can delete your account at any time from Profile → Delete account in the app. This permanently removes your cloud data and auth account.',
+        'You can delete your account at any time from Profile → Danger zone → Delete account in the app. This permanently removes your cloud data and auth account.',
         'You may also contact us to request access, correction, or deletion of your data.',
         'Depending on your location, you may have additional privacy rights under applicable law.',
       ],
@@ -160,13 +160,13 @@ const privacyEs: LegalDocument = {
       paragraphs: [
         'Los datos de cuenta y entrenamientos sincronizados se conservan mientras tu cuenta esté activa.',
         'El historial local en tu dispositivo permanece hasta que elimines la app, borres datos de la app o elimines tu cuenta.',
-        'Al eliminar tu cuenta (Perfil → Eliminar cuenta), removemos tu perfil, sesiones sincronizadas y estadísticas de nuestros servidores.',
+        'Al eliminar tu cuenta (Perfil → Zona de peligro → Eliminar cuenta), removemos tu perfil, sesiones sincronizadas y estadísticas de nuestros servidores.',
       ],
     },
     {
       title: 'Tus derechos y eliminación de cuenta',
       paragraphs: [
-        'Puedes eliminar tu cuenta en cualquier momento desde Perfil → Eliminar cuenta en la app. Esto elimina permanentemente tus datos en la nube y tu cuenta de autenticación.',
+        'Puedes eliminar tu cuenta en cualquier momento desde Perfil → Zona de peligro → Eliminar cuenta en la app. Esto elimina permanentemente tus datos en la nube y tu cuenta de autenticación.',
         'También puedes contactarnos para solicitar acceso, corrección o eliminación de tus datos.',
         'Según tu ubicación, puedes tener derechos adicionales bajo la ley aplicable.',
       ],

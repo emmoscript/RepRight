@@ -1,4 +1,5 @@
 import { signInWithApple } from '@/lib/appleSignIn';
+import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
 import { displayNameFromMetadata, pullProfileFromSupabase } from '@/lib/profileSync';
 import { resolveAnonymousGuestLabel } from '@/lib/anonymousGuest';
 import { getAuthRedirectUri } from '@/lib/authRedirect';
@@ -93,6 +94,7 @@ function applyVerifiedSession(set: (partial: Partial<AuthState>) => void, sessio
     error: null,
   });
   void pullProfileFromSupabase(authUser.id);
+  void pullAndMergeCloudSessions(authUser.id);
   return true;
 }
 

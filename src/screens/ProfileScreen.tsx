@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
@@ -19,6 +19,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RepRightHeader } from '@/components/RepRightHeader';
+import { getAllSessions } from '@/modules/session';
+import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
 import { pushProfileToSupabase } from '@/lib/profileSync';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { resetToWelcome } from '@/navigation/navigationRef';
@@ -27,6 +29,7 @@ import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { resolveDisplayName } from '@/utils/displayName';
+import { computeProfileSessionStats } from '@/utils/profileSessionStats';
 import { weightSystemLabel, weightUnitSuffix } from '@/utils/weightUnits';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -56,6 +59,34 @@ export function ProfileScreen() {
 
   const [nameModalOpen, setNameModalOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [sessionCount, setSessionCount] = useState(0);
+  const [bestFormPct, setBestFormPct] = useState<number | null>(null);
+  const [streakDays, setStreakDays] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      void (async () => {
+        if (isLoggedIn) {
+          await pullAndMergeCloudSessions();
+        }
+        const list = await getAllSessions();
+        if (!active) return;
+        const stats = computeProfileSessionStats(list);
+        setSessionCount(stats.sessionCount);
+        setBestFormPct(stats.bestFormPct);
+        setStreakDays(stats.streakDays);
+      })();
+      return () => {
+        active = false;
+      };
+    }, [userId, isGuest, isLoggedIn]),
+  );
+
+  const bestFormLabel =
+    bestFormPct != null && sessionCount > 0 ? `${Math.round(bestFormPct)}%` : '—';
+  const streakLabel = sessionCount > 0 ? `🔥 ${streakDays}` : '🔥 —';
+  const sessionsLabel = sessionCount > 0 ? String(sessionCount) : '—';
 
   const display = useMemo(
     () => resolveDisplayName({ displayName: displayNamePref, email, isGuest }),
@@ -193,9 +224,9 @@ export function ProfileScreen() {
         </View>
 
         <View style={styles.statRow}>
-          <StatChip label={t('profile.bestForm')} value="—" />
-          <StatChip label={t('profile.sessions')} value="—" />
-          <StatChip label={t('profile.streak')} value="🔥 —" />
+          <StatChip label={t('profile.bestForm')} value={bestFormLabel} />
+          <StatChip label={t('profile.sessions')} value={sessionsLabel} />
+          <StatChip label={t('profile.streak')} value={streakLabel} />
         </View>
 
         <View style={styles.settingsBlock}>
