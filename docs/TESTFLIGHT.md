@@ -56,6 +56,7 @@ eas build --profile production --platform ios
 
 - Profile `production` → **App Store** distribution (TestFlight + App Store).
 - `autoIncrement: true` in `eas.json` bumps the iOS build number each build.
+- **Apple (April 2026+):** production iOS must use **Xcode 26+**. RepRight sets `"image": "macos-sequoia-15.6-xcode-26.2"` in `eas.json` (SDK 52 default `auto` still picks Xcode 16).
 
 Wait for the build on [expo.dev](https://expo.dev) (~15–25 min). Download `.ipa` optional; submit can be done from EAS directly.
 
