@@ -6,7 +6,7 @@
  * Keypoint indices match TensorFlow MoveNet 17-landmark layout.
  */
 
-import { loadTensorflowModel, type TensorflowModel } from 'react-native-fast-tflite';
+import type { TensorflowModel } from 'react-native-fast-tflite';
 import { Platform } from 'react-native';
 
 export interface KeyPoint {
@@ -51,6 +51,23 @@ let modelLoadError: string | null = null;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const MODEL_ASSET = require('../../assets/models/movenet_lightning.tflite') as number;
 
+let tfliteLoadError: string | null = null;
+
+async function loadTensorflowModelSafe(
+  source: number,
+  delegate: 'metal' | 'core-ml' | 'default' | 'android-gpu' | 'nnapi',
+): Promise<TensorflowModel | null> {
+  try {
+    const { loadTensorflowModel } = await import('react-native-fast-tflite');
+    return await loadTensorflowModel(source, delegate);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    tfliteLoadError = msg;
+    console.warn('[MoveNet] TFLite runtime unavailable:', msg);
+    return null;
+  }
+}
+
 /**
  * Try hardware-accelerated delegates first, fall back to CPU.
  * - iOS:     Core ML → CPU
@@ -60,6 +77,7 @@ const MODEL_ASSET = require('../../assets/models/movenet_lightning.tflite') as n
 export async function initModel(): Promise<boolean> {
   if (loadedModel) return true;
   modelLoadError = null;
+  tfliteLoadError = null;
 
   // 'metal' = iOS GPU (fastest), 'core-ml' = iOS Neural Engine, 'android-gpu' = Android GPU
   const delegates =
@@ -68,16 +86,16 @@ export async function initModel(): Promise<boolean> {
       : (['android-gpu', 'nnapi', 'default'] as const);
 
   for (const delegate of delegates) {
-    try {
-      loadedModel = await loadTensorflowModel(MODEL_ASSET, delegate);
+    const model = await loadTensorflowModelSafe(MODEL_ASSET, delegate);
+    if (model != null) {
+      loadedModel = model;
       console.log(`[MoveNet] loaded with delegate: ${delegate}`);
       return true;
-    } catch (e) {
-      console.log(`[MoveNet] delegate "${delegate}" unavailable:`, e instanceof Error ? e.message : e);
     }
+    console.log(`[MoveNet] delegate "${delegate}" unavailable`);
   }
 
-  modelLoadError = 'All delegates failed';
+  modelLoadError = tfliteLoadError ?? 'All delegates failed';
   console.warn('[MoveNet] model load failed on all delegates');
   return false;
 }
