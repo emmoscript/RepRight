@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BiomechSurveyPrompt } from '@/components/BiomechSurveyPrompt';
+import { BiomechSurveyCard } from '@/components/BiomechSurveyCard';
 import { Icon, ICONS } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
@@ -13,6 +14,7 @@ import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
 import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
 import {
+  hasCompletedBiomechSurvey,
   markBiomechSurveyPrompted,
   shouldShowBiomechSurveyPrompt,
 } from '@/constants/researchSurvey';
@@ -77,6 +79,7 @@ export function HomeScreen() {
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [surveyPromptVisible, setSurveyPromptVisible] = useState(false);
+  const [showSurveyCard, setShowSurveyCard] = useState(true);
   const [greetingTick, setGreetingTick] = useState(() => Date.now());
 
   useFocusEffect(
@@ -86,6 +89,10 @@ export function HomeScreen() {
       const clockId = setInterval(() => setGreetingTick(Date.now()), 60_000);
 
       void (async () => {
+        const completed = await hasCompletedBiomechSurvey();
+        if (!active) return;
+        setShowSurveyCard(!completed);
+
         if (isLoggedIn) {
           await pullAndMergeCloudSessions();
         }
@@ -175,6 +182,14 @@ export function HomeScreen() {
           onPress={() => nav.navigate('Workout')}
           style={styles.heroCta as ViewStyle}
         />
+
+        {showSurveyCard ? (
+          <BiomechSurveyCard
+            variant="home"
+            isGuest={isGuest}
+            accountEmail={email}
+          />
+        ) : null}
 
         {/* Bento: Last session + quick stats */}
         <View style={styles.bentoRow}>
@@ -325,7 +340,10 @@ export function HomeScreen() {
         visible={surveyPromptVisible}
         isGuest={isGuest}
         accountEmail={email}
-        onDismiss={() => setSurveyPromptVisible(false)}
+        onDismiss={() => {
+          setSurveyPromptVisible(false);
+          void hasCompletedBiomechSurvey().then((done) => setShowSurveyCard(!done));
+        }}
       />
     </SafeAreaView>
   );

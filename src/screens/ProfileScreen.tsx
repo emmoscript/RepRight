@@ -19,7 +19,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RepRightHeader } from '@/components/RepRightHeader';
+import { BiomechSurveyCard } from '@/components/BiomechSurveyCard';
 import { getAllSessions } from '@/modules/session';
+import { hasCompletedBiomechSurvey, resetBiomechSurveyState } from '@/constants/researchSurvey';
 import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
 import { pushProfileToSupabase } from '@/lib/profileSync';
 import type { RootStackParamList } from '@/navigation/routeTypes';
@@ -62,11 +64,16 @@ export function ProfileScreen() {
   const [sessionCount, setSessionCount] = useState(0);
   const [bestFormPct, setBestFormPct] = useState<number | null>(null);
   const [streakDays, setStreakDays] = useState(0);
+  const [showSurveyCard, setShowSurveyCard] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       void (async () => {
+        const completed = await hasCompletedBiomechSurvey();
+        if (!active) return;
+        setShowSurveyCard(!completed);
+
         if (isLoggedIn) {
           await pullAndMergeCloudSessions();
         }
@@ -210,7 +217,19 @@ export function ProfileScreen() {
         </Pressable>
         {email ? <Text style={styles.emailSub}>{email}</Text> : null}
 
-        <View style={styles.alphaCard}>
+        <Pressable
+          style={styles.alphaCard}
+          onLongPress={
+            __DEV__
+              ? () => {
+                  void resetBiomechSurveyState().then(() => {
+                    setShowSurveyCard(true);
+                    Alert.alert('Dev', 'Survey prompts reset.');
+                  });
+                }
+              : undefined
+          }
+        >
           <Ionicons
             name="flask-outline"
             size={24}
@@ -221,7 +240,15 @@ export function ProfileScreen() {
             <Text style={styles.alphaTitle}>{participantLabel}</Text>
             <Text style={styles.alphaMuted}>{t('profile.alphaBuild', { id: participantId })}</Text>
           </View>
-        </View>
+        </Pressable>
+
+        {showSurveyCard ? (
+          <BiomechSurveyCard
+            variant="profile"
+            isGuest={isGuest}
+            accountEmail={email}
+          />
+        ) : null}
 
         <View style={styles.statRow}>
           <StatChip label={t('profile.bestForm')} value={bestFormLabel} />

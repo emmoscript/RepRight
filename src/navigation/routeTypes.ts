@@ -30,6 +30,7 @@ export type RootStackParamList = {
   SessionDetail: { sessionId: string };
   LegalDocument: { type: 'privacy' | 'terms' };
   Support: undefined;
+  BiomechSurvey: undefined;
 };
 
 export type MainTabCompositeNav = CompositeNavigationProp<

@@ -1,10 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { BIOMECH_SURVEY_URL, markBiomechSurveyCompleted } from '@/constants/researchSurvey';
+import { navigateToBiomechSurvey } from '@/lib/openBiomechSurvey';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
@@ -17,7 +16,6 @@ type Props = {
 
 export function BiomechSurveyPrompt({ visible, isGuest, accountEmail, onDismiss }: Props) {
   const { t } = useTranslation();
-  const [opening, setOpening] = useState(false);
 
   const accountDisplay = isGuest ? t('common.guest') : accountEmail?.trim() || '—';
 
@@ -25,17 +23,9 @@ export function BiomechSurveyPrompt({ visible, isGuest, accountEmail, onDismiss 
     onDismiss();
   }, [onDismiss]);
 
-  const openSurvey = useCallback(async () => {
-    setOpening(true);
-    try {
-      await Linking.openURL(BIOMECH_SURVEY_URL);
-      await markBiomechSurveyCompleted();
-      onDismiss();
-    } catch {
-      // Keep modal open if the browser fails to launch.
-    } finally {
-      setOpening(false);
-    }
+  const openSurvey = useCallback(() => {
+    onDismiss();
+    navigateToBiomechSurvey();
   }, [onDismiss]);
 
   return (
@@ -62,9 +52,8 @@ export function BiomechSurveyPrompt({ visible, isGuest, accountEmail, onDismiss 
           </View>
 
           <PrimaryButton
-            title={opening ? t('home.surveyPrompt.opening') : t('home.surveyPrompt.cta')}
-            onPress={() => void openSurvey()}
-            disabled={opening}
+            title={t('home.surveyPrompt.cta')}
+            onPress={openSurvey}
             style={styles.cta}
           />
           <Pressable

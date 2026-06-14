@@ -16,6 +16,7 @@ import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
 import { SessionDetailScreen } from '@/screens/SessionDetailScreen';
 import { LegalDocumentScreen } from '@/screens/LegalDocumentScreen';
 import { SupportScreen } from '@/screens/SupportScreen';
+import { BiomechSurveyScreen } from '@/screens/BiomechSurveyScreen';
 import { colors } from '@/theme/colors';
 
 declare global {
@@ -86,6 +87,7 @@ export function RootNavigator() {
         <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
         <Stack.Screen name="LegalDocument" component={LegalDocumentScreen} />
         <Stack.Screen name="Support" component={SupportScreen} />
+        <Stack.Screen name="BiomechSurvey" component={BiomechSurveyScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
