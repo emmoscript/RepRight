@@ -28,7 +28,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Worklets } from 'react-native-worklets-core';
+import { Worklets, useSharedValue as useWorkletSharedValue } from 'react-native-worklets-core';
 import {
   Camera,
   useCameraFormat,
@@ -343,8 +343,8 @@ export function LiveSessionScreen() {
     severity: 'critical' | 'warning';
   } | null>(null);
 
-  // ── Shared value for frame-processor throttle (accessible from worklet) ────
-  const lastInferAt = useSharedValue(0);
+  // ── Shared value for frame-processor throttle (worklets-core — not Reanimated) ─
+  const lastInferAt = useWorkletSharedValue(0);
 
   // ── Pulsing dot animations (7A search state) ────────────────────────────────
   const d1 = useSharedValue(0.3);
@@ -1126,6 +1126,10 @@ export function LiveSessionScreen() {
     (_values: number[], _kind: WorkletKind, _ts: number, _frameOrientation: Orientation) => {},
   );
 
+  const onResizedFrameRef = useRef(
+    (_bytes: number[], _ts: number, _frameOrientation: Orientation) => {},
+  );
+
   const onWorkletResult = useCallback(
     (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation) => {
       // Tensor + RAW logs: once per visit, only after countdown → `active` (see blur reset).
@@ -1170,60 +1174,66 @@ export function LiveSessionScreen() {
     [ingestPose],
   );
 
+  /** TFLite runSync on JS thread — calling it inside the Vision Camera worklet crashes iOS Release. */
+  const onResizedFrame = useCallback(
+    (bytes: number[], ts: number, frameOrientation: Orientation) => {
+      const model = getModel();
+      if (!model) return;
+      try {
+        const outs = model.runSync([new Uint8Array(bytes)]);
+        const out = outs[0];
+        if (out instanceof Float32Array) {
+          onWorkletResultRef.current(Array.from(out), 'f32', ts, frameOrientation);
+        } else if (out instanceof ArrayBuffer) {
+          onWorkletResultRef.current(Array.from(new Float32Array(out)), 'f32', ts, frameOrientation);
+        } else if (out instanceof Uint8Array) {
+          onWorkletResultRef.current(Array.from(out), 'u8', ts, frameOrientation);
+        } else if (out instanceof Int8Array) {
+          onWorkletResultRef.current(Array.from(out), 'i8', ts, frameOrientation);
+        }
+      } catch {
+        // inference must never fatal the session
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     onWorkletResultRef.current = onWorkletResult;
   }, [onWorkletResult]);
 
-  const runOnJS = useMemo(
+  useEffect(() => {
+    onResizedFrameRef.current = onResizedFrame;
+  }, [onResizedFrame]);
+
+  const runResizedFrame = useMemo(
     () =>
-      Worklets.createRunOnJS(
-        (
-          values: number[],
-          kind: WorkletKind,
-          ts: number,
-          frameOrientation: Orientation,
-        ) => onWorkletResultRef.current(values, kind, ts, frameOrientation),
-      ),
+      Worklets.createRunOnJS((bytes: number[], ts: number, frameOrientation: Orientation) => {
+        onResizedFrameRef.current(bytes, ts, frameOrientation);
+      }),
     [],
   );
 
   // ── Frame processor ────────────────────────────────────────────────────────
-  // KEY FIX: gate check comes FIRST so resize() is never called on throttled frames.
-  // Flat-interval throttle via Reanimated SharedValue (no modulo = no burst stutter).
-  const model = modelReady ? getModel() : null;
+  // Resize in worklet; infer on JS. Gate check FIRST so resize() is never called on throttled frames.
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
       const now = Date.now();
-      if (now - lastInferAt.value < INFER_INTERVAL_MS) return; // ← gate first
+      if (now - lastInferAt.value < INFER_INTERVAL_MS) return;
       lastInferAt.value = now;
-      if (model == null) return;
       try {
         const r = resize(frame, {
           scale: { width: 192, height: 192 },
           pixelFormat: 'rgb',
           dataType: 'uint8',
         });
-        const outs = model.runSync([new Uint8Array(r)]);
-        const out = outs[0];
-        const ts = Date.now();
-        const orient = frame.orientation;
-        // MoveNet always outputs Float32 (51 values: 17 kps × 3).
-        // Fast path avoids extra allocation for the common case.
-        if (out instanceof Float32Array) {
-          runOnJS(Array.from(out), 'f32', ts, orient);
-        } else if (out instanceof ArrayBuffer) {
-          runOnJS(Array.from(new Float32Array(out)), 'f32', ts, orient);
-        } else if (out instanceof Uint8Array) {
-          runOnJS(Array.from(out), 'u8', ts, orient);
-        } else if (out instanceof Int8Array) {
-          runOnJS(Array.from(out), 'i8', ts, orient);
-        }
+        runResizedFrame(Array.from(new Uint8Array(r)), Date.now(), frame.orientation);
       } catch {
         // worklet must never throw to caller
       }
     },
-    [model, resize, runOnJS, lastInferAt],
+    [resize, runResizedFrame, lastInferAt],
   );
 
   // ── State machine (100 ms tick) ────────────────────────────────────────────
