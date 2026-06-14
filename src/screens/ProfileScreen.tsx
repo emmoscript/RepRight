@@ -269,20 +269,6 @@ export function ProfileScreen() {
           </View>
         </View>
 
-        {isLoggedIn ? (
-          <Pressable
-            style={[styles.deleteAccountBtn, isLoading && styles.signOutDisabled]}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isLoading }}
-            onPress={handleDeleteAccount}
-            disabled={isLoading}
-          >
-            <Text style={styles.deleteAccountTxt}>
-              {isLoading ? t('profile.deletingAccount') : t('profile.deleteAccount')}
-            </Text>
-          </Pressable>
-        ) : null}
-
         <Pressable
           style={[styles.signOutGhost, isLoading && styles.signOutDisabled]}
           accessibilityRole="button"
@@ -294,6 +280,27 @@ export function ProfileScreen() {
             {isLoading ? t('profile.signingOut') : isGuest ? t('profile.exitGuest') : t('profile.signOut')}
           </Text>
         </Pressable>
+
+        {isLoggedIn ? (
+          <View style={styles.dangerZone}>
+            <View style={styles.dangerHeader}>
+              <Ionicons name="warning-outline" size={20} color={colors.accent_red} />
+              <Text style={styles.dangerTitle}>{t('profile.dangerZoneTitle')}</Text>
+            </View>
+            <Text style={styles.dangerSub}>{t('profile.dangerZoneSub')}</Text>
+            <Pressable
+              style={[styles.deleteAccountBtn, isLoading && styles.signOutDisabled]}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isLoading }}
+              onPress={handleDeleteAccount}
+              disabled={isLoading}
+            >
+              <Text style={styles.deleteAccountTxt}>
+                {isLoading ? t('profile.deletingAccount') : t('profile.deleteAccount')}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Text style={styles.verSmall}>{t('profile.footer')}</Text>
       </ScrollView>
@@ -524,12 +531,12 @@ const styles = StyleSheet.create({
   signOutDisabled: { opacity: 0.5 },
   signOutTxt: { color: colors.accent_red, fontFamily: typography.fontFamily.bold, fontSize: 15 },
   deleteAccountBtn: {
-    marginTop: 20,
-    minHeight: 56,
-    borderRadius: 12,
-    backgroundColor: colors.accent_red + '18',
+    marginTop: 14,
+    minHeight: 52,
+    borderRadius: 10,
+    backgroundColor: colors.accent_red + '22',
     borderWidth: StyleSheet.hairlineWidth + 1,
-    borderColor: colors.accent_red + '55',
+    borderColor: colors.accent_red + '66',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -537,6 +544,32 @@ const styles = StyleSheet.create({
     color: colors.accent_red,
     fontFamily: typography.fontFamily.bold,
     fontSize: 15,
+  },
+  dangerZone: {
+    marginTop: 28,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth + 1,
+    borderColor: colors.accent_red + '44',
+    backgroundColor: colors.accent_red + '0D',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  dangerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dangerTitle: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.body,
+    color: colors.accent_red,
+  },
+  dangerSub: {
+    marginTop: 8,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: 13,
+    color: colors.text_secondary,
+    lineHeight: 19,
   },
   settingsLink: {
     marginTop: 12,

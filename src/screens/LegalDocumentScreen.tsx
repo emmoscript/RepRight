@@ -44,6 +44,9 @@ export function LegalDocumentScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.updated}>
+          {t('legal.effectiveDate', { date: doc.effectiveDate })}
+        </Text>
+        <Text style={styles.updatedLast}>
           {t('legal.lastUpdated', { date: doc.lastUpdated })}
         </Text>
 
@@ -90,6 +93,12 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 44 },
   scroll: { paddingHorizontal: 24, paddingBottom: 40 },
   updated: {
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.captions,
+    color: colors.text_muted,
+    marginBottom: 4,
+  },
+  updatedLast: {
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.captions,
     color: colors.text_muted,

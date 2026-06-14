@@ -11,4 +11,4 @@ export const LEGAL_URLS = {
 } as const;
 
 export const SUPPORT_EMAIL =
-  (process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'repright.support@unibe.edu.do').trim();
+  (process.env.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'hello.repright@yahoo.com').trim();

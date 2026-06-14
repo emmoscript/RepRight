@@ -2,25 +2,38 @@
 
 Use this checklist when completing **App Privacy** for RepRight (`com.unibe.repright`) in App Store Connect.
 
-## Data linked to the user
+## Privacy Nutrition Labels — quick answers (current build)
 
-| Category | Data types | Purpose | Collected | Linked to identity | Used for tracking |
-|----------|------------|---------|-----------|-------------------|-------------------|
-| Contact Info | Email address, Name | App functionality, account | Yes | Yes | No |
-| Health & Fitness | Fitness | App functionality (workout stats, form scores) | Yes | Yes (when signed in) | No |
-| User Content | Other user content (display name, optional profile photo on device) | App functionality | Yes | Yes | No |
-| Identifiers | User ID | App functionality | Yes | Yes | No |
-| Usage Data | Product interaction (session counts, error types) | Analytics / app functionality | Yes | Yes | No |
-| Diagnostics | Crash data, performance (if enabled later) | App functionality | Optional | No* | No |
+Declare **Yes, we collect data** and link it to the user when signed in.
 
-\* Only declare diagnostics if you add Sentry/Crashlytics. Current build: **no third-party crash SDK** — skip or answer “No” unless added.
+| Apple category | Data type | Collected? | Linked to user? | Used for tracking? | Purpose in App Store Connect |
+|----------------|-----------|------------|-----------------|-------------------|------------------------------|
+| **Contact Info** | Email Address | Yes | Yes | No | App Functionality, Account Management |
+| **Contact Info** | Name | Yes (display name) | Yes | No | App Functionality |
+| **Health & Fitness** | Fitness | Yes | Yes (when signed in) | No | App Functionality |
+| **User Content** | Other User Content | Yes | Yes | No | App Functionality (workout summaries, form error types, display name) |
+| **Identifiers** | User ID | Yes | Yes | No | App Functionality |
+| **Usage Data** | Product Interaction | Yes | Yes | No | App Functionality (sessions, sets, scores) |
+| **Diagnostics** | Crash Data / Performance | **No** (unless you add Sentry/Crashlytics) | — | No | — |
 
-## Data NOT collected
+### Do NOT declare (current build)
 
-- **Photos or videos uploaded to servers** — camera frames stay on-device.
-- **Precise location** — not used.
-- **HealthKit / Clinical health records** — not integrated.
-- **Browsing history, contacts, financial info** — not collected.
+- **Photos or Video** — camera frames are processed on-device only; nothing uploaded.
+- **Precise Location** — not used.
+- **HealthKit / Medical records** — not integrated.
+- **Browsing history, contacts, financial info, advertising data** — not collected.
+
+## What Supabase actually stores
+
+When a user is **signed in**, Supabase receives:
+
+- Email, user ID, auth provider
+- Profile prefs: display name, language, weight unit, audio setting
+- Workout session summaries: exercise, sets, reps, weights, form scores, timestamps, biomechanical error types (text/metadata — **not** camera frames)
+
+When a user is in **guest mode**, cloud sync is minimal; anonymous guest IDs may be logged for participation counts only.
+
+Supabase auth logs may include **IP address** and device/browser metadata as part of normal hosting — declare under service operation if App Store asks; it is not workout content.
 
 ## Third-party SDKs to disclose
 
@@ -32,13 +45,11 @@ Use this checklist when completing **App Privacy** for RepRight (`com.unibe.repr
 
 ## Privacy Policy URL (required)
 
-Set in App Store Connect → App Information:
-
 ```
 https://emmoscript.github.io/RepRight/legal/privacy.html
 ```
 
-Override with `EXPO_PUBLIC_LEGAL_BASE_URL` if you host elsewhere.
+Override with `EXPO_PUBLIC_LEGAL_BASE_URL` if hosted elsewhere (e.g. custom landing page).
 
 ## Terms of Use URL (recommended)
 
@@ -48,19 +59,16 @@ https://emmoscript.github.io/RepRight/legal/terms.html
 
 ## Account deletion
 
-Apple requires in-app deletion. RepRight: **Profile → Delete account** (logged-in users only).
+Apple requires in-app deletion. RepRight: **Profile → Danger zone → Delete account** (logged-in users only).
 
 ## Camera permission (Info.plist)
 
-`NSCameraUsageDescription` explains on-device form analysis — already set in `app.config.ts` / `Info.plist`. Rebuild iOS after changes.
-
-## Hosting legal pages (GitHub Pages)
-
-1. Repo **Settings → Pages**
-2. Source: **Deploy from branch** → `main` → folder **`/docs`**
-3. URLs become `https://<user>.github.io/RepRight/legal/privacy.html`
-4. Update `EXPO_PUBLIC_LEGAL_BASE_URL` in EAS secrets if the username differs from `emmoscript`
+`NSCameraUsageDescription` explains on-device form analysis — no upload. Rebuild iOS after changes.
 
 ## App Store review notes (suggested)
 
-> RepRight uses the device camera for on-device pose estimation (MoveNet). Video is not uploaded. Test account: [provide email/password]. Account deletion: Profile → Delete account.
+> RepRight uses the device camera for on-device pose estimation (MoveNet). No camera frames or video are uploaded to our servers. Academic research uses aggregated or de-identified data only. Test account: [email/password]. Account deletion: Profile → Danger zone → Delete account.
+
+## Research disclosure tip
+
+If App Store Connect asks about **research** or **health research**: explain that workout metrics may be analyzed in aggregate for UNIBE academic research; no identifiable camera video is collected; users can delete accounts in-app.
