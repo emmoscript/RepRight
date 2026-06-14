@@ -1,0 +1,24 @@
+diff --git a/node_modules/react-native-fast-tflite/spec/NativeRNTflite.ts b/node_modules/react-native-fast-tflite/spec/NativeRNTflite.ts
+index 1111111..2222222 100644
+--- a/node_modules/react-native-fast-tflite/spec/NativeRNTflite.ts
++++ b/node_modules/react-native-fast-tflite/spec/NativeRNTflite.ts
+@@ -1,9 +1,18 @@
+ import type { TurboModule } from 'react-native'
+-import { TurboModuleRegistry } from 'react-native'
++import { NativeModules, TurboModuleRegistry } from 'react-native'
+ 
+ export interface Spec extends TurboModule {
+   install(): boolean
+ }
+ 
+-export default TurboModuleRegistry.getEnforcing<Spec>('Tflite')
++/** Old Architecture registers `Tflite` via RCT_EXPORT_MODULE, not TurboModuleRegistry. */
++const module = TurboModuleRegistry.get<Spec>('Tflite') ?? NativeModules.Tflite
++
++if (module == null) {
++  throw new Error(
++    "The 'Tflite' native module is not linked. Rebuild the iOS/Android app after installing react-native-fast-tflite.",
++  )
++}
++
++export default module as Spec
