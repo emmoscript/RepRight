@@ -55,7 +55,7 @@
     "expo-haptics": "~14.0.0",
     "expo-image-picker": "~16.0.6",
     "expo-linking": "~7.0.5",
-    "expo-localization": "~16.0.1",
+    "expo-localization": "~16.1.6",
     "expo-screen-orientation": "~8.0.4",
     "expo-speech": "~13.0.0",
     "expo-splash-screen": "~0.29.0",
@@ -98,5 +98,16 @@
     "patch-package": "^8.0.1",
     "prettier": "^3.3.0",
     "typescript": "~5.3.0"
+  },
+  "expo": {
+    "install": {
+      "exclude": ["expo-apple-authentication", "expo-localization"]
+    },
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["react-native-fast-tflite", "vision-camera-resize-plugin"],
+        "listUnknownPackages": false
+      }
+    }
   }
 }

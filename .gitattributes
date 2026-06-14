@@ -1,2 +1,7 @@
 # Git LFS for large binary files
 assets/models/*.tflite filter=lfs diff=lfs merge=lfs -text
+
+# Xcode shell scripts must use LF (CRLF breaks `[Expo] Configure project` on EAS/macOS)
+ios/.xcode.env text eol=lf
+ios/Podfile text eol=lf
+*.sh text eol=lf
