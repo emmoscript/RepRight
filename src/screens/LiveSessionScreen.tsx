@@ -333,6 +333,8 @@ export function LiveSessionScreen() {
   const [uiPose, setUiPose] = useState<PoseResult | null>(null);
   const [useMock, setUseMock] = useState(false);
   const [modelReady, setModelReady] = useState(false);
+  /** False until initModel() finishes — camera mounts once so frameProcessor is never toggled mid-stream. */
+  const [modelInitDone, setModelInitDone] = useState(false);
   const [cameraWarmupExpired, setCameraWarmupExpired] = useState(false);
   const [liveFormBanner, setLiveFormBanner] = useState<{
     message: string;
@@ -529,12 +531,16 @@ export function LiveSessionScreen() {
 
   useEffect(() => {
     void (async () => {
-      const ok = await initModel();
-      const ready = ok && getModel() != null;
-      setModelReady(ready);
-      setUseMock(__DEV__ && !ready);
-      sessionTrace.model(ready ? 'ready' : 'unavailable', { ok, ready });
-      if (__DEV__ && !ready) sessionTrace.model('mock_fallback');
+      try {
+        const ok = await initModel();
+        const ready = ok && getModel() != null;
+        setModelReady(ready);
+        setUseMock(__DEV__ && !ready);
+        sessionTrace.model(ready ? 'ready' : 'unavailable', { ok, ready });
+        if (__DEV__ && !ready) sessionTrace.model('mock_fallback');
+      } finally {
+        setModelInitDone(true);
+      }
     })();
   }, []);
 
@@ -1116,6 +1122,10 @@ export function LiveSessionScreen() {
    */
 
   // ── Worklet result handler ─────────────────────────────────────────────────
+  const onWorkletResultRef = useRef(
+    (_values: number[], _kind: WorkletKind, _ts: number, _frameOrientation: Orientation) => {},
+  );
+
   const onWorkletResult = useCallback(
     (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation) => {
       // Tensor + RAW logs: once per visit, only after countdown → `active` (see blur reset).
@@ -1160,22 +1170,27 @@ export function LiveSessionScreen() {
     [ingestPose],
   );
 
-  const runOnJS = useCallback(
-    Worklets.createRunOnJS(
-      (
-        values: number[],
-        kind: WorkletKind,
-        ts: number,
-        frameOrientation: Orientation,
-      ) => onWorkletResult(values, kind, ts, frameOrientation),
-    ),
-    [onWorkletResult],
+  useEffect(() => {
+    onWorkletResultRef.current = onWorkletResult;
+  }, [onWorkletResult]);
+
+  const runOnJS = useMemo(
+    () =>
+      Worklets.createRunOnJS(
+        (
+          values: number[],
+          kind: WorkletKind,
+          ts: number,
+          frameOrientation: Orientation,
+        ) => onWorkletResultRef.current(values, kind, ts, frameOrientation),
+      ),
+    [],
   );
 
   // ── Frame processor ────────────────────────────────────────────────────────
   // KEY FIX: gate check comes FIRST so resize() is never called on throttled frames.
   // Flat-interval throttle via Reanimated SharedValue (no modulo = no burst stutter).
-  const model = getModel();
+  const model = modelReady ? getModel() : null;
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
@@ -1365,20 +1380,24 @@ export function LiveSessionScreen() {
       : 'none';
 
   const cameraReady = cameraGranted && device != null;
-  const sessionActive = cameraReady || useMock;
+  /** Mount Camera once after TFLite init — attaching frameProcessor later crashes Vision Camera on iOS Release. */
+  const canMountCamera = cameraReady && modelInitDone;
+  const sessionActive = canMountCamera || useMock;
   const showCameraGate = !sessionActive;
 
   const cameraGateKind: CameraGateKind | null = showCameraGate
     ? !cameraGranted
       ? 'permission'
-      : cameraPrep === 'warming'
-        ? 'warming'
-        : 'unavailable'
+      : cameraReady && !modelInitDone
+        ? 'model_loading'
+        : cameraPrep === 'warming'
+          ? 'warming'
+          : 'unavailable'
     : null;
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const showStop = sessionActive && (flow === 'active' || flow === 'pose_lost');
-  const useFrame = modelReady && !useMock;
+  const enableInference = modelReady && !useMock;
 
   const poseValid = uiPose != null && isPoseValid(uiPose);
   const skColor =
@@ -1438,14 +1457,14 @@ export function LiveSessionScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root} onLayout={onLayout}>
-      {cameraReady ? (
+      {canMountCamera ? (
         <Camera
           style={StyleSheet.absoluteFill}
           device={device!}
-          isActive={isFocused && cameraReady}
+          isActive={isFocused && canMountCamera}
           {...(format ? { format } : {})}
           resizeMode="contain"
-          frameProcessor={useFrame ? frameProcessor : undefined}
+          frameProcessor={enableInference ? frameProcessor : undefined}
           androidPreviewViewType="texture-view"
           outputOrientation="preview"
           pixelFormat="yuv"
@@ -1721,7 +1740,7 @@ export function LiveSessionScreen() {
   );
 }
 
-type CameraGateKind = 'permission' | 'warming' | 'unavailable';
+type CameraGateKind = 'permission' | 'warming' | 'model_loading' | 'unavailable';
 
 function CameraGatePanel({
   kind,
@@ -1753,16 +1772,20 @@ function CameraGatePanel({
       ? t('liveSession.cameraRequired')
       : kind === 'warming'
         ? t('liveSession.openingCamera')
-        : t('liveSession.noCamera');
+        : kind === 'model_loading'
+          ? t('liveSession.loadingPoseModel')
+          : t('liveSession.noCamera');
 
   const body =
     kind === 'permission'
       ? t('liveSession.cameraSettingsHint')
       : kind === 'warming'
         ? t('liveSession.cameraWarmingHint')
-        : denied
-          ? t('liveSession.cameraDeniedDeviceHint')
-          : t('liveSession.cameraEnumFailedHint');
+        : kind === 'model_loading'
+          ? t('liveSession.loadingPoseModelHint')
+          : denied
+            ? t('liveSession.cameraDeniedDeviceHint')
+            : t('liveSession.cameraEnumFailedHint');
 
   return (
     <View
@@ -1775,7 +1798,7 @@ function CameraGatePanel({
         <Text style={styles.cameraGateTitle}>{title}</Text>
         <Text style={styles.cameraGateBody}>{body}</Text>
 
-        {kind === 'warming' ? (
+        {kind === 'warming' || kind === 'model_loading' ? (
           <View style={styles.cameraGateDots}>
             <View style={styles.cameraGateDot} />
             <View style={[styles.cameraGateDot, styles.cameraGateDotMid]} />

@@ -257,6 +257,8 @@
     "openSettings": "Abrir ajustes",
     "allowCamera": "Permitir cámara",
     "openingCamera": "Abriendo cámara...",
+    "loadingPoseModel": "Cargando modelo de pose...",
+    "loadingPoseModelHint": "Preparando el análisis con IA en el dispositivo. Solo toma un momento.",
     "cameraWarmingHint": "Iniciando la cámara en tu dispositivo. Suele tardar unos segundos.",
     "cameraEnumFailedHint": "No se pudo iniciar la cámara. Prueba voltear la cámara o abre Ajustes para verificar el permiso.",
     "cameraDeniedDeviceHint": "El acceso a la cámara está bloqueado. Abre Ajustes, permite Cámara para RepRight y vuelve aquí.",

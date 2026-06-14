@@ -257,6 +257,8 @@
     "openSettings": "Open app settings",
     "allowCamera": "Allow camera access",
     "openingCamera": "Opening camera...",
+    "loadingPoseModel": "Loading pose model...",
+    "loadingPoseModelHint": "Preparing on-device AI analysis. This only takes a moment.",
     "cameraWarmingHint": "Starting the camera on your device. This usually takes a few seconds.",
     "cameraEnumFailedHint": "The camera could not start. Try flipping the camera or open Settings to verify permission.",
     "cameraDeniedDeviceHint": "Camera access is blocked. Open Settings and allow Camera for RepRight, then return here.",
