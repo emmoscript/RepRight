@@ -83,7 +83,7 @@ export function RootNavigator() {
         <Stack.Screen
           name="LiveSession"
           getComponent={() => require('@/screens/LiveSessionScreen').LiveSessionScreen}
-          options={{ gestureEnabled: false }}
+          options={{ gestureEnabled: false, animation: 'fade' }}
         />
         <Stack.Screen
           name="SessionComplete"

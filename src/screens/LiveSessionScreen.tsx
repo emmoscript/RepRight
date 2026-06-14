@@ -10,6 +10,7 @@ import { speakFeedbackMessage } from '@/utils/speechFeedback';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  InteractionManager,
   LayoutChangeEvent,
   Linking,
   Pressable,
@@ -18,24 +19,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Worklets, useSharedValue as useWorkletSharedValue } from 'react-native-worklets-core';
-import {
-  Camera,
-  useCameraFormat,
-  useFrameProcessor,
-  type Orientation,
-} from 'react-native-vision-camera';
-import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { Camera, type Orientation } from 'react-native-vision-camera';
+
+import { LiveSessionCameraPipeline } from '@/components/LiveSessionCameraPipeline';
 
 import { useResolvedCamera } from '@/hooks/useResolvedCamera';
 import type { RecordedFormError } from '@/types/recordedFormError';
@@ -83,7 +71,7 @@ import {
 import { alignPoseToPortraitOverlay } from '@/utils/orientPose';
 import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
-import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
+import { type ContainRect } from '@/utils/previewContainRect';
 import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -93,11 +81,6 @@ const HOLD_MS = 550;
 const RING_SZ = 160;
 const RING_R = 60;
 const RING_C = 2 * Math.PI * RING_R;
-/**
- * Minimum ms between inferences — flat interval reduces burst load on the UI thread.
- * ~14 fps cap; GPU delegate usually infers in 15–25 ms — 72 ms is a pragmatic balance vs UI latency.
- */
-const INFER_INTERVAL_MS = 72;
 /** Brief pause after last planned rep so the counter/UI updates before navigating away. */
 const AUTO_FINISH_TARGET_REPS_DELAY_MS = 900;
 /** Hold lockout (after a counted rep) this long to auto-finish without tapping FINISH SET. */
@@ -226,10 +209,8 @@ export function LiveSessionScreen() {
     fallbackPosition,
   } = useResolvedCamera({ position, isFocused });
 
-  /** Portrait UI aspect ratio (VisionCamera expects width/height; sensor is landscape; see Snapchat template). */
+  /** Portrait UI aspect ratio (VisionCamera expects width/height; sensor is landscape). */
   const portraitVideoAspectRatio = Math.max(winH, 1) / Math.max(winW, 1);
-  const format = useCameraFormat(device, [{ videoAspectRatio: portraitVideoAspectRatio }, { fps: 30 }]);
-  const { resize } = useResizePlugin();
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   const [layout, setLayout] = useState({ w: 1, h: 1 });
@@ -242,11 +223,8 @@ export function LiveSessionScreen() {
     if (layout.w < 16 || layout.h < 16) {
       return { ox: 0, oy: 0, vw: Math.max(1, layout.w), vh: Math.max(1, layout.h) };
     }
-    if (!format?.videoWidth || !format?.videoHeight) {
-      return { ox: 0, oy: 0, vw: layout.w, vh: layout.h };
-    }
-    return getContainPreviewRect(layout.w, layout.h, format.videoWidth, format.videoHeight);
-  }, [layout.w, layout.h, format]);
+    return { ox: 0, oy: 0, vw: layout.w, vh: layout.h };
+  }, [layout.w, layout.h]);
 
   // ── Session flow ────────────────────────────────────────────────────────────
   const [flow, setFlow] = useState<Flow>('search');
@@ -335,6 +313,9 @@ export function LiveSessionScreen() {
   const [modelReady, setModelReady] = useState(false);
   /** False until initModel() finishes — camera mounts once so frameProcessor is never toggled mid-stream. */
   const [modelInitDone, setModelInitDone] = useState(false);
+  /** Defer camera pipeline until navigation + ScrollView teardown finish (iOS Release Reanimated crash). */
+  const [pipelineReady, setPipelineReady] = useState(false);
+  const [searchDotPhase, setSearchDotPhase] = useState(0);
   const [cameraWarmupExpired, setCameraWarmupExpired] = useState(false);
   const [liveFormBanner, setLiveFormBanner] = useState<{
     message: string;
@@ -343,16 +324,15 @@ export function LiveSessionScreen() {
     severity: 'critical' | 'warning';
   } | null>(null);
 
-  // ── Shared value for frame-processor throttle (worklets-core — not Reanimated) ─
-  const lastInferAt = useWorkletSharedValue(0);
-
-  // ── Pulsing dot animations (7A search state) ────────────────────────────────
-  const d1 = useSharedValue(0.3);
-  const d2 = useSharedValue(0.3);
-  const d3 = useSharedValue(0.3);
-  const d1Style = useAnimatedStyle(() => ({ opacity: d1.value }));
-  const d2Style = useAnimatedStyle(() => ({ opacity: d2.value }));
-  const d3Style = useAnimatedStyle(() => ({ opacity: d3.value }));
+  // ── Pulsing dot indicator (search state) — plain RN, no Reanimated (conflicts with VC on iOS Release) ─
+  useEffect(() => {
+    if (flow !== 'search') {
+      setSearchDotPhase(0);
+      return;
+    }
+    const id = setInterval(() => setSearchDotPhase((p) => (p + 1) % 3), 450);
+    return () => clearInterval(id);
+  }, [flow]);
 
   /** Keep flowRef in sync before paint — infer callbacks shouldn’t lag one frame behind `active`. */
   useLayoutEffect(() => {
@@ -483,22 +463,24 @@ export function LiveSessionScreen() {
     if (!tracking) setTrackingStripHeight(0);
   }, [flow]);
 
+  /** Wait for stack transition to finish before mounting Vision Camera (avoids Reanimated scroll-event crash). */
   useEffect(() => {
-    if (flow !== 'search') {
-      d1.value = 0.3;
-      d2.value = 0.3;
-      d3.value = 0.3;
+    if (!isFocused || !modelInitDone || !cameraGranted || device == null) {
+      setPipelineReady(false);
       return;
     }
-    const pulse = () =>
-      withRepeat(
-        withSequence(withTiming(1, { duration: 500 }), withTiming(0.3, { duration: 500 })),
-        -1,
-      );
-    d1.value = pulse();
-    d2.value = withDelay(200, pulse());
-    d3.value = withDelay(400, pulse());
-  }, [flow, d1, d2, d3]);
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setPipelineReady(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      task.cancel();
+      setPipelineReady(false);
+    };
+  }, [isFocused, modelInitDone, cameraGranted, device]);
 
   // ── Init ───────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1206,36 +1188,6 @@ export function LiveSessionScreen() {
     onResizedFrameRef.current = onResizedFrame;
   }, [onResizedFrame]);
 
-  const runResizedFrame = useMemo(
-    () =>
-      Worklets.createRunOnJS((bytes: number[], ts: number, frameOrientation: Orientation) => {
-        onResizedFrameRef.current(bytes, ts, frameOrientation);
-      }),
-    [],
-  );
-
-  // ── Frame processor ────────────────────────────────────────────────────────
-  // Resize in worklet; infer on JS. Gate check FIRST so resize() is never called on throttled frames.
-  const frameProcessor = useFrameProcessor(
-    (frame) => {
-      'worklet';
-      const now = Date.now();
-      if (now - lastInferAt.value < INFER_INTERVAL_MS) return;
-      lastInferAt.value = now;
-      try {
-        const r = resize(frame, {
-          scale: { width: 192, height: 192 },
-          pixelFormat: 'rgb',
-          dataType: 'uint8',
-        });
-        runResizedFrame(Array.from(new Uint8Array(r)), Date.now(), frame.orientation);
-      } catch {
-        // worklet must never throw to caller
-      }
-    },
-    [resize, runResizedFrame, lastInferAt],
-  );
-
   // ── State machine (100 ms tick) ────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
@@ -1390,8 +1342,8 @@ export function LiveSessionScreen() {
       : 'none';
 
   const cameraReady = cameraGranted && device != null;
-  /** Mount Camera once after TFLite init — attaching frameProcessor later crashes Vision Camera on iOS Release. */
-  const canMountCamera = cameraReady && modelInitDone;
+  /** Mount camera pipeline once after TFLite init + navigation transition settle. */
+  const canMountCamera = cameraReady && modelInitDone && pipelineReady;
   const sessionActive = canMountCamera || useMock;
   const showCameraGate = !sessionActive;
 
@@ -1400,9 +1352,11 @@ export function LiveSessionScreen() {
       ? 'permission'
       : cameraReady && !modelInitDone
         ? 'model_loading'
-        : cameraPrep === 'warming'
+        : cameraReady && modelInitDone && !pipelineReady
           ? 'warming'
-          : 'unavailable'
+          : cameraPrep === 'warming'
+            ? 'warming'
+            : 'unavailable'
     : null;
 
   // ── Derived values ─────────────────────────────────────────────────────────
@@ -1467,17 +1421,13 @@ export function LiveSessionScreen() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={styles.root} onLayout={onLayout}>
-      {canMountCamera ? (
-        <Camera
-          style={StyleSheet.absoluteFill}
-          device={device!}
+      {canMountCamera && device ? (
+        <LiveSessionCameraPipeline
+          device={device}
           isActive={isFocused && canMountCamera}
-          {...(format ? { format } : {})}
-          resizeMode="contain"
-          frameProcessor={enableInference ? frameProcessor : undefined}
-          androidPreviewViewType="texture-view"
-          outputOrientation="preview"
-          pixelFormat="yuv"
+          portraitVideoAspectRatio={portraitVideoAspectRatio}
+          enableInference={enableInference}
+          onFrameBytesRef={onResizedFrameRef}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraBackdrop]} />
@@ -1571,9 +1521,12 @@ export function LiveSessionScreen() {
               <View style={styles.overlayCenter} pointerEvents="none">
                 <Text style={styles.searchingLbl}>{t('liveSession.searchingPose')}</Text>
                 <View style={styles.dotsRow}>
-                  <Animated.View style={[styles.dot, d1Style]} />
-                  <Animated.View style={[styles.dot, d2Style]} />
-                  <Animated.View style={[styles.dot, d3Style]} />
+                  {[0, 1, 2].map((i) => (
+                    <View
+                      key={i}
+                      style={[styles.dot, { opacity: searchDotPhase === i ? 1 : 0.35 }]}
+                    />
+                  ))}
                 </View>
                 <View style={[styles.infoBanner, styles.searchAlertBelowSearching]}>
                   <SvgHudWalkPerson color={colors.text_secondary} size={26} />
