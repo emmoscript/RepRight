@@ -29,7 +29,7 @@
     "eas:production:ios": "eas build --profile production --platform ios",
     "git:hooks": "git config core.hooksPath .githooks",
     "lint": "eslint App.tsx index.js app.config.ts \"src/**/*.ts\" \"src/**/*.tsx\"",
-    "postinstall": "patch-package",
+    "postinstall": "node scripts/postinstall.cjs",
     "tsc": "tsc --noEmit",
     "tsc:test": "tsc --noEmit -p tsconfig.test.json",
     "test": "jest"
