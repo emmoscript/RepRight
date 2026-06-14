@@ -55,6 +55,8 @@
     <string>RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>RepRight accesses your photo library only when you choose a profile picture.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>RepRight does not use your GPS location for workouts or tracking. An included library references location APIs for regional settings; location is not collected or stored.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>RCTRootViewBackgroundColor</key>

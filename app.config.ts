@@ -18,6 +18,8 @@ const config: ExpoConfig = {
         "RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.",
       NSPhotoLibraryUsageDescription:
         "RepRight accesses your photo library only when you choose a profile picture.",
+      NSLocationWhenInUseUsageDescription:
+        "RepRight does not use your GPS location for workouts or tracking. An included library references location APIs for regional settings; location is not collected or stored.",
     },
     buildNumber: "1",
   },
