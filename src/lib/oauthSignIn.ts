@@ -17,10 +17,14 @@ export async function signInWithOAuthProvider(provider: Provider): Promise<Sessi
     options: {
       redirectTo,
       skipBrowserRedirect: true,
-      queryParams: {
-        access_type: 'offline',
-        prompt: 'select_account',
-      },
+      ...(provider === 'google'
+        ? {
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'select_account',
+            },
+          }
+        : {}),
     },
   });
 

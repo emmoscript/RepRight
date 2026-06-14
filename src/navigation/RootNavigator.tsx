@@ -14,6 +14,8 @@ import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
 import { LiveSessionScreen } from '@/screens/LiveSessionScreen';
 import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
 import { SessionDetailScreen } from '@/screens/SessionDetailScreen';
+import { LegalDocumentScreen } from '@/screens/LegalDocumentScreen';
+import { SupportScreen } from '@/screens/SupportScreen';
 import { colors } from '@/theme/colors';
 
 declare global {
@@ -82,6 +84,8 @@ export function RootNavigator() {
         <Stack.Screen name="LiveSession" component={LiveSessionScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ gestureEnabled: false }} />
         <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
+        <Stack.Screen name="LegalDocument" component={LegalDocumentScreen} />
+        <Stack.Screen name="Support" component={SupportScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

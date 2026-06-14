@@ -22,7 +22,8 @@
     "imperialLb": "Imperial (lb)",
     "metricKg": "Métrico (kg)",
     "metric": "Métrico",
-    "imperial": "Imperial"
+    "imperial": "Imperial",
+    "back": "Atrás"
   },
   "tabs": {
     "home": "Inicio",
@@ -171,7 +172,31 @@
     "photoAccessTitle": "Se necesita acceso a fotos",
     "photoAccessBody": "Permite acceso a la galería para poner foto de perfil.",
     "removePhotoTitle": "¿Eliminar foto?",
-    "removePhotoBody": "Se borrará la foto de perfil en este dispositivo."
+    "removePhotoBody": "Se borrará la foto de perfil en este dispositivo.",
+    "legalTitle": "Legal y soporte",
+    "privacyPolicy": "Política de Privacidad",
+    "termsOfUse": "Términos de Uso",
+    "supportContact": "Soporte y contacto",
+    "deleteAccount": "Eliminar cuenta",
+    "deleteAccountTitle": "¿Eliminar tu cuenta?",
+    "deleteAccountBody": "Esto elimina permanentemente tu cuenta de RepRight, el historial de entrenamientos sincronizado y las estadísticas de nuestros servidores. También se borrarán los datos locales en este dispositivo. Esta acción no se puede deshacer.",
+    "deleteAccountConfirm": "Eliminar cuenta",
+    "deletingAccount": "Eliminando cuenta…",
+    "deleteAccountError": "No se pudo eliminar tu cuenta. Revisa tu conexión e inténtalo de nuevo, o contacta soporte."
+  },
+  "legal": {
+    "lastUpdated": "Última actualización: {{date}}",
+    "openInBrowser": "Abrir versión pública en el navegador"
+  },
+  "support": {
+    "title": "Soporte y contacto",
+    "emailTitle": "Soporte por correo",
+    "emailBody": "Para ayuda con la cuenta, solicitudes de datos o reportes de errores, escríbenos. Normalmente respondemos en unos días hábiles.",
+    "helpTitle": "Ayuda en la app",
+    "helpBody": "Para el análisis de forma, coloca el teléfono a 1,5–2 m con vista lateral completa del cuerpo. Usa buena iluminación y mantén la barra en cuadro.",
+    "researchTitle": "Proyecto de investigación",
+    "researchBody": "RepRight se desarrolla en la Universidad Iberoamericana (UNIBE) para investigación académica sobre análisis de forma del ejercicio con visión por computadora en el dispositivo.",
+    "footer": "RepRight · UNIBE · Santo Domingo, República Dominicana"
   },
   "workout": {
     "title": "Entreno",

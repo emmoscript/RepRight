@@ -1,10 +1,8 @@
-import * as AppleAuthentication from 'expo-apple-authentication';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { isAppleSignInAvailable } from '@/lib/appleSignIn';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
@@ -17,20 +15,17 @@ type Props = {
 
 export function SocialAuthButtons({ mode, disabled = false, onGooglePress, onApplePress }: Props) {
   const { t } = useTranslation();
-  const [appleAvailable, setAppleAvailable] = useState(Platform.OS === 'ios');
-
-  useEffect(() => {
-    void isAppleSignInAvailable().then(setAppleAvailable);
-  }, []);
+  const showApple = Platform.OS === 'ios';
 
   const oauthHint = mode === 'signup' ? t('auth.oauthHint') : null;
   const googleLabel = mode === 'signup' ? t('auth.googleSignUp') : t('auth.googleContinue');
+  const appleLabel = mode === 'signup' ? t('auth.appleSignUp') : t('auth.appleContinue');
 
   return (
     <View style={styles.wrap}>
       {oauthHint ? <Text style={styles.hint}>{oauthHint}</Text> : null}
 
-      <View style={[styles.row, !appleAvailable && styles.rowSolo]}>
+      <View style={[styles.row, !showApple && styles.rowSolo]}>
         <Pressable
           style={[styles.chip, styles.chipFlex, disabled && styles.chipDisabled]}
           accessibilityRole="button"
@@ -38,25 +33,23 @@ export function SocialAuthButtons({ mode, disabled = false, onGooglePress, onApp
           onPress={onGooglePress}
         >
           <Ionicons name="logo-google" size={20} color={colors.text_primary} />
-          <Text style={styles.chipLab} numberOfLines={1}>
+          <Text style={styles.chipLab} numberOfLines={2}>
             {googleLabel}
           </Text>
         </Pressable>
 
-        {appleAvailable ? (
-          <View style={[styles.appleWrap, disabled && styles.chipDisabled]} pointerEvents={disabled ? 'none' : 'auto'}>
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={
-                mode === 'signup'
-                  ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
-                  : AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
-              }
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-              cornerRadius={12}
-              style={styles.appleBtn}
-              onPress={onApplePress}
-            />
-          </View>
+        {showApple ? (
+          <Pressable
+            style={[styles.chip, styles.chipFlex, styles.appleChip, disabled && styles.chipDisabled]}
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onApplePress}
+          >
+            <Ionicons name="logo-apple" size={20} color={colors.text_primary} />
+            <Text style={styles.chipLab} numberOfLines={2}>
+              {appleLabel}
+            </Text>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -86,13 +79,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     backgroundColor: colors.surface_v3,
     borderWidth: 1,
     borderColor: colors.border_subtle,
     minHeight: 48,
+  },
+  appleChip: {
+    backgroundColor: colors.bg_high,
   },
   chipFlex: {
     flex: 1,
@@ -105,15 +101,8 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flexShrink: 1,
     fontFamily: typography.fontFamily.semibold,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.text_primary,
-  },
-  appleBtn: {
-    width: '100%',
-    height: 48,
-  },
-  appleWrap: {
-    flex: 1,
-    minWidth: 0,
+    textAlign: 'center',
   },
 });

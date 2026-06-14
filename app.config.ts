@@ -15,9 +15,9 @@ const config: ExpoConfig = {
     usesAppleSignIn: true,
     infoPlist: {
       NSCameraUsageDescription:
-        "RepRight needs camera access to analyze your deadlift form in real time.",
+        "RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.",
       NSPhotoLibraryUsageDescription:
-        "RepRight uses your photo library to set a profile picture.",
+        "RepRight accesses your photo library only when you choose a profile picture.",
     },
     buildNumber: "1",
   },
@@ -47,14 +47,14 @@ const config: ExpoConfig = {
       "expo-image-picker",
       {
         photosPermission:
-          "RepRight uses your photo library to set a profile picture.",
+          "RepRight accesses your photo library only when you choose a profile picture.",
       },
     ],
     [
       "react-native-vision-camera",
       {
         cameraPermissionText:
-          "RepRight needs camera access to analyze your deadlift form in real time.",
+          "RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.",
         enableMicrophonePermission: false,
       },
     ],

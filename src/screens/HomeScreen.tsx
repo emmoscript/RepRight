@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import { resolveDisplayName } from '@/utils/displayName';
 import { timeGreetingI18nKey, timeGreetingPeriod, timeReadyLiftI18nKey } from '@/utils/timeGreeting';
+import { computeCurrentStreakDays } from '@/utils/sessionStreak';
 
 function formatDateShort(iso: string, months: string[]): string {
   const d = new Date(iso);
@@ -128,6 +129,7 @@ export function HomeScreen() {
   const latest = sessions[0] ?? null;
   const recent = sessions.slice(0, 2);
   const sessionCount = sessions.length;
+  const currentStreak = useMemo(() => computeCurrentStreakDays(sessions), [sessions]);
 
   const lastScore = latest ? Math.round(latest.summary.avgScore) : null;
   const lastSets = latest?.sets?.length ?? 0;
@@ -229,10 +231,12 @@ export function HomeScreen() {
             <View style={styles.miniStat}>
               <Text style={styles.miniStatLab}>{t('home.currentStreak')}</Text>
               <View style={styles.streakRow}>
-                <Text style={styles.miniStatVal}>12</Text>
-                <Text style={styles.streakEmoji} accessibilityLabel="Streak flame">
-                  {'🔥'}
-                </Text>
+                <Text style={styles.miniStatVal}>{currentStreak}</Text>
+                {currentStreak > 0 ? (
+                  <Text style={styles.streakEmoji} accessibilityLabel="Streak flame">
+                    {'🔥'}
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>

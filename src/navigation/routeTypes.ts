@@ -28,6 +28,8 @@ export type RootStackParamList = {
   LiveSession: { continuedWorkout?: boolean } | undefined;
   SessionComplete: undefined;
   SessionDetail: { sessionId: string };
+  LegalDocument: { type: 'privacy' | 'terms' };
+  Support: undefined;
 };
 
 export type MainTabCompositeNav = CompositeNavigationProp<

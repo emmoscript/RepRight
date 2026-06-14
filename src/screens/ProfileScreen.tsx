@@ -41,6 +41,7 @@ export function ProfileScreen() {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isLoading = useAuthStore((s) => s.isLoading);
   const signOut = useAuthStore((s) => s.signOut);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
 
   const displayNamePref = useUserPreferencesStore((s) => s.displayName);
   const profilePhotoUri = useUserPreferencesStore((s) => s.profilePhotoUri);
@@ -75,6 +76,21 @@ export function ProfileScreen() {
   const handleSignOut = async () => {
     await signOut();
     resetToWelcome();
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(t('profile.deleteAccountTitle'), t('profile.deleteAccountBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('profile.deleteAccountConfirm'),
+        style: 'destructive',
+        onPress: () => {
+          void deleteAccount().catch(() => {
+            Alert.alert(t('profile.deleteAccount'), t('profile.deleteAccountError'));
+          });
+        },
+      },
+    ]);
   };
 
   const openNameEditor = () => {
@@ -231,7 +247,41 @@ export function ProfileScreen() {
             value={audioFeedbackEnabled}
             onChange={(next) => void setAudioFeedbackEnabled(next).then(pushProfile)}
           />
+
+          <View style={styles.unitsCard}>
+            <View style={styles.cardTitleRow}>
+              <Ionicons name="document-text-outline" size={20} color={colors.primary_green} />
+              <Text style={styles.unitsTitle}>{t('profile.legalTitle')}</Text>
+            </View>
+            <SettingsLink
+              label={t('profile.privacyPolicy')}
+              onPress={() => nav.navigate('LegalDocument', { type: 'privacy' })}
+            />
+            <SettingsLink
+              label={t('profile.termsOfUse')}
+              onPress={() => nav.navigate('LegalDocument', { type: 'terms' })}
+            />
+            <SettingsLink
+              label={t('profile.supportContact')}
+              onPress={() => nav.navigate('Support')}
+              last
+            />
+          </View>
         </View>
+
+        {isLoggedIn ? (
+          <Pressable
+            style={[styles.deleteAccountBtn, isLoading && styles.signOutDisabled]}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isLoading }}
+            onPress={handleDeleteAccount}
+            disabled={isLoading}
+          >
+            <Text style={styles.deleteAccountTxt}>
+              {isLoading ? t('profile.deletingAccount') : t('profile.deleteAccount')}
+            </Text>
+          </Pressable>
+        ) : null}
 
         <Pressable
           style={[styles.signOutGhost, isLoading && styles.signOutDisabled]}
@@ -319,6 +369,19 @@ function RowToggle(props: {
         thumbColor="#fff"
       />
     </View>
+  );
+}
+
+function SettingsLink(props: { label: string; onPress: () => void; last?: boolean }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={props.onPress}
+      style={[styles.settingsLink, props.last && styles.settingsLinkLast]}
+    >
+      <Text style={styles.settingsLinkTxt}>{props.label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.text_muted} />
+    </Pressable>
   );
 }
 
@@ -460,6 +523,39 @@ const styles = StyleSheet.create({
   },
   signOutDisabled: { opacity: 0.5 },
   signOutTxt: { color: colors.accent_red, fontFamily: typography.fontFamily.bold, fontSize: 15 },
+  deleteAccountBtn: {
+    marginTop: 20,
+    minHeight: 56,
+    borderRadius: 12,
+    backgroundColor: colors.accent_red + '18',
+    borderWidth: StyleSheet.hairlineWidth + 1,
+    borderColor: colors.accent_red + '55',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteAccountTxt: {
+    color: colors.accent_red,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 15,
+  },
+  settingsLink: {
+    marginTop: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border_subtle,
+  },
+  settingsLinkLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
+  },
+  settingsLinkTxt: {
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.body,
+    color: colors.text_primary,
+  },
   verSmall: {
     marginTop: 28,
     fontSize: 11,

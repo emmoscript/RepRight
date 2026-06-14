@@ -52,9 +52,9 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>RepRight needs camera access to analyze your deadlift form in real time.</string>
+    <string>RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>RepRight uses your photo library to set a profile picture.</string>
+    <string>RepRight accesses your photo library only when you choose a profile picture.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>RCTRootViewBackgroundColor</key>

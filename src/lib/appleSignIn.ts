@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
 import { supabase } from '@/lib/supabaseClient';
+import { signInWithOAuthProvider } from '@/lib/oauthSignIn';
 import { OAuthCancelledError } from '@/utils/authErrors';
 
 export async function isAppleSignInAvailable(): Promise<boolean> {
@@ -20,6 +21,17 @@ function fullNameFromAppleCredential(
   const family = fullName.familyName?.trim() ?? '';
   const combined = [given, family].filter(Boolean).join(' ');
   return combined.length > 0 ? combined : null;
+}
+
+/** Native when available; otherwise Supabase OAuth in browser (older Dev Client builds). */
+export async function signInWithApple(): Promise<Session> {
+  if (Platform.OS !== 'ios') {
+    throw new Error('Sign in with Apple is only available on iOS.');
+  }
+  if (await isAppleSignInAvailable()) {
+    return signInWithAppleNative();
+  }
+  return signInWithOAuthProvider('apple');
 }
 
 /** Native Sign in with Apple → Supabase session via identity token. iOS only. */

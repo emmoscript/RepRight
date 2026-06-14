@@ -1,10 +1,11 @@
-import { signInWithAppleNative } from '@/lib/appleSignIn';
+import { signInWithApple } from '@/lib/appleSignIn';
 import { displayNameFromMetadata, pullProfileFromSupabase } from '@/lib/profileSync';
 import { resolveAnonymousGuestLabel } from '@/lib/anonymousGuest';
 import { getAuthRedirectUri } from '@/lib/authRedirect';
 import { createSessionFromAuthUrl } from '@/lib/authDeepLink';
 import { signInWithOAuthProvider } from '@/lib/oauthSignIn';
 import { isEmailConfirmed, isSupabaseConfigured, supabase } from '@/lib/supabaseClient';
+import { clearAllSessionsForOwner } from '@/modules/session';
 import { resetToMainTabs, resetToWelcome } from '@/navigation/navigationRef';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
 import {
@@ -40,6 +41,7 @@ type AuthState = {
   signInWithApple: () => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   enterAsGuest: () => Promise<void>;
   restoreSession: () => Promise<void>;
   initAuthListener: () => void;
@@ -291,7 +293,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         );
       }
 
-      const session = await signInWithAppleNative();
+      const session = await signInWithApple();
       await syncDisplayNameFromAuthUser(session.user.user_metadata);
       const ok = applyVerifiedSession(set, session);
       if (ok) resetToMainTabs();
@@ -439,6 +441,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign out failed';
       set({ error: message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  deleteAccount: async () => {
+    set({ isLoading: true, error: null });
+    const userId = get().user?.id;
+    try {
+      if (!isSupabaseConfigured()) {
+        throw new Error(
+          'Supabase is not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env, then restart Metro.',
+        );
+      }
+      if (!userId) {
+        throw new Error('No account to delete');
+      }
+
+      const ownerKey = `user:${userId}`;
+      const { error } = await supabase.rpc('delete_own_account');
+      if (error) throw error;
+
+      await clearAllSessionsForOwner(ownerKey);
+      await supabase.auth.signOut();
+
+      set({
+        isLoggedIn: false,
+        isGuest: false,
+        user: null,
+        pendingVerificationEmail: null,
+        participantId: randomParticipant(),
+        error: null,
+      });
+      resetToWelcome();
+    } catch (err) {
+      const message = formatAuthErrorMessage(err);
+      set({ error: message });
+      throw err;
     } finally {
       set({ isLoading: false });
     }

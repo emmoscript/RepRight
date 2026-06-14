@@ -22,7 +22,8 @@
     "imperialLb": "Imperial (lb)",
     "metricKg": "Metric (kg)",
     "metric": "Metric",
-    "imperial": "Imperial"
+    "imperial": "Imperial",
+    "back": "Back"
   },
   "tabs": {
     "home": "Home",
@@ -171,7 +172,31 @@
     "photoAccessTitle": "Photo access needed",
     "photoAccessBody": "Allow photo library access to set a profile picture.",
     "removePhotoTitle": "Remove photo?",
-    "removePhotoBody": "Your profile picture will be cleared on this device."
+    "removePhotoBody": "Your profile picture will be cleared on this device.",
+    "legalTitle": "Legal & support",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfUse": "Terms of Use",
+    "supportContact": "Support & contact",
+    "deleteAccount": "Delete account",
+    "deleteAccountTitle": "Delete your account?",
+    "deleteAccountBody": "This permanently removes your RepRight account, synced workout history, and statistics from our servers. Local data on this device will also be cleared. This cannot be undone.",
+    "deleteAccountConfirm": "Delete account",
+    "deletingAccount": "Deleting account…",
+    "deleteAccountError": "Could not delete your account. Check your connection and try again, or contact support."
+  },
+  "legal": {
+    "lastUpdated": "Last updated: {{date}}",
+    "openInBrowser": "Open public version in browser"
+  },
+  "support": {
+    "title": "Support & contact",
+    "emailTitle": "Email support",
+    "emailBody": "For account help, data requests, or bug reports, email us. We typically respond within a few business days.",
+    "helpTitle": "In-app help",
+    "helpBody": "For form analysis tips, place your phone 5–7 feet away with a full side view of your body. Ensure good lighting and keep the barbell in frame.",
+    "researchTitle": "Research project",
+    "researchBody": "RepRight is developed at Universidad Iberoamericana (UNIBE) for academic research on exercise form analysis using on-device computer vision.",
+    "footer": "RepRight · UNIBE · Santo Domingo, Dominican Republic"
   },
   "workout": {
     "title": "Workout",
