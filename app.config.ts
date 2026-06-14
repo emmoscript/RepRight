@@ -20,6 +20,7 @@ const config: ExpoConfig = {
         "RepRight accesses your photo library only when you choose a profile picture.",
       NSLocationWhenInUseUsageDescription:
         "RepRight does not use your GPS location for workouts or tracking. An included library references location APIs for regional settings; location is not collected or stored.",
+      ITSAppUsesNonExemptEncryption: false,
     },
     buildNumber: "1",
   },

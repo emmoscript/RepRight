@@ -2,21 +2,10 @@ import { NavigationContainer, DarkTheme, type Theme } from '@react-navigation/na
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuthDeepLink } from '@/hooks/useAuthDeepLink';
-import { MainTabNavigator } from '@/navigation/MainTabNavigator';
 import { flushPendingAuthNavigation, navigationRef } from '@/navigation/navigationRef';
 import type { RootStackParamList, MainTabParamList } from '@/navigation/routeTypes';
 import { useAuthStore } from '@/store/authStore';
 import { useUserPreferencesStore } from '@/store/userPreferencesStore';
-import { DemoScreen } from '@/screens/DemoScreen';
-import { WelcomeScreen } from '@/screens/WelcomeScreen';
-import { AuthGatewayScreen } from '@/screens/AuthGatewayScreen';
-import { EmailConfirmScreen } from '@/screens/EmailConfirmScreen';
-import { LiveSessionScreen } from '@/screens/LiveSessionScreen';
-import { SessionCompleteScreen } from '@/screens/SessionCompleteScreen';
-import { SessionDetailScreen } from '@/screens/SessionDetailScreen';
-import { LegalDocumentScreen } from '@/screens/LegalDocumentScreen';
-import { SupportScreen } from '@/screens/SupportScreen';
-import { BiomechSurveyScreen } from '@/screens/BiomechSurveyScreen';
 import { colors } from '@/theme/colors';
 
 declare global {
@@ -77,17 +66,43 @@ export function RootNavigator() {
           headerShown: false,
         }}
       >
-        <Stack.Screen name="Demo" component={DemoScreen} />
-        <Stack.Screen name="Welcome" component={WelcomeScreen} />
-        <Stack.Screen name="AuthGateway" component={AuthGatewayScreen} />
-        <Stack.Screen name="EmailConfirm" component={EmailConfirmScreen} />
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-        <Stack.Screen name="LiveSession" component={LiveSessionScreen} options={{ gestureEnabled: false }} />
-        <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ gestureEnabled: false }} />
-        <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
-        <Stack.Screen name="LegalDocument" component={LegalDocumentScreen} />
-        <Stack.Screen name="Support" component={SupportScreen} />
-        <Stack.Screen name="BiomechSurvey" component={BiomechSurveyScreen} />
+        <Stack.Screen name="Demo" getComponent={() => require('@/screens/DemoScreen').DemoScreen} />
+        <Stack.Screen name="Welcome" getComponent={() => require('@/screens/WelcomeScreen').WelcomeScreen} />
+        <Stack.Screen
+          name="AuthGateway"
+          getComponent={() => require('@/screens/AuthGatewayScreen').AuthGatewayScreen}
+        />
+        <Stack.Screen
+          name="EmailConfirm"
+          getComponent={() => require('@/screens/EmailConfirmScreen').EmailConfirmScreen}
+        />
+        <Stack.Screen
+          name="MainTabs"
+          getComponent={() => require('@/navigation/MainTabNavigator').MainTabNavigator}
+        />
+        <Stack.Screen
+          name="LiveSession"
+          getComponent={() => require('@/screens/LiveSessionScreen').LiveSessionScreen}
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="SessionComplete"
+          getComponent={() => require('@/screens/SessionCompleteScreen').SessionCompleteScreen}
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="SessionDetail"
+          getComponent={() => require('@/screens/SessionDetailScreen').SessionDetailScreen}
+        />
+        <Stack.Screen
+          name="LegalDocument"
+          getComponent={() => require('@/screens/LegalDocumentScreen').LegalDocumentScreen}
+        />
+        <Stack.Screen name="Support" getComponent={() => require('@/screens/SupportScreen').SupportScreen} />
+        <Stack.Screen
+          name="BiomechSurvey"
+          getComponent={() => require('@/screens/BiomechSurveyScreen').BiomechSurveyScreen}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

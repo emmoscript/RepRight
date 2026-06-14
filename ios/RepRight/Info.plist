@@ -57,6 +57,8 @@
     <string>RepRight accesses your photo library only when you choose a profile picture.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>RepRight does not use your GPS location for workouts or tracking. An included library references location APIs for regional settings; location is not collected or stored.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
     <key>RCTRootViewBackgroundColor</key>
