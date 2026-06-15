@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo } from 'react';
-import { StyleSheet } from 'react-native';
-import { Worklets, useSharedValue as useWorkletSharedValue } from 'react-native-worklets-core';
+import { Platform, StyleSheet } from 'react-native';
+import type { TensorflowModel } from 'react-native-fast-tflite';
+import {
+  Worklets,
+  useSharedValue as useWorkletSharedValue,
+} from 'react-native-worklets-core';
 import {
   Camera,
   useCameraFormat,
@@ -12,10 +16,20 @@ import { useResizePlugin } from 'vision-camera-resize-plugin';
 
 import { diagBreadcrumb } from '@/lib/crashDiag';
 
-const INFER_INTERVAL_MS = 72;
+const INFER_INTERVAL_MS = Platform.OS === 'android' ? 180 : 140;
 
-export type LiveSessionFrameBytesHandler = (
-  bytes: number[],
+export type InferenceTensorKind = 'f32' | 'u8' | 'i8';
+
+export type LiveSessionInferenceHandler = (
+  values: number[],
+  kind: InferenceTensorKind,
+  ts: number,
+  frameOrientation: Orientation,
+) => void;
+
+/** Fallback path: ~110 KB Uint8Array via SharedValue (not 110k JS numbers). */
+export type LiveSessionFramePixelsHandler = (
+  pixels: Uint8Array,
   ts: number,
   frameOrientation: Orientation,
 ) => void;
@@ -25,7 +39,9 @@ type Props = {
   isActive: boolean;
   portraitVideoAspectRatio: number;
   enableInference: boolean;
-  onFrameBytesRef: React.MutableRefObject<LiveSessionFrameBytesHandler>;
+  model: TensorflowModel | null;
+  onInferenceResultRef: React.MutableRefObject<LiveSessionInferenceHandler>;
+  onFramePixelsRef: React.MutableRefObject<LiveSessionFramePixelsHandler>;
 };
 
 /**
@@ -37,7 +53,9 @@ export function LiveSessionCameraPipeline({
   isActive,
   portraitVideoAspectRatio,
   enableInference,
-  onFrameBytesRef,
+  model,
+  onInferenceResultRef,
+  onFramePixelsRef,
 }: Props) {
   useEffect(() => {
     diagBreadcrumb('live_session:camera_pipeline_mount', { enableInference });
@@ -46,17 +64,35 @@ export function LiveSessionCameraPipeline({
 
   const format = useCameraFormat(device, [
     { videoAspectRatio: portraitVideoAspectRatio },
-    { fps: 30 },
+    { fps: Platform.OS === 'android' ? 20 : 30 },
+    ...(Platform.OS === 'android'
+      ? [{ videoResolution: { width: 720, height: 1280 } }]
+      : []),
   ]);
   const { resize } = useResizePlugin();
   const lastInferAt = useWorkletSharedValue(0);
+  const sharedPixels = useWorkletSharedValue<Uint8Array | null>(null);
+  const sharedTs = useWorkletSharedValue(0);
+  const sharedOrientation = useWorkletSharedValue<Orientation>('portrait');
 
-  const runFrameBytes = useMemo(
+  const runInferenceResult = useMemo(
     () =>
-      Worklets.createRunOnJS((bytes: number[], ts: number, frameOrientation: Orientation) => {
-        onFrameBytesRef.current(bytes, ts, frameOrientation);
+      Worklets.createRunOnJS(
+        (values: number[], kind: InferenceTensorKind, ts: number, frameOrientation: Orientation) => {
+          onInferenceResultRef.current(values, kind, ts, frameOrientation);
+        },
+      ),
+    [onInferenceResultRef],
+  );
+
+  const deliverFramePixels = useMemo(
+    () =>
+      Worklets.createRunOnJS(() => {
+        const pixels = sharedPixels.value;
+        if (pixels == null) return;
+        onFramePixelsRef.current(pixels, sharedTs.value, sharedOrientation.value);
       }),
-    [onFrameBytesRef],
+    [onFramePixelsRef, sharedPixels, sharedOrientation, sharedTs],
   );
 
   const frameProcessor = useFrameProcessor(
@@ -66,17 +102,44 @@ export function LiveSessionCameraPipeline({
       if (now - lastInferAt.value < INFER_INTERVAL_MS) return;
       lastInferAt.value = now;
       try {
-        const r = resize(frame, {
+        const resized = resize(frame, {
           scale: { width: 192, height: 192 },
           pixelFormat: 'rgb',
           dataType: 'uint8',
         });
-        runFrameBytes(Array.from(new Uint8Array(r)), Date.now(), frame.orientation);
+
+        // Best: infer in worklet → only ~51 floats cross the bridge.
+        if (model != null) {
+          try {
+            const outs = model.runSync([resized]);
+            const out = outs[0];
+            if (out != null) {
+              runInferenceResult(Array.from(out as ArrayLike<number>), 'f32', now, frame.orientation);
+              return;
+            }
+          } catch {
+            // Fall through — JS thread runSync via SharedValue.
+          }
+        }
+
+        sharedPixels.value = resized.slice();
+        sharedTs.value = now;
+        sharedOrientation.value = frame.orientation;
+        deliverFramePixels();
       } catch {
         // worklet must never throw to caller
       }
     },
-    [resize, runFrameBytes, lastInferAt],
+    [
+      resize,
+      runInferenceResult,
+      deliverFramePixels,
+      lastInferAt,
+      model,
+      sharedPixels,
+      sharedTs,
+      sharedOrientation,
+    ],
   );
 
   return (

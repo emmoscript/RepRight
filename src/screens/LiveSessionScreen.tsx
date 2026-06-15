@@ -23,9 +23,10 @@ import {
 
 import { LiveSessionErrorBoundary } from '@/components/LiveSessionErrorBoundary';
 import { diagBreadcrumb } from '@/lib/crashDiag';
+import { clearInferenceInputBuffer, reuseInferenceInput } from '@/utils/inferenceInputBuffer';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Camera, type Orientation } from 'react-native-vision-camera';
+import { Camera, useCameraFormat, type Orientation } from 'react-native-vision-camera';
 
 import { LiveSessionCameraPipeline } from '@/components/LiveSessionCameraPipeline';
 
@@ -75,7 +76,7 @@ import {
 import { alignPoseToPortraitOverlay } from '@/utils/orientPose';
 import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
-import { type ContainRect } from '@/utils/previewContainRect';
+import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
 import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -152,8 +153,8 @@ const MUTE_FAB_HEIGHT = 52;
 const MUTE_GAP_ABOVE_TRACKING_PANEL = 10;
 /** Gap between FAB top and bottom edge of form-feedback banner. */
 const FORM_FEEDBACK_GAP_ABOVE_FAB = 8;
-/** Push header controls down from status bar to clear camera letterboxing. */
-const HEADER_CONTROLS_EXTRA_DOWN = 14;
+/** Push header controls down from status bar to sit in the camera letterbox band. */
+const HEADER_CONTROLS_EXTRA_DOWN = 22;
 /** Extra offset when stats strip is hidden — keeps FAB off search / countdown overlays. */
 const MUTE_FAB_CLEAR_HUD = 40;
 /**
@@ -200,6 +201,10 @@ export function LiveSessionScreen() {
 
   // ── Camera ─────────────────────────────────────────────────────────────────
   const [useFront, setUseFront] = useState(() => useUserPreferencesStore.getState().defaultCameraFront);
+  const useFrontRef = useRef(useFront);
+  useEffect(() => {
+    useFrontRef.current = useFront;
+  }, [useFront]);
   const position = useFront ? 'front' : 'back';
 
   const {
@@ -216,6 +221,14 @@ export function LiveSessionScreen() {
   /** Portrait UI aspect ratio (VisionCamera expects width/height; sensor is landscape). */
   const portraitVideoAspectRatio = Math.max(winH, 1) / Math.max(winW, 1);
 
+  const cameraFormat = useCameraFormat(device, [
+    { videoAspectRatio: portraitVideoAspectRatio },
+    { fps: Platform.OS === 'android' ? 20 : 30 },
+    ...(Platform.OS === 'android'
+      ? [{ videoResolution: { width: 720, height: 1280 } }]
+      : []),
+  ]);
+
   // ── Layout ─────────────────────────────────────────────────────────────────
   const [layout, setLayout] = useState({ w: 1, h: 1 });
   const onLayout = useCallback((e: LayoutChangeEvent) => {
@@ -227,8 +240,16 @@ export function LiveSessionScreen() {
     if (layout.w < 16 || layout.h < 16) {
       return { ox: 0, oy: 0, vw: Math.max(1, layout.w), vh: Math.max(1, layout.h) };
     }
+    if (cameraFormat) {
+      return getContainPreviewRect(
+        layout.w,
+        layout.h,
+        cameraFormat.videoWidth,
+        cameraFormat.videoHeight,
+      );
+    }
     return { ox: 0, oy: 0, vw: layout.w, vh: layout.h };
-  }, [layout.w, layout.h]);
+  }, [layout.w, layout.h, cameraFormat]);
 
   // ── Session flow ────────────────────────────────────────────────────────────
   const [flow, setFlow] = useState<Flow>('search');
@@ -260,6 +281,7 @@ export function LiveSessionScreen() {
   const returnStreakRef = useRef(0);
   const activeEnteredRef = useRef(false);
   const poseRef = useRef<PoseResult | null>(null);
+  const lastUiPoseAtRef = useRef(0);
   const historyRef = useRef<PoseResult[]>([]);
   const sessionStartRef = useRef(0);
   /** Dev: log raw tensor landmark sample once after countdown (avoid spam before lift starts). */
@@ -578,7 +600,11 @@ export function LiveSessionScreen() {
     const h = historyRef.current;
     h.push(pose);
     if (h.length > 8) h.shift();
-    setUiPose(pose);
+    const now = Date.now();
+    if (now - lastUiPoseAtRef.current >= 150) {
+      lastUiPoseAtRef.current = now;
+      setUiPose(pose);
+    }
 
     const stage = flowRef.current;
     const hipY = primaryHipY(pose);
@@ -1139,15 +1165,44 @@ export function LiveSessionScreen() {
    */
 
   // ── Worklet result handler ─────────────────────────────────────────────────
-  const onWorkletResultRef = useRef(
+  const onInferenceResultRef = useRef(
     (_values: number[], _kind: WorkletKind, _ts: number, _frameOrientation: Orientation) => {},
   );
 
-  const onResizedFrameRef = useRef(
-    (_bytes: number[], _ts: number, _frameOrientation: Orientation) => {},
+  const onFramePixelsRef = useRef(
+    (_pixels: Uint8Array, _ts: number, _frameOrientation: Orientation) => {},
   );
 
-  const onWorkletResult = useCallback(
+  const applyModelOutput = useCallback(
+    (
+      out: ArrayBuffer | ArrayBufferView,
+      kind: WorkletKind,
+      ts: number,
+      frameOrientation: Orientation,
+    ) => {
+      const shouldLogInferenceBundle =
+        __DEV__ && flowRef.current === 'active' && !didLogOnce.current;
+      if (shouldLogInferenceBundle) {
+        didLogOnce.current = true;
+        sessionTrace.rawTensor(
+          kind,
+          out instanceof Float32Array ? Array.from(out) : [],
+        );
+      }
+      try {
+        const raw = keypointsFromMovenetOutput(out, ts);
+        const aligned = alignPoseToPortraitOverlay(raw, frameOrientation, {
+          mirrorX: useFrontRef.current,
+        });
+        ingestPose(aligned);
+      } catch {
+        // swallow
+      }
+    },
+    [ingestPose],
+  );
+
+  const onInferenceResult = useCallback(
     (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation) => {
       // Tensor + RAW logs: once per visit, only after countdown → `active` (see blur reset).
       const shouldLogInferenceBundle =
@@ -1176,13 +1231,16 @@ export function LiveSessionScreen() {
             sessionTrace.infer('orientation', { orientation: o });
           }
         }
-        const raw =
+        const tensor: ArrayBuffer | ArrayBufferView =
           kind === 'f32'
-            ? keypointsFromMovenetOutput(Float32Array.from(values), ts)
+            ? new Float32Array(values)
             : kind === 'u8'
-              ? keypointsFromMovenetOutput(Uint8Array.from(values), ts)
-              : keypointsFromMovenetOutput(Int8Array.from(values), ts);
-        const aligned = alignPoseToPortraitOverlay(raw, frameOrientation);
+              ? new Uint8Array(values)
+              : new Int8Array(values);
+        const raw = keypointsFromMovenetOutput(tensor, ts);
+        const aligned = alignPoseToPortraitOverlay(raw, frameOrientation, {
+          mirrorX: useFrontRef.current,
+        });
         ingestPose(aligned);
       } catch {
         // swallow — worklet errors must not crash JS thread
@@ -1191,37 +1249,45 @@ export function LiveSessionScreen() {
     [ingestPose],
   );
 
-  /** TFLite runSync on JS thread — calling it inside the Vision Camera worklet crashes iOS Release. */
-  const onResizedFrame = useCallback(
-    (bytes: number[], ts: number, frameOrientation: Orientation) => {
+  /** JS fallback when TFLite runSync is unavailable in the camera worklet. */
+  const onFramePixels = useCallback(
+    (pixels: Uint8Array, ts: number, frameOrientation: Orientation) => {
       const model = getModel();
       if (!model) return;
       try {
-        const outs = model.runSync([new Uint8Array(bytes)]);
+        const input = reuseInferenceInput(pixels);
+        const outs = model.runSync([input]);
         const out = outs[0];
+        if (out == null) return;
         if (out instanceof Float32Array) {
-          onWorkletResultRef.current(Array.from(out), 'f32', ts, frameOrientation);
+          applyModelOutput(out, 'f32', ts, frameOrientation);
         } else if (out instanceof ArrayBuffer) {
-          onWorkletResultRef.current(Array.from(new Float32Array(out)), 'f32', ts, frameOrientation);
+          applyModelOutput(out, 'f32', ts, frameOrientation);
         } else if (out instanceof Uint8Array) {
-          onWorkletResultRef.current(Array.from(out), 'u8', ts, frameOrientation);
+          applyModelOutput(out, 'u8', ts, frameOrientation);
         } else if (out instanceof Int8Array) {
-          onWorkletResultRef.current(Array.from(out), 'i8', ts, frameOrientation);
+          applyModelOutput(out, 'i8', ts, frameOrientation);
         }
-      } catch {
-        // inference must never fatal the session
+      } catch (e) {
+        if (__DEV__) {
+          console.warn('[LiveSession] inference failed:', e instanceof Error ? e.message : e);
+        }
       }
     },
-    [],
+    [applyModelOutput],
   );
 
   useEffect(() => {
-    onWorkletResultRef.current = onWorkletResult;
-  }, [onWorkletResult]);
+    return () => clearInferenceInputBuffer();
+  }, []);
 
   useEffect(() => {
-    onResizedFrameRef.current = onResizedFrame;
-  }, [onResizedFrame]);
+    onInferenceResultRef.current = onInferenceResult;
+  }, [onInferenceResult]);
+
+  useEffect(() => {
+    onFramePixelsRef.current = onFramePixels;
+  }, [onFramePixels]);
 
   // ── State machine (100 ms tick) ────────────────────────────────────────────
   useEffect(() => {
@@ -1400,6 +1466,7 @@ export function LiveSessionScreen() {
   const pipelineInferOn =
     enableInference && (Platform.OS !== 'ios' || __DEV__ || inferMounted);
   const pipelineKey = pipelineInferOn ? 'infer' : 'preview';
+  const tfliteModel = modelReady ? getModel() : null;
 
   const poseValid = uiPose != null && isPoseValid(uiPose);
   const skColor =
@@ -1467,7 +1534,9 @@ export function LiveSessionScreen() {
           isActive={isFocused && canMountCamera}
           portraitVideoAspectRatio={portraitVideoAspectRatio}
           enableInference={pipelineInferOn}
-          onFrameBytesRef={onResizedFrameRef}
+          model={tfliteModel}
+          onInferenceResultRef={onInferenceResultRef}
+          onFramePixelsRef={onFramePixelsRef}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraBackdrop]} />

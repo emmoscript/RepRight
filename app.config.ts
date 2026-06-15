@@ -8,6 +8,7 @@ const config: ExpoConfig = {
   scheme: "repright",
   userInterfaceStyle: "dark",
   backgroundColor: "#0D0D0D",
+  icon: "./assets/icon.png",
   assetBundlePatterns: ["**/*"],
   ios: {
     supportsTablet: false,
@@ -27,6 +28,7 @@ const config: ExpoConfig = {
   android: {
     package: "com.unibe.repright",
     adaptiveIcon: {
+      foregroundImage: "./assets/icon.png",
       backgroundColor: "#0D0D0D",
     },
   },
