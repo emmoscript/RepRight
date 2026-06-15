@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { Orientation } from 'react-native-vision-camera';
 
 import type { KeyPoint, PoseResult } from '@/modules/movenet';
@@ -20,19 +21,37 @@ export function alignPoseToPortraitOverlay(
 }
 
 function mapKeypointToPortrait(k: KeyPoint, orientation: Orientation): KeyPoint {
-  const { x, y } = k;
+  const { x: mx, y: my } = k;
+  let x = mx;
+  let y = my;
 
   switch (orientation) {
     case 'landscape-left':
       // Validated on Samsung A17 front cam (portrait UI, landscape-left buffer).
-      return { ...k, x: 1 - y, y: 1 - x };
+      x = 1 - my;
+      y = 1 - mx;
+      break;
     case 'landscape-right':
-      // Typical iPhone portrait buffer orientation (counter-rotate to preview).
-      return { ...k, x: y, y: 1 - x };
+      x = my;
+      y = 1 - mx;
+      break;
     case 'portrait-upside-down':
-      return { ...k, x: 1 - x, y: 1 - y };
+      x = 1 - mx;
+      y = 1 - my;
+      break;
     case 'portrait':
     default:
-      return { ...k, x, y };
+      break;
   }
+
+  // iPhone portrait preview is 180° vs the Android-validated landscape mapping.
+  if (
+    Platform.OS === 'ios' &&
+    (orientation === 'landscape-left' || orientation === 'landscape-right')
+  ) {
+    x = 1 - x;
+    y = 1 - y;
+  }
+
+  return { ...k, x, y };
 }
