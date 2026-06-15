@@ -1159,9 +1159,8 @@ export function LiveSessionScreen() {
   // ── Coordinate transforms ──────────────────────────────────────────────────
   /**
    * vision-camera-resize-plugin STRETCHES to 192×192 (no crop).
-   * Model output maps to screen via alignPoseToPortraitOverlay.
-   * Many Android front cameras (e.g. Samsung) already mirror the preview — do not mirror pose again
-   * or the skeleton flips horizontally. Use plain `aligned` for overlay.
+   * Model output maps to screen via alignPoseToPortraitOverlay using frame.orientation
+   * (frame processors ignore outputOrientation — sensor buffer + orientation metadata).
    */
 
   // ── Worklet result handler ─────────────────────────────────────────────────
@@ -1191,10 +1190,7 @@ export function LiveSessionScreen() {
       }
       try {
         const raw = keypointsFromMovenetOutput(out, ts);
-        const aligned = alignPoseToPortraitOverlay(raw, frameOrientation, {
-          mirrorX: useFrontRef.current,
-        });
-        ingestPose(aligned);
+        ingestPose(alignPoseToPortraitOverlay(raw, frameOrientation));
       } catch {
         // swallow
       }
@@ -1238,10 +1234,7 @@ export function LiveSessionScreen() {
               ? new Uint8Array(values)
               : new Int8Array(values);
         const raw = keypointsFromMovenetOutput(tensor, ts);
-        const aligned = alignPoseToPortraitOverlay(raw, frameOrientation, {
-          mirrorX: useFrontRef.current,
-        });
-        ingestPose(aligned);
+        ingestPose(alignPoseToPortraitOverlay(raw, frameOrientation));
       } catch {
         // swallow — worklet errors must not crash JS thread
       }
