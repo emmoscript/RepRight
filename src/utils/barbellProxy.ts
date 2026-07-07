@@ -15,7 +15,7 @@ export interface BarbellProxy {
 
 /**
  * Barbell position proxy — average wrists when both confident; otherwise the single confident wrist.
- * Coordinates align with overlay after `alignPoseToPortraitOverlay`.
+ * Coordinates align with overlay after `mapPoseToPreviewSpace`.
  */
 export function barbellProxyFromWrists(pose: PoseResult): BarbellProxy | null {
   const kp = pose.keypoints;

@@ -20,11 +20,18 @@ const INFER_INTERVAL_MS = Platform.OS === 'android' ? 180 : 140;
 
 export type InferenceTensorKind = 'f32' | 'u8' | 'i8';
 
+export type FrameProcessorMeta = {
+  width: number;
+  height: number;
+  isMirrored: boolean;
+};
+
 export type LiveSessionInferenceHandler = (
   values: number[],
   kind: InferenceTensorKind,
   ts: number,
   frameOrientation: Orientation,
+  frameMeta: FrameProcessorMeta,
 ) => void;
 
 /** Fallback path: ~110 KB Uint8Array via SharedValue (not 110k JS numbers). */
@@ -32,6 +39,7 @@ export type LiveSessionFramePixelsHandler = (
   pixels: Uint8Array,
   ts: number,
   frameOrientation: Orientation,
+  frameMeta: FrameProcessorMeta,
 ) => void;
 
 type Props = {
@@ -74,12 +82,21 @@ export function LiveSessionCameraPipeline({
   const sharedPixels = useWorkletSharedValue<Uint8Array | null>(null);
   const sharedTs = useWorkletSharedValue(0);
   const sharedOrientation = useWorkletSharedValue<Orientation>('portrait');
+  const sharedFrameWidth = useWorkletSharedValue(0);
+  const sharedFrameHeight = useWorkletSharedValue(0);
+  const sharedFrameMirrored = useWorkletSharedValue(false);
 
   const runInferenceResult = useMemo(
     () =>
       Worklets.createRunOnJS(
-        (values: number[], kind: InferenceTensorKind, ts: number, frameOrientation: Orientation) => {
-          onInferenceResultRef.current(values, kind, ts, frameOrientation);
+        (
+          values: number[],
+          kind: InferenceTensorKind,
+          ts: number,
+          frameOrientation: Orientation,
+          frameMeta: FrameProcessorMeta,
+        ) => {
+          onInferenceResultRef.current(values, kind, ts, frameOrientation, frameMeta);
         },
       ),
     [onInferenceResultRef],
@@ -90,9 +107,21 @@ export function LiveSessionCameraPipeline({
       Worklets.createRunOnJS(() => {
         const pixels = sharedPixels.value;
         if (pixels == null) return;
-        onFramePixelsRef.current(pixels, sharedTs.value, sharedOrientation.value);
+        onFramePixelsRef.current(pixels, sharedTs.value, sharedOrientation.value, {
+          width: sharedFrameWidth.value,
+          height: sharedFrameHeight.value,
+          isMirrored: sharedFrameMirrored.value,
+        });
       }),
-    [onFramePixelsRef, sharedPixels, sharedOrientation, sharedTs],
+    [
+      onFramePixelsRef,
+      sharedFrameHeight,
+      sharedFrameMirrored,
+      sharedFrameWidth,
+      sharedOrientation,
+      sharedPixels,
+      sharedTs,
+    ],
   );
 
   const frameProcessor = useFrameProcessor(
@@ -114,7 +143,11 @@ export function LiveSessionCameraPipeline({
             const outs = model.runSync([resized]);
             const out = outs[0];
             if (out != null) {
-              runInferenceResult(Array.from(out as ArrayLike<number>), 'f32', now, frame.orientation);
+              runInferenceResult(Array.from(out as ArrayLike<number>), 'f32', now, frame.orientation, {
+                width: frame.width,
+                height: frame.height,
+                isMirrored: frame.isMirrored,
+              });
               return;
             }
           } catch {
@@ -125,6 +158,9 @@ export function LiveSessionCameraPipeline({
         sharedPixels.value = resized.slice();
         sharedTs.value = now;
         sharedOrientation.value = frame.orientation;
+        sharedFrameWidth.value = frame.width;
+        sharedFrameHeight.value = frame.height;
+        sharedFrameMirrored.value = frame.isMirrored;
         deliverFramePixels();
       } catch {
         // worklet must never throw to caller
@@ -138,6 +174,9 @@ export function LiveSessionCameraPipeline({
       model,
       sharedPixels,
       sharedTs,
+      sharedFrameHeight,
+      sharedFrameMirrored,
+      sharedFrameWidth,
       sharedOrientation,
     ],
   );

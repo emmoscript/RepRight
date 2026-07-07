@@ -28,7 +28,7 @@ import Svg, { Circle, G } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Camera, useCameraFormat, type Orientation } from 'react-native-vision-camera';
 
-import { LiveSessionCameraPipeline } from '@/components/LiveSessionCameraPipeline';
+import { LiveSessionCameraPipeline, type FrameProcessorMeta } from '@/components/LiveSessionCameraPipeline';
 
 import { useResolvedCamera } from '@/hooks/useResolvedCamera';
 import type { RecordedFormError } from '@/types/recordedFormError';
@@ -73,7 +73,7 @@ import {
   smoothHipY,
   standingHipYFromBaseline,
 } from '@/utils/deadliftRep';
-import { alignPoseToPortraitOverlay } from '@/utils/orientPose';
+import { mapPoseToPreviewSpace, orientedPreviewSize } from '@/utils/modelFrameCoords';
 import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
@@ -236,17 +236,22 @@ export function LiveSessionScreen() {
     setLayout({ w: width, h: height });
   }, []);
 
+  const lastFrameMetaRef = useRef<{
+    width: number;
+    height: number;
+    orientation: Orientation;
+  }>({ width: 0, height: 0, orientation: 'portrait' });
+
   const previewContain = useMemo((): ContainRect => {
     if (layout.w < 16 || layout.h < 16) {
       return { ox: 0, oy: 0, vw: Math.max(1, layout.w), vh: Math.max(1, layout.h) };
     }
-    if (cameraFormat) {
-      return getContainPreviewRect(
-        layout.w,
-        layout.h,
-        cameraFormat.videoWidth,
-        cameraFormat.videoHeight,
-      );
+    const meta = lastFrameMetaRef.current;
+    const srcW = meta.width > 0 ? meta.width : cameraFormat?.videoWidth;
+    const srcH = meta.height > 0 ? meta.height : cameraFormat?.videoHeight;
+    if (srcW && srcH) {
+      const oriented = orientedPreviewSize(srcW, srcH, meta.orientation);
+      return getContainPreviewRect(layout.w, layout.h, oriented.width, oriented.height);
     }
     return { ox: 0, oy: 0, vw: layout.w, vh: layout.h };
   }, [layout.w, layout.h, cameraFormat]);
@@ -1158,18 +1163,48 @@ export function LiveSessionScreen() {
 
   // ── Coordinate transforms ──────────────────────────────────────────────────
   /**
-   * vision-camera-resize-plugin STRETCHES to 192×192 (no crop).
-   * Model output maps to screen via alignPoseToPortraitOverlay using frame.orientation
-   * (frame processors ignore outputOrientation — sensor buffer + orientation metadata).
+   * Resize plugin center-crops to square before 192×192; uncrop to full buffer (SravB-style
+   * frameWidth/frameHeight scale) then rotate into portrait preview space.
    */
+
+  const mapInferencePose = useCallback(
+    (raw: PoseResult, frameOrientation: Orientation, frameMeta: FrameProcessorMeta) => {
+      lastFrameMetaRef.current = {
+        width: frameMeta.width,
+        height: frameMeta.height,
+        orientation: frameOrientation,
+      };
+      // Preview is always mirrored on front (Vision Camera); always flip X on iOS front.
+      const mirrorPreview = Platform.OS === 'ios' && useFrontRef.current;
+      return mapPoseToPreviewSpace(
+        raw,
+        frameMeta.width,
+        frameMeta.height,
+        frameOrientation,
+        { mirrorPreview },
+      );
+    },
+    [],
+  );
 
   // ── Worklet result handler ─────────────────────────────────────────────────
   const onInferenceResultRef = useRef(
-    (_values: number[], _kind: WorkletKind, _ts: number, _frameOrientation: Orientation) => {},
+    (
+      _values: number[],
+      _kind: WorkletKind,
+      _ts: number,
+      _frameOrientation: Orientation,
+      _frameMeta: FrameProcessorMeta,
+    ) => {},
   );
 
   const onFramePixelsRef = useRef(
-    (_pixels: Uint8Array, _ts: number, _frameOrientation: Orientation) => {},
+    (
+      _pixels: Uint8Array,
+      _ts: number,
+      _frameOrientation: Orientation,
+      _frameMeta: FrameProcessorMeta,
+    ) => {},
   );
 
   const applyModelOutput = useCallback(
@@ -1178,6 +1213,7 @@ export function LiveSessionScreen() {
       kind: WorkletKind,
       ts: number,
       frameOrientation: Orientation,
+      frameMeta: FrameProcessorMeta,
     ) => {
       const shouldLogInferenceBundle =
         __DEV__ && flowRef.current === 'active' && !didLogOnce.current;
@@ -1190,16 +1226,16 @@ export function LiveSessionScreen() {
       }
       try {
         const raw = keypointsFromMovenetOutput(out, ts);
-        ingestPose(alignPoseToPortraitOverlay(raw, frameOrientation));
+        ingestPose(mapInferencePose(raw, frameOrientation, frameMeta));
       } catch {
         // swallow
       }
     },
-    [ingestPose],
+    [ingestPose, mapInferencePose],
   );
 
   const onInferenceResult = useCallback(
-    (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation) => {
+    (values: number[], kind: WorkletKind, ts: number, frameOrientation: Orientation, frameMeta: FrameProcessorMeta) => {
       // Tensor + RAW logs: once per visit, only after countdown → `active` (see blur reset).
       const shouldLogInferenceBundle =
         __DEV__ && flowRef.current === 'active' && !didLogOnce.current;
@@ -1234,17 +1270,17 @@ export function LiveSessionScreen() {
               ? new Uint8Array(values)
               : new Int8Array(values);
         const raw = keypointsFromMovenetOutput(tensor, ts);
-        ingestPose(alignPoseToPortraitOverlay(raw, frameOrientation));
+        ingestPose(mapInferencePose(raw, frameOrientation, frameMeta));
       } catch {
         // swallow — worklet errors must not crash JS thread
       }
     },
-    [ingestPose],
+    [ingestPose, mapInferencePose],
   );
 
   /** JS fallback when TFLite runSync is unavailable in the camera worklet. */
   const onFramePixels = useCallback(
-    (pixels: Uint8Array, ts: number, frameOrientation: Orientation) => {
+    (pixels: Uint8Array, ts: number, frameOrientation: Orientation, frameMeta: FrameProcessorMeta) => {
       const model = getModel();
       if (!model) return;
       try {
@@ -1253,13 +1289,13 @@ export function LiveSessionScreen() {
         const out = outs[0];
         if (out == null) return;
         if (out instanceof Float32Array) {
-          applyModelOutput(out, 'f32', ts, frameOrientation);
+          applyModelOutput(out, 'f32', ts, frameOrientation, frameMeta);
         } else if (out instanceof ArrayBuffer) {
-          applyModelOutput(out, 'f32', ts, frameOrientation);
+          applyModelOutput(out, 'f32', ts, frameOrientation, frameMeta);
         } else if (out instanceof Uint8Array) {
-          applyModelOutput(out, 'u8', ts, frameOrientation);
+          applyModelOutput(out, 'u8', ts, frameOrientation, frameMeta);
         } else if (out instanceof Int8Array) {
-          applyModelOutput(out, 'i8', ts, frameOrientation);
+          applyModelOutput(out, 'i8', ts, frameOrientation, frameMeta);
         }
       } catch (e) {
         if (__DEV__) {

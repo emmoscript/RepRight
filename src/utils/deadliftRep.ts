@@ -30,7 +30,7 @@ export const DEADLIFT_REP_THRESH = {
   /** Hard cap on baseline collection window. */
   baselineMaxFrames: 28,
   /** Hips must drop this far below standing (norm Y) to arm the bottom of a rep. */
-  setupDropBelowStanding: 0.055,
+  setupDropBelowStanding: 0.040,
   /**
    * Lockout: hips at or above standing (y <= stand + slack).
    * Side-view keypoints rarely exceed a large rise above baseline — ROM is the primary signal.
@@ -55,7 +55,7 @@ export const DEADLIFT_REP_THRESH = {
   /** Min hip keypoint confidence to allow a rep COUNT. */
   minHipScoreForCount: 0.22,
   /** Armed bottom must clear bottomGate by at least this (blocks shallow false-arms). */
-  minBottomClearanceBeyondGate: 0.026,
+  minBottomClearanceBeyondGate: 0.012,
   /** While waiting for lockout, re-arm if hips drop this much below current armed bottom. */
   lockoutRearmMinDrop: 0.028,
   consecutiveSetupFrames: 4,
@@ -65,7 +65,7 @@ export const DEADLIFT_REP_THRESH = {
   /** One frame at return gate — fast touch-and-go rarely holds 2 frames mid-descent. */
   consecutiveReturnFrames: 1,
   /** Min ascent from armed bottom to lockout (full rep ROM — primary count gate). */
-  repRomCompleteNorm: 0.070,
+  repRomCompleteNorm: 0.050,
   /** At COUNT frame, smoothed ascent must still be near peak (blocks count on descent). */
   lockoutCountCurrentRomFrac: 0.78,
   /** Ignore back-to-back counts within this window. */
@@ -75,13 +75,13 @@ export const DEADLIFT_REP_THRESH = {
   /** After a COUNT, block shallow setup-arms for this window (walk-off / rack false reps). */
   postCountShallowArmBlockMs: 1200,
   /** Min frames with hips below bottom gate while armed (blocks walk-to-camera false reps). */
-  minDeepHoldFrames: 5,
+  minDeepHoldFrames: 2,
   /** stale_reset only when peak ascent is below this fraction of full ROM. */
   staleResetMaxAscentFrac: 0.22,
   /** Do not re-arm lockout when hips are above this offset from lockout line. */
   lockoutRearmUpperRomSlack: 0.038,
   /** During post-count window, armed depth must reach at least bottomGate + this. */
-  postCountMinArmDepthBeyondGate: 0.040,
+  postCountMinArmDepthBeyondGate: 0.024,
   /** EMA alpha for hip Y used by rep FSM (raw keypoints flicker in side view). */
   hipSmoothAlpha: 0.32,
 } as const;
@@ -93,8 +93,15 @@ export function medianHipY(samples: number[]): number {
   return sorted[Math.floor(sorted.length / 2)] ?? sorted[0]!;
 }
 
-/** Standing reference from calibration window (median, not min). */
+/** Standing reference from calibration window. */
 export function standingHipYFromBaseline(samples: number[]): number {
+  if (samples.length === 0) return 0;
+  const spread = Math.max(...samples) - Math.min(...samples);
+  // Countdown often includes hinge/setup motion — median skews “standing” too low (deep).
+  // Use tallest hips (min Y) so deadlift hinge depth is measured from true lockout height.
+  if (spread > DEADLIFT_REP_THRESH.baselineMaxSpread) {
+    return Math.min(...samples);
+  }
   return medianHipY(samples);
 }
 
