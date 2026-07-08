@@ -94,23 +94,3 @@ export type SessionSyncExtras = {
 export type WorkoutSessionWithErrors = WorkoutSession & {
   biomechanical_errors: BiomechanicalError[];
 };
-
-export type BiomechSurveyResponseRow = {
-  id: string;
-  owner_key: string;
-  user_id: string | null;
-  client_id: string | null;
-  email: string | null;
-  survey_version: string;
-  answers: unknown;
-  score: number;
-  session_count_at_submit: number | null;
-  consent_accepted_at: string;
-  created_at: string;
-};
-
-export type SubmitBiomechSurveyResponse = {
-  id: string;
-  score: number;
-  already_submitted: boolean;
-};

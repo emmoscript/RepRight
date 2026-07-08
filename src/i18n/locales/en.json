@@ -138,25 +138,7 @@
     "startToLog": "START A DEADLIFT RUN TO LOG ACTIVITY HERE",
     "weeklyVolume": "WEEKLY VOLUME INCREASE",
     "weeklyHint": "Based on reps logged in rolling 7-day windows.",
-    "min": "MIN",
-    "surveyPrompt": {
-      "kicker": "Universidad Iberoamericana (UNIBE)",
-      "title": "How much do you know about deadlift?",
-      "body": "You just tried RepRight. As part of the Universidad Iberoamericana (UNIBE) study, we invite you to a short questionnaire — 10 multiple-choice questions, about 3 minutes — on safe deadlift technique. Your answers are confidential and help us evaluate the app.",
-      "accountLabel": "Your account",
-      "emailHint": "Your answers will be linked to this account.",
-      "cta": "Take questionnaire",
-      "opening": "Opening…",
-      "later": "Not now"
-    },
-    "surveyCard": {
-      "homeTitle": "UNIBE questionnaire (~2 min)",
-      "homeBody": "10 quick questions on safe deadlift technique — right inside the app.",
-      "profileTitle": "Research questionnaire",
-      "profileBody": "Short UNIBE study — about 2 minutes. Confidential.",
-      "cta": "Take questionnaire",
-      "guestHint": "Optional: you can leave your email when you start the questionnaire."
-    }
+    "min": "MIN"
   },
   "profile": {
     "guestParticipant": "Guest participant",
@@ -366,117 +348,6 @@
     "ERR_003": "Keep the bar close. Drag it up your legs.",
     "ERR_004": "Stand tall. Don't lean back at the top.",
     "ERR_005": "Shoulders over the bar. Shift weight forward."
-  },
-  "biomechSurvey": {
-    "screenTitle": "Biomechanics questionnaire",
-    "introTitle": "Deadlift biomechanics knowledge",
-    "introGreeting": "Hello! This survey is part of a UNIBE School of ICT research study on learning deadlift technique with artificial intelligence (RepRight).",
-    "introObjective": "Goal: assess your technical knowledge to validate the effectiveness of our app.",
-    "introTime": "Estimated time: about 2 minutes.",
-    "introPrivacy": "Privacy: your answers are handled with strict confidentiality for academic purposes only.",
-    "introVoluntary": "Participation is optional and you may withdraw at any time without penalty.",
-    "introConsent": "By continuing, you confirm that you have read this information and agree to participate voluntarily.",
-    "introScoring": "Scoring: 1 point per correct answer (maximum 10 points).",
-    "emailLabel": "Email address",
-    "emailPlaceholder": "you@email.com",
-    "emailRequired": "Enter a valid email to continue.",
-    "accountEmailLabel": "Email linked to your account",
-    "consentCheckbox": "I have read the information and agree to participate voluntarily",
-    "startCta": "Start questionnaire",
-    "progress": "Question {{current}} of {{total}}",
-    "selectAnswer": "Select an answer to continue.",
-    "next": "Next",
-    "submit": "Submit answers",
-    "submitting": "Submitting…",
-    "submitError": "Could not submit. Check your connection and try again.",
-    "completeTitle": "Thank you for participating!",
-    "completeScore": "Your score: {{score}} / {{max}}",
-    "pointsLabel": "correct answers",
-    "completeBody": "Your answers help promote safer training. You can close this screen.",
-    "doneCta": "Back to home",
-    "alreadyCompleted": "You already completed this questionnaire.",
-    "questions": {
-      "q1": {
-        "prompt": "How should your lower back be while lifting the weight from the floor?",
-        "options": {
-          "a": "Straight or in a natural position, without excessive rounding",
-          "b": "Arched backward as much as possible to protect the bones",
-          "c": "Rounded forward to reach the bar better"
-        }
-      },
-      "q2": {
-        "prompt": "What is the main risk of rounding your back during the lift?",
-        "options": {
-          "a": "Your arms get tired faster",
-          "b": "The exercise is less tiring for your legs",
-          "c": "Injury or pain in the spinal discs"
-        }
-      },
-      "q3": {
-        "prompt": "Before you start lifting, where should your hips be?",
-        "options": {
-          "a": "Much higher than your shoulders",
-          "b": "Almost touching the floor, like sitting in a low chair",
-          "c": "At a similar level or slightly below your shoulders"
-        }
-      },
-      "q4": {
-        "prompt": "What is the hip hinge movement?",
-        "options": {
-          "a": "Push your hips back while keeping your back firm",
-          "b": "Fall forward without moving your legs",
-          "c": "Bend only your knees to lower your body"
-        }
-      },
-      "q5": {
-        "prompt": "Throughout the lift, how close should the bar stay to your legs?",
-        "options": {
-          "a": "Far enough not to hit your knees",
-          "b": "As close as possible to your shins and thighs",
-          "c": "About 20 cm away to leave space"
-        }
-      },
-      "q6": {
-        "prompt": "What happens if the bar drifts far from your body as you rise?",
-        "options": {
-          "a": "You feel much more load and pressure on your lower back",
-          "b": "The exercise becomes more effective for your arms",
-          "c": "It is easier to balance the weight"
-        }
-      },
-      "q7": {
-        "prompt": "When you are standing with the weight up, what mistake should you avoid?",
-        "options": {
-          "a": "Leaning your back far backward (excessive arching)",
-          "b": "Standing completely upright",
-          "c": "Squeezing your glutes at the finish"
-        }
-      },
-      "q8": {
-        "prompt": "At the start position, where should your shoulders be relative to the bar?",
-        "options": {
-          "a": "Well behind the bar",
-          "b": "Directly over the bar or slightly in front",
-          "c": "Resting on your knees"
-        }
-      },
-      "q9": {
-        "prompt": "What happens if you start pulling with your hips very high?",
-        "options": {
-          "a": "Your leg muscles work more effectively",
-          "b": "The weight feels much lighter",
-          "c": "The load shifts to your lower back, increasing pain or injury risk"
-        }
-      },
-      "q10": {
-        "prompt": "If your shoulders are far behind the bar at the start, what problem does that cause?",
-        "options": {
-          "a": "The exercise feels more comfortable for your arms",
-          "b": "You lose balance and the pull becomes less efficient (harder)",
-          "c": "It helps keep your back straighter"
-        }
-      }
-    }
   },
   "months": {
     "short": ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"],

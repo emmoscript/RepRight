@@ -29,6 +29,7 @@ import { typography } from '@/theme/typography';
 
 const DEMO_IMAGE = require('../../assets/images/movenet-demo-image.png');
 const GYM_IMAGE = require('../../assets/images/woman-deadlift.jpg');
+const APP_ICON = require('../../assets/icon.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type TFn = ReturnType<typeof useTranslation>['t'];
@@ -163,7 +164,12 @@ function WelcomeSlide({ t }: { t: TFn }) {
   return (
     <View style={styles.slide}>
       <View style={styles.logoBox}>
-        <Text style={styles.logoMark}>RR</Text>
+        <Image
+          source={APP_ICON}
+          style={styles.logoIcon}
+          resizeMode="cover"
+          accessibilityLabel="RepRight"
+        />
       </View>
 
       <Text style={styles.headlineXl}>RepRight</Text>
@@ -378,19 +384,14 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 28,
-    backgroundColor: colors.surface_container_high,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
     marginBottom: 20,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(132,149,133,0.25)',
   },
-  logoMark: {
-    fontFamily: typography.fontFamily.display,
-    fontSize: 40,
-    fontWeight: '700',
-    color: colors.primary_green,
-    letterSpacing: -2,
+  logoIcon: {
+    width: '100%',
+    height: '100%',
   },
   headlineXl: {
     textAlign: 'center',

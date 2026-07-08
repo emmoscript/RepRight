@@ -99,10 +99,6 @@ export function RootNavigator() {
           getComponent={() => require('@/screens/LegalDocumentScreen').LegalDocumentScreen}
         />
         <Stack.Screen name="Support" getComponent={() => require('@/screens/SupportScreen').SupportScreen} />
-        <Stack.Screen
-          name="BiomechSurvey"
-          getComponent={() => require('@/screens/BiomechSurveyScreen').BiomechSurveyScreen}
-        />
       </Stack.Navigator>
     </NavigationContainer>
   );

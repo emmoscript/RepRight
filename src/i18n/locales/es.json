@@ -138,25 +138,7 @@
     "startToLog": "INICIA UN PESO MUERTO PARA VER ACTIVIDAD AQUÍ",
     "weeklyVolume": "AUMENTO DE VOLUMEN SEMANAL",
     "weeklyHint": "Basado en reps registradas en ventanas de 7 días.",
-    "min": "MIN",
-    "surveyPrompt": {
-      "kicker": "Universidad Iberoamericana (UNIBE)",
-      "title": "¿Cuánto sabes sobre peso muerto?",
-      "body": "Acabas de probar RepRight. Como parte del estudio de la Universidad Iberoamericana (UNIBE), te invitamos a un cuestionario breve — 10 preguntas de opción múltiple, unos 3 minutos — sobre técnica segura del peso muerto. Tus respuestas son confidenciales y nos ayudan a evaluar la app.",
-      "accountLabel": "Tu cuenta",
-      "emailHint": "Tus respuestas se vincularán a esta cuenta.",
-      "cta": "Responder cuestionario",
-      "opening": "Abriendo…",
-      "later": "Ahora no"
-    },
-    "surveyCard": {
-      "homeTitle": "Cuestionario UNIBE (~2 min)",
-      "homeBody": "10 preguntas rápidas sobre técnica segura de peso muerto — directamente en la app.",
-      "profileTitle": "Cuestionario de investigación",
-      "profileBody": "Estudio breve UNIBE — unos 2 minutos. Confidencial.",
-      "cta": "Responder cuestionario",
-      "guestHint": "Opcional: puedes dejar tu correo al iniciar el cuestionario."
-    }
+    "min": "MIN"
   },
   "profile": {
     "guestParticipant": "Participante invitado",
@@ -366,117 +348,6 @@
     "ERR_003": "Barra cerca del cuerpo. Arrástrala por las piernas.",
     "ERR_004": "Ponte recto. No te inclines atrás arriba.",
     "ERR_005": "Hombros sobre la barra. Lleva el peso adelante."
-  },
-  "biomechSurvey": {
-    "screenTitle": "Cuestionario biomecánico",
-    "introTitle": "Conocimiento biomecánico del deadlift",
-    "introGreeting": "¡Hola! Esta encuesta es parte de una investigación de la Escuela de TIC de UNIBE sobre el aprendizaje de la técnica de peso muerto mediante Inteligencia Artificial (RepRight).",
-    "introObjective": "Objetivo: evaluar tu conocimiento técnico para validar la efectividad de nuestra aplicación.",
-    "introTime": "Tiempo estimado: solo te tomará 2 minutos.",
-    "introPrivacy": "Privacidad: tus respuestas se manejan con estricta confidencialidad exclusivamente para fines académicos.",
-    "introVoluntary": "Voluntariedad: participar es opcional y puedes retirarte en cualquier momento sin penalidad.",
-    "introConsent": "Al continuar, confirmas que has leído esta información y aceptas participar voluntariamente en el estudio.",
-    "introScoring": "Puntuación: 1 punto por respuesta correcta (máximo 10 puntos).",
-    "emailLabel": "Correo electrónico",
-    "emailPlaceholder": "tu@correo.com",
-    "emailRequired": "Ingresa un correo válido para continuar.",
-    "accountEmailLabel": "Correo vinculado a tu cuenta",
-    "consentCheckbox": "He leído la información y acepto participar voluntariamente",
-    "startCta": "Comenzar cuestionario",
-    "progress": "Pregunta {{current}} de {{total}}",
-    "selectAnswer": "Selecciona una respuesta para continuar.",
-    "next": "Siguiente",
-    "submit": "Enviar respuestas",
-    "submitting": "Enviando…",
-    "submitError": "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.",
-    "completeTitle": "¡Gracias por participar!",
-    "completeScore": "Tu puntuación: {{score}} / {{max}}",
-    "pointsLabel": "respuestas correctas",
-    "completeBody": "Tus respuestas ayudan a promover un entrenamiento más seguro. Puedes cerrar esta pantalla.",
-    "doneCta": "Volver al inicio",
-    "alreadyCompleted": "Ya completaste este cuestionario.",
-    "questions": {
-      "q1": {
-        "prompt": "¿Cómo debe estar tu espalda baja mientras levantas la pesa del suelo?",
-        "options": {
-          "a": "Derecha o en una posición natural, sin doblarla excesivamente",
-          "b": "Arqueada hacia atrás lo más posible para proteger los huesos",
-          "c": "Encurvada hacia adelante para alcanzar mejor la barra"
-        }
-      },
-      "q2": {
-        "prompt": "¿Cuál es el principal riesgo de \"encorvar\" la espalda (hacer una joroba) durante el levantamiento?",
-        "options": {
-          "a": "Que los brazos se cansen más rápido",
-          "b": "Que el ejercicio sea menos cansado para las piernas",
-          "c": "Sufrir una lesión o dolor en los discos de la columna"
-        }
-      },
-      "q3": {
-        "prompt": "Antes de empezar a levantar, ¿dónde deberían estar tus caderas?",
-        "options": {
-          "a": "Mucho más arriba que los hombros",
-          "b": "Casi tocando el suelo, como si estuvieras sentado en una silla bajita",
-          "c": "A un nivel similar o un poco por debajo de los hombros"
-        }
-      },
-      "q4": {
-        "prompt": "¿Qué es el movimiento de \"bisagra de cadera\" (hip hinge)?",
-        "options": {
-          "a": "Empujar las caderas hacia atrás manteniendo la espalda firme",
-          "b": "Dejarse caer hacia adelante sin mover las piernas",
-          "c": "Doblar solo las rodillas para bajar el cuerpo"
-        }
-      },
-      "q5": {
-        "prompt": "Durante todo el levantamiento, ¿a qué distancia debe estar la barra de tus piernas?",
-        "options": {
-          "a": "Lo suficientemente lejos para no golpearte las rodillas",
-          "b": "Lo más pegada posible a tus espinillas y muslos",
-          "c": "A unos 20 centímetros de distancia para tener espacio"
-        }
-      },
-      "q6": {
-        "prompt": "¿Qué pasa si la barra se separa mucho de tu cuerpo mientras subes?",
-        "options": {
-          "a": "Se siente mucho más peso y presión en la espalda baja",
-          "b": "El ejercicio se vuelve más efectivo para los brazos",
-          "c": "Es más fácil equilibrar el peso"
-        }
-      },
-      "q7": {
-        "prompt": "Cuando ya estás de pie con la pesa arriba, ¿qué error debes evitar?",
-        "options": {
-          "a": "Echar la espalda muy hacia atrás (arquearse excesivamente)",
-          "b": "Estar completamente derecho",
-          "c": "Apretar los glúteos al finalizar"
-        }
-      },
-      "q8": {
-        "prompt": "En la posición inicial, ¿dónde deben estar tus hombros respecto a la barra?",
-        "options": {
-          "a": "Muy por detrás de la barra",
-          "b": "Directamente sobre la barra o apenas un poco por delante",
-          "c": "Apoyados sobre las rodillas"
-        }
-      },
-      "q9": {
-        "prompt": "¿Qué pasa si empiezas a subir la pesa con el trasero (caderas) muy arriba?",
-        "options": {
-          "a": "Los músculos de las piernas trabajan de forma más efectiva",
-          "b": "El peso se siente mucho más liviano",
-          "c": "Toda la carga se va a la espalda baja, aumentando el riesgo de dolor o lesión"
-        }
-      },
-      "q10": {
-        "prompt": "Si tus hombros están muy por detrás de la barra al iniciar el movimiento, ¿qué problema causa?",
-        "options": {
-          "a": "Hace que el ejercicio sea más cómodo para los brazos",
-          "b": "Pierdes el equilibrio y el tirón se vuelve menos eficiente (más difícil)",
-          "c": "Ayuda a mantener la espalda más derecha"
-        }
-      }
-    }
   },
   "months": {
     "short": ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"],

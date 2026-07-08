@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { BiomechSurveyPrompt } from '@/components/BiomechSurveyPrompt';
-import { BiomechSurveyCard } from '@/components/BiomechSurveyCard';
 import { Icon, ICONS } from '@/components/Icon';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RepRightHeader } from '@/components/RepRightHeader';
@@ -13,11 +11,6 @@ import { SvgPlayIcon, SvgTrendingUpIcon } from '@/components/icons/SvgUiIcons';
 import type { MainTabCompositeNav } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
 import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
-import {
-  hasCompletedBiomechSurvey,
-  markBiomechSurveyPrompted,
-  shouldShowBiomechSurveyPrompt,
-} from '@/constants/researchSurvey';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import { useAuthStore } from '@/store/authStore';
@@ -78,8 +71,6 @@ export function HomeScreen() {
   const displayNamePref = useUserPreferencesStore((s) => s.displayName);
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
-  const [surveyPromptVisible, setSurveyPromptVisible] = useState(false);
-  const [showSurveyCard, setShowSurveyCard] = useState(true);
   const [greetingTick, setGreetingTick] = useState(() => Date.now());
 
   useFocusEffect(
@@ -89,10 +80,6 @@ export function HomeScreen() {
       const clockId = setInterval(() => setGreetingTick(Date.now()), 60_000);
 
       void (async () => {
-        const completed = await hasCompletedBiomechSurvey();
-        if (!active) return;
-        setShowSurveyCard(!completed);
-
         if (isLoggedIn) {
           await pullAndMergeCloudSessions();
         }
@@ -100,11 +87,6 @@ export function HomeScreen() {
         if (!active) return;
         const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
         setSessions(sorted);
-
-        if (sorted.length >= 1 && (await shouldShowBiomechSurveyPrompt(sorted.length))) {
-          await markBiomechSurveyPrompted(sorted.length);
-          if (active) setSurveyPromptVisible(true);
-        }
       })();
       return () => {
         active = false;
@@ -182,14 +164,6 @@ export function HomeScreen() {
           onPress={() => nav.navigate('Workout')}
           style={styles.heroCta as ViewStyle}
         />
-
-        {showSurveyCard ? (
-          <BiomechSurveyCard
-            variant="home"
-            isGuest={isGuest}
-            accountEmail={email}
-          />
-        ) : null}
 
         {/* Bento: Last session + quick stats */}
         <View style={styles.bentoRow}>
@@ -336,15 +310,6 @@ export function HomeScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
-      <BiomechSurveyPrompt
-        visible={surveyPromptVisible}
-        isGuest={isGuest}
-        accountEmail={email}
-        onDismiss={() => {
-          setSurveyPromptVisible(false);
-          void hasCompletedBiomechSurvey().then((done) => setShowSurveyCard(!done));
-        }}
-      />
     </SafeAreaView>
   );
 }
