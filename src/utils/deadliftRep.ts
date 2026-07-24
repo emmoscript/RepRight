@@ -30,7 +30,7 @@ export const DEADLIFT_REP_THRESH = {
   /** Hard cap on baseline collection window. */
   baselineMaxFrames: 28,
   /** Hips must drop this far below standing (norm Y) to arm the bottom of a rep. */
-  setupDropBelowStanding: 0.040,
+  setupDropBelowStanding: 0.032,
   /**
    * Lockout: hips at or above standing (y <= stand + slack).
    * Side-view keypoints rarely exceed a large rise above baseline — ROM is the primary signal.
@@ -55,10 +55,10 @@ export const DEADLIFT_REP_THRESH = {
   /** Min hip keypoint confidence to allow a rep COUNT. */
   minHipScoreForCount: 0.22,
   /** Armed bottom must clear bottomGate by at least this (blocks shallow false-arms). */
-  minBottomClearanceBeyondGate: 0.012,
+  minBottomClearanceBeyondGate: 0.008,
   /** While waiting for lockout, re-arm if hips drop this much below current armed bottom. */
   lockoutRearmMinDrop: 0.028,
-  consecutiveSetupFrames: 4,
+  consecutiveSetupFrames: 3,
   consecutiveLockoutFrames: 2,
   /** With clear ROM, one valid lockout frame is enough (normal tempo + valid=false flicker). */
   lockoutStrongRomFrac: 1.25,
@@ -93,16 +93,10 @@ export function medianHipY(samples: number[]): number {
   return sorted[Math.floor(sorted.length / 2)] ?? sorted[0]!;
 }
 
-/** Standing reference from calibration window. */
+/** Standing reference = tallest hips (min Y) in the calibration window. */
 export function standingHipYFromBaseline(samples: number[]): number {
   if (samples.length === 0) return 0;
-  const spread = Math.max(...samples) - Math.min(...samples);
-  // Countdown often includes hinge/setup motion — median skews “standing” too low (deep).
-  // Use tallest hips (min Y) so deadlift hinge depth is measured from true lockout height.
-  if (spread > DEADLIFT_REP_THRESH.baselineMaxSpread) {
-    return Math.min(...samples);
-  }
-  return medianHipY(samples);
+  return Math.min(...samples);
 }
 
 /** Exponential moving average — dampens single-frame hip spikes. */

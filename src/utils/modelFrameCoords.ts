@@ -5,8 +5,7 @@ import type { KeyPoint, PoseResult } from '@/modules/movenet';
 
 /**
  * vision-camera-resize-plugin center-crops to a square before scaling when `crop` is omitted.
- * MoveNet coords are 0–1 over that square — map back to full-frame normalized space first,
- * like OpenCV OpenPose scaling with frameWidth / frameHeight (SravB repo).
+ * MoveNet coords are 0–1 over that square — map back to full-frame normalized space first.
  */
 export function uncropFromCenterSquareCrop(
   x: number,
@@ -44,6 +43,7 @@ export type FrameCoordOptions = {
 
 /**
  * Model (crop square) → full buffer → portrait preview normalized (0–1 in contain rect).
+ * Kept on JS thread (17 keypoints) — avoid GPU rotate/mirror in the resize worklet.
  */
 export function mapPoseToPreviewSpace(
   pose: PoseResult,
@@ -72,7 +72,7 @@ function mapKeypointToPreview(
 
   // Selfie preview is mirrored; model runs on the unmirrored sensor buffer.
   // Android: landscape swap already lines up with Samsung front preview — extra flip breaks it.
-  // iOS: same swap + explicit horizontal mirror to stick on body (not a clone facing you).
+  // iOS: explicit horizontal mirror to stick on body (not a clone facing you).
   if (options?.mirrorPreview) {
     x = 1 - x;
   }

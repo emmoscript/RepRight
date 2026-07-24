@@ -236,25 +236,22 @@ export function LiveSessionScreen() {
     setLayout({ w: width, h: height });
   }, []);
 
-  const lastFrameMetaRef = useRef<{
-    width: number;
-    height: number;
-    orientation: Orientation;
-  }>({ width: 0, height: 0, orientation: 'portrait' });
+  const previewFrameRef = useRef({ w: 0, h: 0 });
+  const [previewFrameSize, setPreviewFrameSize] = useState({ w: 0, h: 0 });
 
   const previewContain = useMemo((): ContainRect => {
     if (layout.w < 16 || layout.h < 16) {
       return { ox: 0, oy: 0, vw: Math.max(1, layout.w), vh: Math.max(1, layout.h) };
     }
-    const meta = lastFrameMetaRef.current;
-    const srcW = meta.width > 0 ? meta.width : cameraFormat?.videoWidth;
-    const srcH = meta.height > 0 ? meta.height : cameraFormat?.videoHeight;
+    const srcW =
+      previewFrameSize.w > 0 ? previewFrameSize.w : cameraFormat?.videoWidth;
+    const srcH =
+      previewFrameSize.h > 0 ? previewFrameSize.h : cameraFormat?.videoHeight;
     if (srcW && srcH) {
-      const oriented = orientedPreviewSize(srcW, srcH, meta.orientation);
-      return getContainPreviewRect(layout.w, layout.h, oriented.width, oriented.height);
+      return getContainPreviewRect(layout.w, layout.h, srcW, srcH);
     }
     return { ox: 0, oy: 0, vw: layout.w, vh: layout.h };
-  }, [layout.w, layout.h, cameraFormat]);
+  }, [layout.w, layout.h, cameraFormat, previewFrameSize.w, previewFrameSize.h]);
 
   // ── Session flow ────────────────────────────────────────────────────────────
   const [flow, setFlow] = useState<Flow>('search');
@@ -1169,12 +1166,18 @@ export function LiveSessionScreen() {
 
   const mapInferencePose = useCallback(
     (raw: PoseResult, frameOrientation: Orientation, frameMeta: FrameProcessorMeta) => {
-      lastFrameMetaRef.current = {
-        width: frameMeta.width,
-        height: frameMeta.height,
-        orientation: frameOrientation,
-      };
-      // Preview is always mirrored on front (Vision Camera); always flip X on iOS front.
+      const oriented = orientedPreviewSize(
+        frameMeta.width,
+        frameMeta.height,
+        frameOrientation,
+      );
+      if (
+        previewFrameRef.current.w !== oriented.width ||
+        previewFrameRef.current.h !== oriented.height
+      ) {
+        previewFrameRef.current = { w: oriented.width, h: oriented.height };
+        setPreviewFrameSize({ w: oriented.width, h: oriented.height });
+      }
       const mirrorPreview = Platform.OS === 'ios' && useFrontRef.current;
       return mapPoseToPreviewSpace(
         raw,
@@ -1541,14 +1544,12 @@ export function LiveSessionScreen() {
 
   const showFramingGuide =
     sessionActive &&
-    (flow === 'search' || flow === 'detected' || flow === 'countdown' || flow === 'pose_lost');
+    (flow === 'search' || flow === 'detected' || flow === 'countdown');
 
   const framingHint = useMemo(() => {
     if (!showFramingGuide || !uiPose) return null;
-    const valid =
-      flow === 'pose_lost' ? isPoseStableForLiftTracking(uiPose) : isPoseValid(uiPose);
-    return framingHintFromPose(uiPose, valid);
-  }, [showFramingGuide, uiPose, flow]);
+    return framingHintFromPose(uiPose, isPoseValid(uiPose));
+  }, [showFramingGuide, uiPose]);
 
   const headerScrimBottomPx = topPad + HEADER_SCRIM_BODY_PX + HEADER_CONTROLS_EXTRA_DOWN;
 
@@ -1726,11 +1727,9 @@ export function LiveSessionScreen() {
 
           {flow === 'pose_lost' && !showQuitWorkoutModal ? (
             <View style={[styles.topBannerAbs, { top: belowHeaderBannerTop, zIndex: 12 }]} pointerEvents="none">
-              <View style={[styles.infoBanner, styles.infoBannerAmber]}>
+              <View style={[styles.infoBanner, styles.infoBannerPoseLost]}>
                 <SvgHudWarnTriangle color={colors.accent_yellow} size={22} />
-                <Text style={[styles.infoBannerTitle, { color: colors.accent_yellow }]}>
-                  {t('liveSession.poseLost')}
-                </Text>
+                <Text style={styles.infoBannerPoseLostTitle}>{t('liveSession.poseLost')}</Text>
               </View>
             </View>
           ) : null}
@@ -2190,6 +2189,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,184,0,0.12)',
     borderColor: colors.accent_yellow,
     borderWidth: 1,
+  },
+  infoBannerPoseLost: {
+    backgroundColor: colors.surface_v3,
+    borderColor: colors.accent_yellow,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 16,
+  },
+  infoBannerPoseLostTitle: {
+    flex: 1,
+    color: colors.accent_yellow,
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.captionCaps + 3,
+    letterSpacing: typography.letterSpacing.capsWide,
+    textTransform: 'uppercase',
   },
   infoBannerTitle: {
     color: colors.text_primary,
