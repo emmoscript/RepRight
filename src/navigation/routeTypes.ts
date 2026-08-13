@@ -1,6 +1,9 @@
-import type { CompositeNavigationProp, NavigatorScreenParams } from '@react-navigation/native';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import type {
+    CompositeNavigationProp,
+    NavigatorScreenParams,
+} from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 /** Nested stack inside the Workout tab — one configure screen per exercise. */
 export type WorkoutStackParamList = {
@@ -21,14 +24,17 @@ export type RootStackParamList = {
   Demo: undefined;
   /** Auth entry for returning users (after sign-out). Not the first-run onboarding. */
   Welcome: undefined;
-  AuthGateway: { email?: string; fromEmailVerify?: boolean; mode?: 'login' | 'signup' } | undefined;
+  AuthGateway:
+    | { email?: string; fromEmailVerify?: boolean; mode?: "login" | "signup" }
+    | undefined;
   EmailConfirm: { email: string };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
+  SubscriptionOffer: { source?: "first_session" | "profile" } | undefined;
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
   LiveSession: { continuedWorkout?: boolean } | undefined;
   SessionComplete: undefined;
   SessionDetail: { sessionId: string };
-  LegalDocument: { type: 'privacy' | 'terms' };
+  LegalDocument: { type: "privacy" | "terms" };
   Support: undefined;
 };
 

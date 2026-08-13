@@ -1,9 +1,9 @@
 import "@/i18n";
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
 } from "@expo-google-fonts/inter";
 import { SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -18,6 +18,10 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { RootNavigator } from "@/navigation/RootNavigator";
 import { useAuthStore } from "@/store/authStore";
+import {
+    resolveSubscriptionOwnerKey,
+    useSubscriptionStore,
+} from "@/store/subscriptionStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
 
 void SplashScreen.preventAutoHideAsync();
@@ -36,24 +40,40 @@ export default function App() {
   const [fontsReady, setFontsReady] = useState(false);
   const authReady = useAuthStore((s) => s.authReady);
   const prefsReady = useUserPreferencesStore((s) => s.hydrated);
+  const subReady = useSubscriptionStore((s) => s.hydrated);
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const participantId = useAuthStore((s) => s.participantId);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
 
   useEffect(() => {
     useAuthStore.getState().initAuthListener();
     void useUserPreferencesStore.getState().hydrate();
     void useAuthStore.getState().restoreSession();
     if (__DEV__) {
-      void import('@/lib/supabaseClient').then(({ pingSupabase }) => {
+      void import("@/lib/supabaseClient").then(({ pingSupabase }) => {
         void pingSupabase().then((r) => {
-          console.log(`[supabase] ping ${r.ok ? 'OK' : 'FAILED'}: ${r.detail}`);
-          if (!r.ok && r.detail.includes('Network request failed')) {
+          console.log(`[supabase] ping ${r.ok ? "OK" : "FAILED"}: ${r.detail}`);
+          if (!r.ok && r.detail.includes("Network request failed")) {
             console.warn(
-              '[supabase] Device cannot reach your project URL. In Supabase Dashboard → Settings → API, copy Project URL again. Open that URL in the phone browser — if it fails, the project is paused or DNS is broken (not an app bug).',
+              "[supabase] Device cannot reach your project URL. In Supabase Dashboard → Settings → API, copy Project URL again. Open that URL in the phone browser — if it fails, the project is paused or DNS is broken (not an app bug).",
             );
           }
         });
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!authReady || !prefsReady) return;
+    const ownerKey = resolveSubscriptionOwnerKey({
+      isLoggedIn,
+      isGuest,
+      userId,
+      participantId,
+    });
+    void useSubscriptionStore.getState().hydrate(ownerKey);
+  }, [authReady, prefsReady, isLoggedIn, isGuest, participantId, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +102,7 @@ export default function App() {
     }
   }, [fontsReady]);
 
-  if (!fontsReady || !authReady || !prefsReady) {
+  if (!fontsReady || !authReady || !prefsReady || !subReady) {
     return null;
   }
 

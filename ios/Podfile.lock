@@ -3,6 +3,9 @@ PODS:
   - DoubleConversion (1.1.6)
   - EXConstants (17.0.8):
     - ExpoModulesCore
+  - EXImageLoader (5.0.0):
+    - ExpoModulesCore
+    - React-Core
   - EXJSONUtils (0.14.0)
   - EXManifests (0.15.8):
     - ExpoModulesCore
@@ -215,6 +218,8 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - ExpoAppleAuthentication (7.2.4):
+    - ExpoModulesCore
   - ExpoAsset (11.0.5):
     - ExpoModulesCore
   - ExpoCrypto (14.0.2):
@@ -225,7 +230,13 @@ PODS:
     - ExpoModulesCore
   - ExpoHaptics (14.0.1):
     - ExpoModulesCore
+  - ExpoImagePicker (16.0.6):
+    - ExpoModulesCore
   - ExpoKeepAwake (14.0.3):
+    - ExpoModulesCore
+  - ExpoLinking (7.0.5):
+    - ExpoModulesCore
+  - ExpoLocalization (16.1.6):
     - ExpoModulesCore
   - ExpoModulesCore (2.2.3):
     - DoubleConversion
@@ -277,6 +288,8 @@ PODS:
   - ExpoSplashScreen (0.29.24):
     - ExpoModulesCore
   - ExpoSystemUI (4.0.9):
+    - ExpoModulesCore
+  - ExpoWebBrowser (14.0.2):
     - ExpoModulesCore
   - EXUpdatesInterface (1.0.0):
     - ExpoModulesCore
@@ -1611,6 +1624,8 @@ PODS:
     - TensorFlowLiteC (= 2.17.0)
     - TensorFlowLiteC/CoreML (= 2.17.0)
     - Yoga
+  - react-native-get-random-values (1.11.0):
+    - React-Core
   - react-native-safe-area-context (4.12.0):
     - React-Core
   - react-native-worklets-core (1.6.3):
@@ -1929,6 +1944,8 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - Yoga
+  - RNIap (13.0.4):
+    - React-Core
   - RNReanimated (3.16.7):
     - DoubleConversion
     - glog
@@ -2086,6 +2103,7 @@ DEPENDENCIES:
   - boost (from `../node_modules/react-native/third-party-podspecs/boost.podspec`)
   - DoubleConversion (from `../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec`)
   - EXConstants (from `../node_modules/expo-constants/ios`)
+  - EXImageLoader (from `../node_modules/expo-image-loader/ios`)
   - EXJSONUtils (from `../node_modules/expo-json-utils/ios`)
   - EXManifests (from `../node_modules/expo-manifests/ios`)
   - Expo (from `../node_modules/expo`)
@@ -2093,17 +2111,22 @@ DEPENDENCIES:
   - expo-dev-launcher (from `../node_modules/expo-dev-launcher`)
   - expo-dev-menu (from `../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../node_modules/expo-dev-menu-interface/ios`)
+  - ExpoAppleAuthentication (from `../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../node_modules/expo-asset/ios`)
   - ExpoCrypto (from `../node_modules/expo-crypto/ios`)
   - ExpoFileSystem (from `../node_modules/expo-file-system/ios`)
   - ExpoFont (from `../node_modules/expo-font/ios`)
   - ExpoHaptics (from `../node_modules/expo-haptics/ios`)
+  - ExpoImagePicker (from `../node_modules/expo-image-picker/ios`)
   - ExpoKeepAwake (from `../node_modules/expo-keep-awake/ios`)
+  - ExpoLinking (from `../node_modules/expo-linking/ios`)
+  - ExpoLocalization (from `../node_modules/expo-localization/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoScreenOrientation (from `../node_modules/expo-screen-orientation/ios`)
   - ExpoSpeech (from `../node_modules/expo-speech/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
   - ExpoSystemUI (from `../node_modules/expo-system-ui/ios`)
+  - ExpoWebBrowser (from `../node_modules/expo-web-browser/ios`)
   - EXUpdatesInterface (from `../node_modules/expo-updates-interface/ios`)
   - fast_float (from `../node_modules/react-native/third-party-podspecs/fast_float.podspec`)
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
@@ -2143,6 +2166,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
   - react-native-fast-tflite (from `../node_modules/react-native-fast-tflite`)
+  - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-worklets-core (from `../node_modules/react-native-worklets-core`)
   - React-nativeconfig (from `../node_modules/react-native/ReactCommon`)
@@ -2174,6 +2198,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
+  - RNIap (from `../node_modules/react-native-iap`)
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNSVG (from `../node_modules/react-native-svg`)
@@ -2193,6 +2218,8 @@ EXTERNAL SOURCES:
     :podspec: "../node_modules/react-native/third-party-podspecs/DoubleConversion.podspec"
   EXConstants:
     :path: "../node_modules/expo-constants/ios"
+  EXImageLoader:
+    :path: "../node_modules/expo-image-loader/ios"
   EXJSONUtils:
     :path: "../node_modules/expo-json-utils/ios"
   EXManifests:
@@ -2207,6 +2234,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-dev-menu"
   expo-dev-menu-interface:
     :path: "../node_modules/expo-dev-menu-interface/ios"
+  ExpoAppleAuthentication:
+    :path: "../node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../node_modules/expo-asset/ios"
   ExpoCrypto:
@@ -2217,8 +2246,14 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-font/ios"
   ExpoHaptics:
     :path: "../node_modules/expo-haptics/ios"
+  ExpoImagePicker:
+    :path: "../node_modules/expo-image-picker/ios"
   ExpoKeepAwake:
     :path: "../node_modules/expo-keep-awake/ios"
+  ExpoLinking:
+    :path: "../node_modules/expo-linking/ios"
+  ExpoLocalization:
+    :path: "../node_modules/expo-localization/ios"
   ExpoModulesCore:
     :path: "../node_modules/expo-modules-core"
   ExpoScreenOrientation:
@@ -2229,6 +2264,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-splash-screen/ios"
   ExpoSystemUI:
     :path: "../node_modules/expo-system-ui/ios"
+  ExpoWebBrowser:
+    :path: "../node_modules/expo-web-browser/ios"
   EXUpdatesInterface:
     :path: "../node_modules/expo-updates-interface/ios"
   fast_float:
@@ -2304,6 +2341,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-fast-tflite:
     :path: "../node_modules/react-native-fast-tflite"
+  react-native-get-random-values:
+    :path: "../node_modules/react-native-get-random-values"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-worklets-core:
@@ -2366,6 +2405,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
+  RNIap:
+    :path: "../node_modules/react-native-iap"
   RNReanimated:
     :path: "../node_modules/react-native-reanimated"
   RNScreens:
@@ -2383,6 +2424,7 @@ SPEC CHECKSUMS:
   boost: 1dca942403ed9342f98334bf4c3621f011aa7946
   DoubleConversion: f16ae600a246532c4020132d54af21d0ddb2a385
   EXConstants: fcfc75800824ac2d5c592b5bc74130bad17b146b
+  EXImageLoader: e5da974e25b13585c196b658a440720c075482d5
   EXJSONUtils: 01fc7492b66c234e395dcffdd5f53439c5c29c93
   EXManifests: a19d50504b8826546a4782770317bc83fffec87d
   Expo: 4bb70893882e6382b41d1e910d7226c6a1b85f0a
@@ -2390,17 +2432,22 @@ SPEC CHECKSUMS:
   expo-dev-launcher: 82de1bf29e91f4794bcc65a697e7066d9a826bee
   expo-dev-menu: 3fda3eb2b3394dc92955f6ff60cb278f843641be
   expo-dev-menu-interface: 00dc42302a72722fdecec3fa048de84a9133bcc4
+  ExpoAppleAuthentication: 4d2e0c88a4463229760f1fbb9a937a810efb6863
   ExpoAsset: 48386d40d53a8c1738929b3ed509bcad595b5516
   ExpoCrypto: e97e864c8d7b9ce4a000bca45dddb93544a1b2b4
   ExpoFileSystem: 42d363d3b96f9afab980dcef60d5657a4443c655
   ExpoFont: f354e926f8feae5e831ec8087f36652b44a0b188
   ExpoHaptics: 8d199b2f33245ea85289ff6c954c7ee7c00a5b5d
+  ExpoImagePicker: 24e5ba8da111f74519b1e6dc556e0b438b2b8464
   ExpoKeepAwake: b0171a73665bfcefcfcc311742a72a956e6aa680
+  ExpoLinking: 8d12bee174ba0cdf31239706578e29e74a417402
+  ExpoLocalization: 999a1ff61a7f5917d65c2bd9234883009019ca9f
   ExpoModulesCore: 725faec070d590810d2ea5983d9f78f7cf6a38ec
   ExpoScreenOrientation: 4a3ee98da02b0e0f86a6aa5e3c4bd96399c87581
   ExpoSpeech: 8f74347608243ee8fdc2faa14e7d2cd5503f33f8
   ExpoSplashScreen: 399ee9f85b6c8a61b965e13a1ecff8384db591c2
   ExpoSystemUI: b82a45cf0f6a4fa18d07c46deba8725dd27688b4
+  ExpoWebBrowser: a212e6b480d8857d3e441fba51e0c968333803b3
   EXUpdatesInterface: 7c977640bdd8b85833c19e3959ba46145c5719db
   fast_float: 06eeec4fe712a76acc9376682e4808b05ce978b6
   FBLazyVector: 7605ea4810e0e10ae4815292433c09bf4324ba45
@@ -2438,6 +2485,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 33546a3ebefbccb8770c33a1f8a5554fa96a54de
   React-microtasksnativemodule: 5c3d795318c22ab8df55100e50b151384a4a60b3
   react-native-fast-tflite: 5f53cdc2599e3ab699d4e08f9f7625234855cd15
+  react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-safe-area-context: 8b8404e70b0cbf2a56428a17017c14c1dcc16448
   react-native-worklets-core: bbe81840f445f2af18266fe70a00e077805acb2d
   React-nativeconfig: 8efdb1ef1e9158c77098a93085438f7e7b463678
@@ -2469,6 +2517,7 @@ SPEC CHECKSUMS:
   ReactCommon: 300d8d9c5cb1a6cd79a67cf5d8f91e4d477195f9
   RNCAsyncStorage: aa75595c1aefa18f868452091fa0c411a516ce11
   RNGestureHandler: 32336458ef842088a459ccfcc10b583186de2633
+  RNIap: 868250beda0ced499d39f53eaa88e8c2951cfe27
   RNReanimated: 6d22a1aec06a9787b797bc0c40fc2779be0599a5
   RNScreens: 295d9c0aaeb7f680d03d7e9b476569a4959aae89
   RNSVG: 8542aa11770b27563714bbd8494a8436385fc85f

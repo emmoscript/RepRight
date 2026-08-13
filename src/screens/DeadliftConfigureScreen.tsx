@@ -1,23 +1,43 @@
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Image, InteractionManager, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+    Alert, Image,
+    InteractionManager,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { REPS_PER_SET_MAX, REPS_PER_SET_MIN, RepsSlider } from '@/components/RepsSlider';
-import { SetPlanRow } from '@/components/SetPlanRow';
-import type { WorkoutStackNav } from '@/navigation/routeTypes';
-import { diagBreadcrumb } from '@/lib/crashDiag';
-import { useSessionConfigStore } from '@/store/sessionConfigStore';
-import { useUserPreferencesStore } from '@/store/userPreferencesStore';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { clampMass, parseMassDraft, weightPlaceholder, weightUnitSuffix } from '@/utils/weightUnits';
+import { PrimaryButton } from "@/components/PrimaryButton";
+import {
+    REPS_PER_SET_MAX,
+    REPS_PER_SET_MIN,
+    RepsSlider,
+} from "@/components/RepsSlider";
+import { SetPlanRow } from "@/components/SetPlanRow";
+import { diagBreadcrumb } from "@/lib/crashDiag";
+import { getAllSessions, hasUsedFreeWeeklySession } from "@/modules/session";
+import type { WorkoutStackNav } from "@/navigation/routeTypes";
+import { useSessionConfigStore } from "@/store/sessionConfigStore";
+import { useSubscriptionStore } from "@/store/subscriptionStore";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
+import {
+    clampMass,
+    parseMassDraft,
+    weightPlaceholder,
+    weightUnitSuffix,
+} from "@/utils/weightUnits";
 
 const SET_OPTS = [2, 3, 4, 5] as const;
-const WORKOUT_BG = require('../../assets/images/man-deadlifting.jpg');
+const WORKOUT_BG = require("../../assets/images/man-deadlifting.jpg");
 
 export function DeadliftConfigureScreen() {
   const { t } = useTranslation();
@@ -32,11 +52,15 @@ export function DeadliftConfigureScreen() {
   const setSetCount = useSessionConfigStore((s) => s.setSetCount);
   const setCustomSetPlan = useSessionConfigStore((s) => s.setCustomSetPlan);
   const updateSetPlanRow = useSessionConfigStore((s) => s.updateSetPlanRow);
+  const subscribed = useSubscriptionStore((s) => s.subscribed);
+  const getSubscriptionAgeMs = useSubscriptionStore(
+    (s) => s.getSubscriptionAgeMs,
+  );
 
   const [weightDraft, setWeightDraft] = useState(() => String(weightAmount));
 
   useEffect(() => {
-    patch({ exercise: 'conventional_deadlift' });
+    patch({ exercise: "conventional_deadlift" });
   }, [patch]);
 
   useFocusEffect(
@@ -66,54 +90,94 @@ export function DeadliftConfigureScreen() {
 
   const planSummary = useMemo(() => {
     if (customSetPlan) {
-      const reps = setPlans.map((r) => r.reps).join(' · ');
-      return t('deadliftConfigure.planCustom', { sets: numSets, repsList: reps });
+      const reps = setPlans.map((r) => r.reps).join(" · ");
+      return t("deadliftConfigure.planCustom", {
+        sets: numSets,
+        repsList: reps,
+      });
     }
-    return t('deadliftConfigure.planSame', {
+    return t("deadliftConfigure.planSame", {
       sets: numSets,
       reps: repsPerSet,
       weight: weightAmount,
       unit: unitLabel,
     });
-  }, [customSetPlan, numSets, repsPerSet, setPlans, weightAmount, unitLabel, t]);
+  }, [
+    customSetPlan,
+    numSets,
+    repsPerSet,
+    setPlans,
+    weightAmount,
+    unitLabel,
+    t,
+  ]);
 
-  const startLiveSession = useCallback(() => {
-    diagBreadcrumb('deadlift_configure:start_session_tap');
+  const startLiveSession = useCallback(async () => {
+    diagBreadcrumb("deadlift_configure:start_session_tap");
+
+    const sessions = await getAllSessions();
+    if (!subscribed && hasUsedFreeWeeklySession(sessions)) {
+      const ageMs = getSubscriptionAgeMs();
+      const ageDays =
+        ageMs == null
+          ? null
+          : Math.max(1, Math.floor(ageMs / (24 * 60 * 60 * 1000)));
+      Alert.alert(
+        "Weekly limit reached",
+        ageDays == null
+          ? "Your free plan allows one session per week. Subscribe to unlock more sessions."
+          : `Your free plan allows one session per week. You have been subscribed for ${ageDays} days.`,
+      );
+      return;
+    }
+
     InteractionManager.runAfterInteractions(() => {
       requestAnimationFrame(() => {
-        diagBreadcrumb('deadlift_configure:navigate_live_session');
-        nav.navigate('LiveSession');
+        diagBreadcrumb("deadlift_configure:navigate_live_session");
+        nav.navigate("LiveSession");
       });
     });
-  }, [nav]);
+  }, [getSubscriptionAgeMs, nav, subscribed]);
 
   return (
     <View style={styles.root}>
       <View style={styles.bgLayer} pointerEvents="none">
-        <Image source={WORKOUT_BG} style={styles.bgImage} resizeMode="contain" accessibilityIgnoresInvertColors />
+        <Image
+          source={WORKOUT_BG}
+          style={styles.bgImage}
+          resizeMode="contain"
+          accessibilityIgnoresInvertColors
+        />
       </View>
       <View style={styles.bgScrim} pointerEvents="none" />
 
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.topBar}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Back to exercises"
             onPress={() => nav.goBack()}
-            style={styles.backBtn}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text_primary} />
+            style={styles.backBtn}>
+            <Ionicons
+              name="chevron-back"
+              size={24}
+              color={colors.text_primary}
+            />
           </Pressable>
           <View style={styles.topTitles}>
-            <Text style={styles.title}>{t('deadliftConfigure.title')}</Text>
-            <Text style={styles.meta}>{t('deadliftConfigure.meta')}</Text>
+            <Text style={styles.title}>{t("deadliftConfigure.title")}</Text>
+            <Text style={styles.meta}>{t("deadliftConfigure.meta")}</Text>
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionHeading}>{t('deadliftConfigure.volume')}</Text>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}>
+          <Text style={styles.sectionHeading}>
+            {t("deadliftConfigure.volume")}
+          </Text>
 
-          <Text style={styles.fieldLab}>{t('deadliftConfigure.sets')}</Text>
+          <Text style={styles.fieldLab}>{t("deadliftConfigure.sets")}</Text>
           <View style={styles.pillRow}>
             {SET_OPTS.map((n) => {
               const on = numSets === n;
@@ -121,30 +185,49 @@ export function DeadliftConfigureScreen() {
                 <Pressable
                   key={n}
                   onPress={() => setSetCount(n)}
-                  style={[styles.pill, on ? styles.pillOn : styles.pillOff]}
-                >
-                  <Text style={[styles.pillTxt, on ? styles.pillTxtOn : styles.pillTxtOff]}>{n}</Text>
+                  style={[styles.pill, on ? styles.pillOn : styles.pillOff]}>
+                  <Text
+                    style={[
+                      styles.pillTxt,
+                      on ? styles.pillTxtOn : styles.pillTxtOff,
+                    ]}>
+                    {n}
+                  </Text>
                 </Pressable>
               );
             })}
           </View>
 
-          <Text style={[styles.fieldLab, { marginTop: 20 }]}>{t('deadliftConfigure.repTarget')}</Text>
+          <Text style={[styles.fieldLab, { marginTop: 20 }]}>
+            {t("deadliftConfigure.repTarget")}
+          </Text>
           <View style={styles.planToggleRow}>
             <Pressable
               onPress={() => setCustomSetPlan(false)}
-              style={[styles.planSeg, !customSetPlan ? styles.planSegOn : styles.planSegOff]}
-            >
-              <Text style={[styles.planSegTxt, !customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff]}>
-                {t('deadliftConfigure.sameEachSet')}
+              style={[
+                styles.planSeg,
+                !customSetPlan ? styles.planSegOn : styles.planSegOff,
+              ]}>
+              <Text
+                style={[
+                  styles.planSegTxt,
+                  !customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff,
+                ]}>
+                {t("deadliftConfigure.sameEachSet")}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setCustomSetPlan(true)}
-              style={[styles.planSeg, customSetPlan ? styles.planSegOn : styles.planSegOff]}
-            >
-              <Text style={[styles.planSegTxt, customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff]}>
-                {t('deadliftConfigure.varyBySet')}
+              style={[
+                styles.planSeg,
+                customSetPlan ? styles.planSegOn : styles.planSegOff,
+              ]}>
+              <Text
+                style={[
+                  styles.planSegTxt,
+                  customSetPlan ? styles.planSegTxtOn : styles.planSegTxtOff,
+                ]}>
+                {t("deadliftConfigure.varyBySet")}
               </Text>
             </Pressable>
           </View>
@@ -152,23 +235,32 @@ export function DeadliftConfigureScreen() {
           {!customSetPlan ? (
             <View style={styles.volumeBody}>
               <RepsSlider
-                value={Math.min(REPS_PER_SET_MAX, Math.max(REPS_PER_SET_MIN, repsPerSet))}
+                value={Math.min(
+                  REPS_PER_SET_MAX,
+                  Math.max(REPS_PER_SET_MIN, repsPerSet),
+                )}
                 onChange={(n) => patch({ repsPerSet: n })}
                 min={REPS_PER_SET_MIN}
                 max={REPS_PER_SET_MAX}
               />
             </View>
           ) : (
-            <Text style={styles.customHint}>{t('deadliftConfigure.customHint')}</Text>
+            <Text style={styles.customHint}>
+              {t("deadliftConfigure.customHint")}
+            </Text>
           )}
 
           <View style={styles.sectionDivider} />
 
-          <Text style={styles.sectionHeading}>{t('deadliftConfigure.load')}</Text>
+          <Text style={styles.sectionHeading}>
+            {t("deadliftConfigure.load")}
+          </Text>
 
           {!customSetPlan ? (
             <>
-              <Text style={[styles.fieldLab, { marginTop: 14 }]}>{t('deadliftConfigure.workingWeight')}</Text>
+              <Text style={[styles.fieldLab, { marginTop: 14 }]}>
+                {t("deadliftConfigure.workingWeight")}
+              </Text>
               <View style={styles.weightInputShell}>
                 <TextInput
                   placeholder={weightPlaceholder(weightUnit)}
@@ -190,7 +282,7 @@ export function DeadliftConfigureScreen() {
               {setPlans.map((row, i) => (
                 <SetPlanRow
                   key={i}
-                  setLabel={t('deadliftConfigure.setLabel', { n: i + 1 })}
+                  setLabel={t("deadliftConfigure.setLabel", { n: i + 1 })}
                   row={row}
                   unitLabel={unitLabel}
                   onChange={(p) => updateSetPlanRow(i, p)}
@@ -200,13 +292,21 @@ export function DeadliftConfigureScreen() {
           )}
 
           <View style={styles.summaryStrip}>
-            <Text style={styles.summaryLab}>{t('deadliftConfigure.sessionPlan')}</Text>
+            <Text style={styles.summaryLab}>
+              {t("deadliftConfigure.sessionPlan")}
+            </Text>
             <Text style={styles.summaryVal}>{planSummary}</Text>
           </View>
 
-          <Text style={styles.footerNote}>{t('deadliftConfigure.footerNote')}</Text>
+          <Text style={styles.footerNote}>
+            {t("deadliftConfigure.footerNote")}
+          </Text>
 
-          <PrimaryButton title={t('deadliftConfigure.startSession')} onPress={startLiveSession} style={styles.startBtn} />
+          <PrimaryButton
+            title={t("deadliftConfigure.startSession")}
+            onPress={startLiveSession}
+            style={styles.startBtn}
+          />
           <View style={{ height: 104 }} />
         </ScrollView>
       </SafeAreaView>
@@ -221,18 +321,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg_v3,
   },
   bgImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     opacity: 0.26,
   },
   bgScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13, 13, 13, 0.74)',
+    backgroundColor: "rgba(13, 13, 13, 0.74)",
   },
-  safe: { flex: 1, backgroundColor: 'transparent' },
+  safe: { flex: 1, backgroundColor: "transparent" },
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 8,
@@ -243,8 +343,8 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     backgroundColor: colors.bg_elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   topTitles: { flex: 1 },
   scroll: { paddingHorizontal: 24, paddingBottom: 32, paddingTop: 4 },
@@ -253,7 +353,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.titleSm + 4,
     letterSpacing: -1,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   meta: {
     marginTop: 2,
@@ -279,10 +379,10 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.medium,
     fontSize: typography.fontSize.captionCaps + 2,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   pillRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginTop: 10,
   },
@@ -290,16 +390,19 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 48,
     borderRadius: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   pillOn: { backgroundColor: colors.primary_green },
   pillOff: { backgroundColor: colors.bg_elevated },
-  pillTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodyLg },
+  pillTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.bodyLg,
+  },
   pillTxtOn: { color: colors.text_on_green },
   pillTxtOff: { color: colors.text_secondary },
   planToggleRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     marginTop: 10,
   },
@@ -307,13 +410,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     borderRadius: 999,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 8,
   },
   planSegOn: { backgroundColor: colors.primary_green },
   planSegOff: { backgroundColor: colors.bg_elevated },
-  planSegTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.bodySm },
+  planSegTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.bodySm,
+  },
   planSegTxtOn: { color: colors.text_on_green },
   planSegTxtOff: { color: colors.text_secondary },
   volumeBody: { marginTop: 4 },
@@ -324,8 +430,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   weightInputShell: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.bg_elevated,
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
@@ -361,7 +467,7 @@ const styles = StyleSheet.create({
     color: colors.text_muted,
     fontSize: typography.fontSize.captionCaps + 1,
     letterSpacing: typography.letterSpacing.capsWide,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   summaryVal: {
     marginTop: 6,

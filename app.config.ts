@@ -48,6 +48,7 @@ const config: ExpoConfig = {
     "expo-file-system",
     "expo-asset",
     "expo-localization",
+    "react-native-iap",
     [
       "expo-image-picker",
       {

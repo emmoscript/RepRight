@@ -5,14 +5,14 @@
  * Index key   : session_index_${ownerKey}  →  string[] of sessionIds
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { useAuthStore } from '@/store/authStore';
-import type { RecordedFormError } from '@/types/recordedFormError';
-import type { WeightUnit } from '@/utils/weightUnits';
+import { useAuthStore } from "@/store/authStore";
+import type { RecordedFormError } from "@/types/recordedFormError";
+import type { WeightUnit } from "@/utils/weightUnits";
 
-const LEGACY_INDEX_KEY = 'session_index';
-const GUEST_CLIENT_KEY = '@repright/guest_client_id';
+const LEGACY_INDEX_KEY = "session_index";
+const GUEST_CLIENT_KEY = "@repright/guest_client_id";
 
 export interface RepLog {
   repNumber: number;
@@ -72,7 +72,7 @@ export async function getSessionOwnerKey(): Promise<string> {
   if (isLoggedIn && user?.id) return `user:${user.id}`;
   if (isGuest) {
     const clientId = await AsyncStorage.getItem(GUEST_CLIENT_KEY);
-    return `guest:${clientId ?? 'local'}`;
+    return `guest:${clientId ?? "local"}`;
   }
   return `orphan:${useAuthStore.getState().participantId}`;
 }
@@ -82,7 +82,9 @@ async function readIndex(indexKey: string): Promise<string[]> {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
   } catch {
     return [];
   }
@@ -104,7 +106,10 @@ async function migrateLegacyIndex(ownerKey: string): Promise<string[]> {
   }
 
   if (ownedIds.length > 0) {
-    await AsyncStorage.setItem(sessionIndexKey(ownerKey), JSON.stringify(ownedIds));
+    await AsyncStorage.setItem(
+      sessionIndexKey(ownerKey),
+      JSON.stringify(ownedIds),
+    );
   }
 
   return ownedIds;
@@ -151,7 +156,9 @@ export function sessionsMatch(a: SessionLog, b: SessionLog): boolean {
 }
 
 /** Import cloud sessions into local storage; skips duplicates. Returns count added. */
-export async function mergeCloudSessions(imports: SessionLog[]): Promise<number> {
+export async function mergeCloudSessions(
+  imports: SessionLog[],
+): Promise<number> {
   if (imports.length === 0) return 0;
 
   const existing = await getAllSessions();
@@ -168,7 +175,9 @@ export async function mergeCloudSessions(imports: SessionLog[]): Promise<number>
   return added;
 }
 
-export async function getSession(sessionId: string): Promise<SessionLog | null> {
+export async function getSession(
+  sessionId: string,
+): Promise<SessionLog | null> {
   const session = await getSessionById(sessionId);
   if (!session) return null;
 
@@ -188,6 +197,32 @@ export async function getAllSessions(): Promise<SessionLog[]> {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+export function countSessionsSince(
+  sessions: SessionLog[],
+  sinceMs: number,
+): number {
+  return sessions.reduce((count, session) => {
+    const sessionMs = new Date(session.date).getTime();
+    return sessionMs >= sinceMs ? count + 1 : count;
+  }, 0);
+}
+
+export function countSessionsInLastDays(
+  sessions: SessionLog[],
+  days: number,
+  now = Date.now(),
+): number {
+  const startMs = now - days * 24 * 60 * 60 * 1000;
+  return countSessionsSince(sessions, startMs);
+}
+
+export function hasUsedFreeWeeklySession(
+  sessions: SessionLog[],
+  now = Date.now(),
+): boolean {
+  return countSessionsInLastDays(sessions, 7, now) >= 1;
+}
+
 export async function deleteSession(sessionId: string): Promise<void> {
   const ownerKey = await getSessionOwnerKey();
   const indexKey = sessionIndexKey(ownerKey);
@@ -200,7 +235,9 @@ export async function deleteSession(sessionId: string): Promise<void> {
 }
 
 /** Remove all local session logs for an owner (e.g. on account deletion). */
-export async function clearAllSessionsForOwner(ownerKey?: string): Promise<void> {
+export async function clearAllSessionsForOwner(
+  ownerKey?: string,
+): Promise<void> {
   const key = ownerKey ?? (await getSessionOwnerKey());
   const ids = await getOwnerSessionIds(key);
   await Promise.all(ids.map((id) => AsyncStorage.removeItem(`session_${id}`)));

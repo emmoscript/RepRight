@@ -1,36 +1,37 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import * as ImagePicker from "expo-image-picker";
+import React, { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  Alert,
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+    Alert,
+    Image,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { RepRightHeader } from '@/components/RepRightHeader';
-import { getAllSessions } from '@/modules/session';
-import { pullAndMergeCloudSessions } from '@/lib/pullSessionsFromSupabase';
-import { pushProfileToSupabase } from '@/lib/profileSync';
-import type { RootStackParamList } from '@/navigation/routeTypes';
-import { resetToWelcome } from '@/navigation/navigationRef';
-import { useAuthStore } from '@/store/authStore';
-import { useUserPreferencesStore } from '@/store/userPreferencesStore';
-import { colors } from '@/theme/colors';
-import { typography } from '@/theme/typography';
-import { resolveDisplayName } from '@/utils/displayName';
-import { computeProfileSessionStats } from '@/utils/profileSessionStats';
-import { weightSystemLabel, weightUnitSuffix } from '@/utils/weightUnits';
+import { RepRightHeader } from "@/components/RepRightHeader";
+import { pushProfileToSupabase } from "@/lib/profileSync";
+import { pullAndMergeCloudSessions } from "@/lib/pullSessionsFromSupabase";
+import { getAllSessions } from "@/modules/session";
+import { resetToWelcome } from "@/navigation/navigationRef";
+import type { RootStackParamList } from "@/navigation/routeTypes";
+import { useAuthStore } from "@/store/authStore";
+import { useSubscriptionStore } from "@/store/subscriptionStore";
+import { useUserPreferencesStore } from "@/store/userPreferencesStore";
+import { colors } from "@/theme/colors";
+import { typography } from "@/theme/typography";
+import { resolveDisplayName } from "@/utils/displayName";
+import { computeProfileSessionStats } from "@/utils/profileSessionStats";
+import { weightSystemLabel, weightUnitSuffix } from "@/utils/weightUnits";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -45,20 +46,28 @@ export function ProfileScreen() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const signOut = useAuthStore((s) => s.signOut);
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const subscribed = useSubscriptionStore((s) => s.subscribed);
+  const subscriptionEndsAt = useSubscriptionStore((s) => s.subscriptionEndsAt);
 
   const displayNamePref = useUserPreferencesStore((s) => s.displayName);
   const profilePhotoUri = useUserPreferencesStore((s) => s.profilePhotoUri);
   const weightUnit = useUserPreferencesStore((s) => s.weightUnit);
   const language = useUserPreferencesStore((s) => s.language);
-  const audioFeedbackEnabled = useUserPreferencesStore((s) => s.audioFeedbackEnabled);
+  const audioFeedbackEnabled = useUserPreferencesStore(
+    (s) => s.audioFeedbackEnabled,
+  );
   const setDisplayName = useUserPreferencesStore((s) => s.setDisplayName);
-  const setProfilePhotoUri = useUserPreferencesStore((s) => s.setProfilePhotoUri);
+  const setProfilePhotoUri = useUserPreferencesStore(
+    (s) => s.setProfilePhotoUri,
+  );
   const setWeightUnit = useUserPreferencesStore((s) => s.setWeightUnit);
   const setLanguage = useUserPreferencesStore((s) => s.setLanguage);
-  const setAudioFeedbackEnabled = useUserPreferencesStore((s) => s.setAudioFeedbackEnabled);
+  const setAudioFeedbackEnabled = useUserPreferencesStore(
+    (s) => s.setAudioFeedbackEnabled,
+  );
 
   const [nameModalOpen, setNameModalOpen] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
+  const [nameDraft, setNameDraft] = useState("");
   const [sessionCount, setSessionCount] = useState(0);
   const [bestFormPct, setBestFormPct] = useState<number | null>(null);
   const [streakDays, setStreakDays] = useState(0);
@@ -84,9 +93,11 @@ export function ProfileScreen() {
   );
 
   const bestFormLabel =
-    bestFormPct != null && sessionCount > 0 ? `${Math.round(bestFormPct)}%` : '—';
-  const streakLabel = sessionCount > 0 ? `🔥 ${streakDays}` : '🔥 —';
-  const sessionsLabel = sessionCount > 0 ? String(sessionCount) : '—';
+    bestFormPct != null && sessionCount > 0
+      ? `${Math.round(bestFormPct)}%`
+      : "—";
+  const streakLabel = sessionCount > 0 ? `🔥 ${streakDays}` : "🔥 —";
+  const sessionsLabel = sessionCount > 0 ? String(sessionCount) : "—";
 
   const display = useMemo(
     () => resolveDisplayName({ displayName: displayNamePref, email, isGuest }),
@@ -94,7 +105,9 @@ export function ProfileScreen() {
   );
 
   const participantLabel =
-    isGuest || !isLoggedIn ? t('profile.guestParticipant') : t('profile.testParticipant');
+    isGuest || !isLoggedIn
+      ? t("profile.guestParticipant")
+      : t("profile.testParticipant");
   const unitSuffix = weightUnitSuffix(weightUnit);
   const systemLabel = weightSystemLabel(weightUnit);
 
@@ -110,18 +123,25 @@ export function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(t('profile.deleteAccountTitle'), t('profile.deleteAccountBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('profile.deleteAccountConfirm'),
-        style: 'destructive',
-        onPress: () => {
-          void deleteAccount().catch(() => {
-            Alert.alert(t('profile.deleteAccount'), t('profile.deleteAccountError'));
-          });
+    Alert.alert(
+      t("profile.deleteAccountTitle"),
+      t("profile.deleteAccountBody"),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("profile.deleteAccountConfirm"),
+          style: "destructive",
+          onPress: () => {
+            void deleteAccount().catch(() => {
+              Alert.alert(
+                t("profile.deleteAccount"),
+                t("profile.deleteAccountError"),
+              );
+            });
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   const openNameEditor = () => {
@@ -138,7 +158,7 @@ export function ProfileScreen() {
   };
 
   const handleLanguageChange = useCallback(
-    (lang: 'en' | 'es') => {
+    (lang: "en" | "es") => {
       void setLanguage(lang).then(pushProfile);
     },
     [setLanguage, pushProfile],
@@ -147,11 +167,11 @@ export function ProfileScreen() {
   const pickProfilePhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(t('profile.photoAccessTitle'), t('profile.photoAccessBody'));
+      Alert.alert(t("profile.photoAccessTitle"), t("profile.photoAccessBody"));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.85,
@@ -162,11 +182,11 @@ export function ProfileScreen() {
   };
 
   const confirmRemovePhoto = () => {
-    Alert.alert(t('profile.removePhotoTitle'), t('profile.removePhotoBody'), [
-      { text: t('common.cancel'), style: 'cancel' },
+    Alert.alert(t("profile.removePhotoTitle"), t("profile.removePhotoBody"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: t('common.remove'),
-        style: 'destructive',
+        text: t("common.remove"),
+        style: "destructive",
         onPress: () => void setProfilePhotoUri(null),
       },
     ]);
@@ -175,17 +195,21 @@ export function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <RepRightHeader />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}>
         <Pressable
           style={styles.avatarWrap}
           accessibilityRole="button"
-          accessibilityLabel={t('profile.changePhoto')}
+          accessibilityLabel={t("profile.changePhoto")}
           onPress={() => void pickProfilePhoto()}
-          onLongPress={profilePhotoUri ? confirmRemovePhoto : undefined}
-        >
+          onLongPress={profilePhotoUri ? confirmRemovePhoto : undefined}>
           <View style={styles.avatar}>
             {profilePhotoUri ? (
-              <Image source={{ uri: profilePhotoUri }} style={styles.avatarImg} />
+              <Image
+                source={{ uri: profilePhotoUri }}
+                style={styles.avatarImg}
+              />
             ) : (
               <Text style={styles.avatarTxt}>{initials}</Text>
             )}
@@ -195,7 +219,11 @@ export function ProfileScreen() {
           </View>
           {isLoggedIn ? (
             <View style={styles.ver}>
-              <Ionicons name="checkmark-circle" size={26} color={colors.primary_green} />
+              <Ionicons
+                name="checkmark-circle"
+                size={26}
+                color={colors.primary_green}
+              />
             </View>
           ) : null}
         </Pressable>
@@ -203,8 +231,7 @@ export function ProfileScreen() {
         <Pressable
           style={styles.nameRow}
           accessibilityRole="button"
-          onPress={openNameEditor}
-        >
+          onPress={openNameEditor}>
           <Text style={styles.name}>{display}</Text>
           <Ionicons name="pencil-outline" size={18} color={colors.text_muted} />
         </Pressable>
@@ -219,82 +246,130 @@ export function ProfileScreen() {
           />
           <View style={{ flex: 1 }}>
             <Text style={styles.alphaTitle}>{participantLabel}</Text>
-            <Text style={styles.alphaMuted}>{t('profile.alphaBuild', { id: participantId })}</Text>
+            <Text style={styles.alphaMuted}>
+              {t("profile.alphaBuild", { id: participantId })}
+            </Text>
           </View>
         </Pressable>
 
+        <Pressable
+          style={styles.subscriptionCard}
+          accessibilityRole="button"
+          onPress={() =>
+            nav.navigate("SubscriptionOffer", { source: "profile" })
+          }>
+          <View style={styles.subscriptionTextBlock}>
+            <Text style={styles.subscriptionTitle}>
+              {subscribed
+                ? t("subscriptionOffer.active")
+                : t("subscriptionOffer.unlock")}
+            </Text>
+            <Text style={styles.subscriptionSub}>
+              {subscribed
+                ? subscriptionEndsAt
+                  ? `Sandbox access through ${new Date(subscriptionEndsAt).toLocaleDateString()}`
+                  : t("subscriptionOffer.benefit1")
+                : `${t("subscriptionOffer.priceLabel")} · $9.99/month`}
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={colors.text_muted}
+          />
+        </Pressable>
+
         <View style={styles.statRow}>
-          <StatChip label={t('profile.bestForm')} value={bestFormLabel} />
-          <StatChip label={t('profile.sessions')} value={sessionsLabel} />
-          <StatChip label={t('profile.streak')} value={streakLabel} />
+          <StatChip label={t("profile.bestForm")} value={bestFormLabel} />
+          <StatChip label={t("profile.sessions")} value={sessionsLabel} />
+          <StatChip label={t("profile.streak")} value={streakLabel} />
         </View>
 
         <View style={styles.settingsBlock}>
           <View style={styles.unitsCard}>
             <View style={styles.cardTitleRow}>
-              <Ionicons name="language-outline" size={20} color={colors.primary_green} />
-              <Text style={styles.unitsTitle}>{t('profile.languageTitle')}</Text>
+              <Ionicons
+                name="language-outline"
+                size={20}
+                color={colors.primary_green}
+              />
+              <Text style={styles.unitsTitle}>
+                {t("profile.languageTitle")}
+              </Text>
             </View>
-            <Text style={styles.unitsSub}>{t('profile.languageSub')}</Text>
+            <Text style={styles.unitsSub}>{t("profile.languageSub")}</Text>
             <View style={styles.segmentRow}>
               <SegmentButton
-                label={t('common.english')}
-                selected={language === 'en'}
-                onPress={() => handleLanguageChange('en')}
+                label={t("common.english")}
+                selected={language === "en"}
+                onPress={() => handleLanguageChange("en")}
               />
               <SegmentButton
-                label={t('common.spanish')}
-                selected={language === 'es'}
-                onPress={() => handleLanguageChange('es')}
+                label={t("common.spanish")}
+                selected={language === "es"}
+                onPress={() => handleLanguageChange("es")}
               />
             </View>
           </View>
 
           <View style={styles.unitsCard}>
             <View style={styles.cardTitleRow}>
-              <Ionicons name="barbell-outline" size={20} color={colors.primary_green} />
-              <Text style={styles.unitsTitle}>{t('profile.unitsTitle')}</Text>
+              <Ionicons
+                name="barbell-outline"
+                size={20}
+                color={colors.primary_green}
+              />
+              <Text style={styles.unitsTitle}>{t("profile.unitsTitle")}</Text>
             </View>
             <Text style={styles.unitsSub}>
-              {t('profile.unitsSub', { system: systemLabel, suffix: unitSuffix })}
+              {t("profile.unitsSub", {
+                system: systemLabel,
+                suffix: unitSuffix,
+              })}
             </Text>
             <View style={styles.segmentRow}>
               <SegmentButton
-                label={t('common.imperialLb')}
-                selected={weightUnit === 'lb'}
-                onPress={() => void setWeightUnit('lb').then(pushProfile)}
+                label={t("common.imperialLb")}
+                selected={weightUnit === "lb"}
+                onPress={() => void setWeightUnit("lb").then(pushProfile)}
               />
               <SegmentButton
-                label={t('common.metricKg')}
-                selected={weightUnit === 'kg'}
-                onPress={() => void setWeightUnit('kg').then(pushProfile)}
+                label={t("common.metricKg")}
+                selected={weightUnit === "kg"}
+                onPress={() => void setWeightUnit("kg").then(pushProfile)}
               />
             </View>
           </View>
 
           <RowToggle
-            label={t('profile.voiceFeedback')}
-            subtitle={t('profile.voiceFeedbackSub')}
+            label={t("profile.voiceFeedback")}
+            subtitle={t("profile.voiceFeedbackSub")}
             value={audioFeedbackEnabled}
-            onChange={(next) => void setAudioFeedbackEnabled(next).then(pushProfile)}
+            onChange={(next) =>
+              void setAudioFeedbackEnabled(next).then(pushProfile)
+            }
           />
 
           <View style={styles.unitsCard}>
             <View style={styles.cardTitleRow}>
-              <Ionicons name="document-text-outline" size={20} color={colors.primary_green} />
-              <Text style={styles.unitsTitle}>{t('profile.legalTitle')}</Text>
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={colors.primary_green}
+              />
+              <Text style={styles.unitsTitle}>{t("profile.legalTitle")}</Text>
             </View>
             <SettingsLink
-              label={t('profile.privacyPolicy')}
-              onPress={() => nav.navigate('LegalDocument', { type: 'privacy' })}
+              label={t("profile.privacyPolicy")}
+              onPress={() => nav.navigate("LegalDocument", { type: "privacy" })}
             />
             <SettingsLink
-              label={t('profile.termsOfUse')}
-              onPress={() => nav.navigate('LegalDocument', { type: 'terms' })}
+              label={t("profile.termsOfUse")}
+              onPress={() => nav.navigate("LegalDocument", { type: "terms" })}
             />
             <SettingsLink
-              label={t('profile.supportContact')}
-              onPress={() => nav.navigate('Support')}
+              label={t("profile.supportContact")}
+              onPress={() => nav.navigate("Support")}
               last
             />
           </View>
@@ -305,56 +380,85 @@ export function ProfileScreen() {
           accessibilityRole="button"
           accessibilityState={{ disabled: isLoading }}
           onPress={() => void handleSignOut()}
-          disabled={isLoading}
-        >
+          disabled={isLoading}>
           <Text style={styles.signOutTxt}>
-            {isLoading ? t('profile.signingOut') : isGuest ? t('profile.exitGuest') : t('profile.signOut')}
+            {isLoading
+              ? t("profile.signingOut")
+              : isGuest
+                ? t("profile.exitGuest")
+                : t("profile.signOut")}
           </Text>
         </Pressable>
 
         {isLoggedIn ? (
           <View style={styles.dangerZone}>
             <View style={styles.dangerHeader}>
-              <Ionicons name="warning-outline" size={20} color={colors.accent_red} />
-              <Text style={styles.dangerTitle}>{t('profile.dangerZoneTitle')}</Text>
+              <Ionicons
+                name="warning-outline"
+                size={20}
+                color={colors.accent_red}
+              />
+              <Text style={styles.dangerTitle}>
+                {t("profile.dangerZoneTitle")}
+              </Text>
             </View>
-            <Text style={styles.dangerSub}>{t('profile.dangerZoneSub')}</Text>
+            <Text style={styles.dangerSub}>{t("profile.dangerZoneSub")}</Text>
             <Pressable
-              style={[styles.deleteAccountBtn, isLoading && styles.signOutDisabled]}
+              style={[
+                styles.deleteAccountBtn,
+                isLoading && styles.signOutDisabled,
+              ]}
               accessibilityRole="button"
               accessibilityState={{ disabled: isLoading }}
               onPress={handleDeleteAccount}
-              disabled={isLoading}
-            >
+              disabled={isLoading}>
               <Text style={styles.deleteAccountTxt}>
-                {isLoading ? t('profile.deletingAccount') : t('profile.deleteAccount')}
+                {isLoading
+                  ? t("profile.deletingAccount")
+                  : t("profile.deleteAccount")}
               </Text>
             </Pressable>
           </View>
         ) : null}
 
-        <Text style={styles.verSmall}>{t('profile.footer')}</Text>
+        <Text style={styles.verSmall}>{t("profile.footer")}</Text>
       </ScrollView>
 
-      <Modal visible={nameModalOpen} transparent animationType="fade" onRequestClose={() => setNameModalOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setNameModalOpen(false)}>
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>{t('profile.displayName')}</Text>
+      <Modal
+        visible={nameModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNameModalOpen(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setNameModalOpen(false)}>
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>{t("profile.displayName")}</Text>
             <TextInput
               value={nameDraft}
               onChangeText={setNameDraft}
-              placeholder={t('profile.yourName')}
+              placeholder={t("profile.yourName")}
               placeholderTextColor={colors.text_muted}
               autoCapitalize="words"
               autoFocus
               style={styles.modalInput}
             />
             <View style={styles.modalActions}>
-              <Pressable style={styles.modalBtnGhost} onPress={() => setNameModalOpen(false)}>
-                <Text style={styles.modalBtnGhostTxt}>{t('common.cancel')}</Text>
+              <Pressable
+                style={styles.modalBtnGhost}
+                onPress={() => setNameModalOpen(false)}>
+                <Text style={styles.modalBtnGhostTxt}>
+                  {t("common.cancel")}
+                </Text>
               </Pressable>
-              <Pressable style={styles.modalBtnPrimary} onPress={() => void saveName()}>
-                <Text style={styles.modalBtnPrimaryTxt}>{t('common.save')}</Text>
+              <Pressable
+                style={styles.modalBtnPrimary}
+                onPress={() => void saveName()}>
+                <Text style={styles.modalBtnPrimaryTxt}>
+                  {t("common.save")}
+                </Text>
               </Pressable>
             </View>
           </Pressable>
@@ -364,15 +468,25 @@ export function ProfileScreen() {
   );
 }
 
-function SegmentButton(props: { label: string; selected: boolean; onPress: () => void }) {
+function SegmentButton(props: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: props.selected }}
       onPress={props.onPress}
-      style={[styles.segmentBtn, props.selected ? styles.segmentBtnOn : styles.segmentBtnOff]}
-    >
-      <Text style={[styles.segmentTxt, props.selected ? styles.segmentTxtOn : styles.segmentTxtOff]}>
+      style={[
+        styles.segmentBtn,
+        props.selected ? styles.segmentBtnOn : styles.segmentBtnOff,
+      ]}>
+      <Text
+        style={[
+          styles.segmentTxt,
+          props.selected ? styles.segmentTxtOn : styles.segmentTxtOff,
+        ]}>
         {props.label}
       </Text>
     </Pressable>
@@ -398,25 +512,30 @@ function RowToggle(props: {
     <View style={styles.row}>
       <View style={{ flex: 1, paddingRight: 12 }}>
         <Text style={styles.rowLab}>{props.label}</Text>
-        {props.subtitle ? <Text style={styles.rowSub}>{props.subtitle}</Text> : null}
+        {props.subtitle ? (
+          <Text style={styles.rowSub}>{props.subtitle}</Text>
+        ) : null}
       </View>
       <Switch
         value={props.value}
         onValueChange={props.onChange}
-        trackColor={{ false: '#333', true: colors.primary_green }}
+        trackColor={{ false: "#333", true: colors.primary_green }}
         thumbColor="#fff"
       />
     </View>
   );
 }
 
-function SettingsLink(props: { label: string; onPress: () => void; last?: boolean }) {
+function SettingsLink(props: {
+  label: string;
+  onPress: () => void;
+  last?: boolean;
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={props.onPress}
-      style={[styles.settingsLink, props.last && styles.settingsLinkLast]}
-    >
+      style={[styles.settingsLink, props.last && styles.settingsLinkLast]}>
       <Text style={styles.settingsLinkTxt}>{props.label}</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.text_muted} />
     </Pressable>
@@ -426,43 +545,47 @@ function SettingsLink(props: { label: string; onPress: () => void; last?: boolea
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg_v3 },
   scroll: { paddingHorizontal: 24, paddingBottom: 100 },
-  avatarWrap: { alignSelf: 'center', marginTop: 8 },
+  avatarWrap: { alignSelf: "center", marginTop: 8 },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 999,
     borderWidth: 2,
     borderColor: colors.primary_green,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.bg_elevated,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarTxt: { fontFamily: typography.fontFamily.bold, fontSize: 34, color: colors.text_primary },
+  avatarImg: { width: "100%", height: "100%" },
+  avatarTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 34,
+    color: colors.text_primary,
+  },
   cameraBadge: {
-    position: 'absolute',
+    position: "absolute",
     left: -2,
     bottom: 6,
     width: 30,
     height: 30,
     borderRadius: 15,
     backgroundColor: colors.primary_green,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
     borderColor: colors.bg_v3,
   },
-  ver: { position: 'absolute', right: -4, bottom: 6 },
+  ver: { position: "absolute", right: -4, bottom: 6 },
   nameRow: {
     marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
   },
   name: {
-    textAlign: 'center',
+    textAlign: "center",
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.bodyLg + 12,
     color: colors.text_primary,
@@ -470,7 +593,7 @@ const styles = StyleSheet.create({
   },
   emailSub: {
     marginTop: 6,
-    textAlign: 'center',
+    textAlign: "center",
     fontFamily: typography.fontFamily.regular,
     fontSize: typography.fontSize.captions,
     color: colors.text_muted,
@@ -483,19 +606,50 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.primary_green,
     paddingVertical: 16,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
-  alphaTitle: { fontFamily: typography.fontFamily.bold, color: colors.text_primary, fontSize: 16 },
+  alphaTitle: {
+    fontFamily: typography.fontFamily.bold,
+    color: colors.text_primary,
+    fontSize: 16,
+  },
   alphaMuted: { marginTop: 6, fontSize: 13, color: colors.text_secondary },
-  statRow: { flexDirection: 'row', marginTop: 28, gap: 10 },
+  subscriptionCard: {
+    marginTop: 14,
+    borderRadius: 16,
+    backgroundColor: colors.green_subtle_bg,
+    borderWidth: 1,
+    borderColor: colors.border_active,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  subscriptionTextBlock: {
+    flex: 1,
+  },
+  subscriptionTitle: {
+    fontFamily: typography.fontFamily.bold,
+    color: colors.text_primary,
+    fontSize: 16,
+  },
+  subscriptionSub: {
+    marginTop: 6,
+    fontSize: 13,
+    color: colors.text_secondary,
+    lineHeight: 18,
+  },
+  statRow: { flexDirection: "row", marginTop: 28, gap: 10 },
   statChip: {
     flex: 1,
     backgroundColor: colors.surface_v3,
     borderRadius: 14,
     paddingVertical: 16,
     paddingHorizontal: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   statVal: {
     fontFamily: typography.fontFamily.bold,
@@ -508,7 +662,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1,
     fontFamily: typography.fontFamily.medium,
-    textAlign: 'center',
+    textAlign: "center",
   },
   settingsBlock: { marginTop: 22, gap: 10 },
   unitsCard: {
@@ -518,8 +672,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   unitsTitle: {
@@ -538,12 +692,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface_low,
     borderRadius: 12,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     minHeight: 56,
   },
-  rowLab: { fontFamily: typography.fontFamily.medium, color: colors.text_primary },
+  rowLab: {
+    fontFamily: typography.fontFamily.medium,
+    color: colors.text_primary,
+  },
   rowSub: {
     marginTop: 4,
     fontFamily: typography.fontFamily.regular,
@@ -555,21 +712,25 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth + 2,
-    borderColor: colors.accent_red + '69',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: colors.accent_red + "69",
+    alignItems: "center",
+    justifyContent: "center",
   },
   signOutDisabled: { opacity: 0.5 },
-  signOutTxt: { color: colors.accent_red, fontFamily: typography.fontFamily.bold, fontSize: 15 },
+  signOutTxt: {
+    color: colors.accent_red,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: 15,
+  },
   deleteAccountBtn: {
     marginTop: 14,
     minHeight: 52,
     borderRadius: 10,
-    backgroundColor: colors.accent_red + '22',
+    backgroundColor: colors.accent_red + "22",
     borderWidth: StyleSheet.hairlineWidth + 1,
-    borderColor: colors.accent_red + '66',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: colors.accent_red + "66",
+    alignItems: "center",
+    justifyContent: "center",
   },
   deleteAccountTxt: {
     color: colors.accent_red,
@@ -580,14 +741,14 @@ const styles = StyleSheet.create({
     marginTop: 28,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth + 1,
-    borderColor: colors.accent_red + '44',
-    backgroundColor: colors.accent_red + '0D',
+    borderColor: colors.accent_red + "44",
+    backgroundColor: colors.accent_red + "0D",
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
   dangerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   dangerTitle: {
@@ -605,9 +766,9 @@ const styles = StyleSheet.create({
   settingsLink: {
     marginTop: 12,
     paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border_subtle,
   },
@@ -625,13 +786,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: typography.fontFamily.regular,
     color: colors.text_muted,
-    textAlign: 'center',
+    textAlign: "center",
     letterSpacing: 0.3,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
     paddingHorizontal: 24,
   },
   modalCard: {
@@ -656,8 +817,8 @@ const styles = StyleSheet.create({
   },
   modalActions: {
     marginTop: 18,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
     gap: 10,
   },
   modalBtnGhost: {
@@ -681,19 +842,22 @@ const styles = StyleSheet.create({
   },
   segmentRow: {
     marginTop: 14,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
-    alignSelf: 'stretch',
+    alignSelf: "stretch",
   },
   segmentBtn: {
     flex: 1,
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 12,
     borderRadius: 10,
   },
   segmentBtnOn: { backgroundColor: colors.primary_green },
   segmentBtnOff: { backgroundColor: colors.bg_elevated },
-  segmentTxt: { fontFamily: typography.fontFamily.bold, fontSize: typography.fontSize.body },
+  segmentTxt: {
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.body,
+  },
   segmentTxtOn: { color: colors.text_on_green },
   segmentTxtOff: { color: colors.text_secondary },
 });

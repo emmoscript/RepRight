@@ -2,8 +2,8 @@
  * Supabase database types — keep in sync with supabase/migrations/
  */
 
-import type { AppLanguage } from '@/i18n/types';
-import type { WeightUnit } from '@/utils/weightUnits';
+import type { AppLanguage } from "@/i18n/types";
+import type { WeightUnit } from "@/utils/weightUnits";
 
 // ── Table row types ───────────────────────────────────────────────────────────
 
@@ -16,6 +16,9 @@ export type UserProfileRow = {
   language: AppLanguage | null;
   audio_feedback_enabled: boolean | null;
   default_camera_front: boolean | null;
+  subscribed: boolean | null;
+  joined_on: string | null;
+  subscription_ends_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -42,7 +45,7 @@ export type BiomechanicalError = {
   error_type: string;
   timestamp_ms: number;
   confidence: number;
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   metadata: Record<string, unknown> | null;
   created_at: string;
 };
@@ -63,7 +66,7 @@ export type BiomechanicalErrorInput = {
   error_type: string;
   timestamp_ms: number;
   confidence: number;
-  severity: 'low' | 'medium' | 'high';
+  severity: "low" | "medium" | "high";
   metadata?: Record<string, unknown>;
 };
 

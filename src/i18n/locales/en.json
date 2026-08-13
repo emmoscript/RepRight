@@ -301,6 +301,22 @@
     "setRepLabel": "Set {{set}} · Rep {{rep}}",
     "setSetupLabel": "Set {{set}} · Setup"
   },
+  "subscriptionOffer": {
+    "title": "Premium membership",
+    "subtitle": "Unlock unlimited sessions per month with the premium tier.",
+    "benefit1": "Unlimited sessions per month",
+    "benefit2": "Keep your training flow moving without the weekly cap",
+    "benefit3": "Sandbox/TestFlight ready for iOS testing",
+    "priceLabel": "Monthly price",
+    "priceFine": "Test only. No real charges in this prototype.",
+    "unlock": "Unlock premium",
+    "continueFree": "Continue free for now",
+    "active": "Premium active",
+    "restore": "Restore purchases",
+    "restoreEmpty": "No active Sandbox subscription found for this Apple ID.",
+    "restoreFailed": "Could not restore purchases. Try again with your Sandbox account.",
+    "purchaseFailed": "Purchase could not be completed. Check your Sandbox account and try again."
+  },
   "formErrorTitles": {
     "ERR_001": "Lumbar rounding",
     "ERR_002": "Hips too high at pull",
@@ -350,7 +366,33 @@
     "ERR_005": "Shoulders over the bar. Shift weight forward."
   },
   "months": {
-    "short": ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"],
-    "long": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    "short": [
+      "JAN",
+      "FEB",
+      "MAR",
+      "APR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AUG",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DEC"
+    ],
+    "long": [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
+    ]
   }
 }

@@ -301,6 +301,22 @@
     "setRepLabel": "Serie {{set}} · Rep {{rep}}",
     "setSetupLabel": "Serie {{set}} · Posición inicial"
   },
+  "subscriptionOffer": {
+    "title": "Membresía premium",
+    "subtitle": "Desbloquea sesiones ilimitadas por mes con el plan premium.",
+    "benefit1": "Sesiones ilimitadas por mes",
+    "benefit2": "Mantén tu progreso sin el límite semanal",
+    "benefit3": "Listo para pruebas Sandbox/TestFlight en iOS",
+    "priceLabel": "Precio mensual",
+    "priceFine": "Solo pruebas. No hay cargos reales en este prototipo.",
+    "unlock": "Desbloquear premium",
+    "continueFree": "Seguir gratis por ahora",
+    "active": "Premium activo",
+    "restore": "Restaurar compras",
+    "restoreEmpty": "No se encontró una suscripción Sandbox activa para este Apple ID.",
+    "restoreFailed": "No se pudieron restaurar las compras. Intenta de nuevo con tu cuenta Sandbox.",
+    "purchaseFailed": "No se pudo completar la compra. Revisa tu cuenta Sandbox e intenta de nuevo."
+  },
   "formErrorTitles": {
     "ERR_001": "Redondeo lumbar",
     "ERR_002": "Cadera muy alta al iniciar",
@@ -350,7 +366,33 @@
     "ERR_005": "Hombros sobre la barra. Lleva el peso adelante."
   },
   "months": {
-    "short": ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"],
-    "long": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    "short": [
+      "ENE",
+      "FEB",
+      "MAR",
+      "ABR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AGO",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DIC"
+    ],
+    "long": [
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dic"
+    ]
   }
 }

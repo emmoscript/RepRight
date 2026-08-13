@@ -4,6 +4,8 @@
   <dict>
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
+    <key>CFBundleAllowMixedLocalizations</key>
+    <true/>
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
@@ -40,6 +42,8 @@
     </array>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -53,14 +57,12 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>RepRight uses the camera to analyze your exercise form in real time and provide technique feedback. Video is processed on your device and is not uploaded to our servers.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>RepRight accesses your photo library only when you choose a profile picture.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>RepRight does not use your GPS location for workouts or tracking. An included library references location APIs for regional settings; location is not collected or stored.</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
-    <key>NSFaceIDUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>RepRight accesses your photo library only when you choose a profile picture.</string>
     <key>RCTRootViewBackgroundColor</key>
     <integer>4279045389</integer>
     <key>UILaunchStoryboardName</key>

@@ -15,24 +15,32 @@ import {
 } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
 
-import { FormBreakdownCard } from "@/components/session/FormBreakdownCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { RepRightHeader } from "@/components/RepRightHeader";
 import { REPS_PER_SET_MAX, REPS_PER_SET_MIN } from "@/components/RepsSlider";
+import { FormBreakdownCard } from "@/components/session/FormBreakdownCard";
+import { mapErrorsForSupabase } from "@/lib/mapErrorsForSupabase";
 import {
+    getAllSessions,
     saveSession,
     type SessionLog,
     type SessionSetSummary,
 } from "@/modules/session";
-import { mapErrorsForSupabase } from "@/lib/mapErrorsForSupabase";
 import type { RootStackParamList } from "@/navigation/routeTypes";
 import { useAuthStore } from "@/store/authStore";
 import { useSessionConfigStore } from "@/store/sessionConfigStore";
 import { useSessionResultStore } from "@/store/sessionResultStore";
 import { useSessionSyncStore } from "@/store/sessionSyncStore";
+import {
+    resolveSubscriptionOwnerKey,
+    useSubscriptionStore,
+} from "@/store/subscriptionStore";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
-import { focusErrorIds, normalizeRecordedFormError } from "@/utils/formBreakdown";
+import {
+    focusErrorIds,
+    normalizeRecordedFormError,
+} from "@/utils/formBreakdown";
 import {
     deriveSessionReviewDisplay,
     type SessionReviewDisplay,
@@ -123,7 +131,10 @@ export function SessionCompleteScreen() {
     weightAmount,
   } = useSessionConfigStore();
   const applyNextSetTarget = useSessionConfigStore((s) => s.applyNextSetTarget);
-  const { participantId } = useAuthStore();
+  const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+  const isGuest = useAuthStore((s) => s.isGuest);
+  const participantId = useAuthStore((s) => s.participantId);
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [saved, setSaved] = useState(false);
 
   const {
@@ -228,6 +239,17 @@ export function SessionCompleteScreen() {
       goHome();
       return;
     }
+    const sessionsBeforeSave = await getAllSessions();
+    const shouldShowOffer =
+      sessionsBeforeSave.length === 0 &&
+      !useSubscriptionStore.getState().subscribed &&
+      !useSubscriptionStore.getState().upsellSeen;
+    const ownerKey = resolveSubscriptionOwnerKey({
+      isLoggedIn,
+      isGuest,
+      userId,
+      participantId,
+    });
     const sessionId = randomUUID();
     const endedAt = Date.now();
     const setSummaries: SessionSetSummary[] = workoutSetResults.map((row) => ({
@@ -283,8 +305,8 @@ export function SessionCompleteScreen() {
     await saveSession(log);
 
     // Sync to Supabase when logged in (guests stay local-only)
-    const { isLoggedIn, user } = useAuthStore.getState();
-    if (isLoggedIn && user) {
+    const { isLoggedIn: currentLoggedIn, user } = useAuthStore.getState();
+    if (currentLoggedIn && user) {
       try {
         const syncErrors = mapErrorsForSupabase(uniqueErrors);
         const {
@@ -299,14 +321,19 @@ export function SessionCompleteScreen() {
           startedAt,
         );
         await syncAddErrors(syncStoreSessionId, syncErrors);
-        await completeSessionSync(syncStoreSessionId, plannedSetCount, weightAmount || null, {
-          weightUnit,
-          totalReps: metrics.totalReps,
-          formScore: metrics.formScore,
-          completionPct: metrics.completionPct,
-          avgScore: metrics.overallScore,
-          startedAtMs: startedAt,
-        });
+        await completeSessionSync(
+          syncStoreSessionId,
+          plannedSetCount,
+          weightAmount || null,
+          {
+            weightUnit,
+            totalReps: metrics.totalReps,
+            formScore: metrics.formScore,
+            completionPct: metrics.completionPct,
+            avgScore: metrics.overallScore,
+            startedAtMs: startedAt,
+          },
+        );
       } catch (err) {
         if (__DEV__) {
           console.warn(
@@ -319,6 +346,11 @@ export function SessionCompleteScreen() {
 
     setSaved(true);
     useSessionResultStore.getState().clear();
+    if (shouldShowOffer) {
+      await useSubscriptionStore.getState().markUpsellSeen(ownerKey);
+      nav.replace("SubscriptionOffer", { source: "first_session" });
+      return;
+    }
     goHome();
   };
 
