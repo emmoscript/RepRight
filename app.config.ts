@@ -5,6 +5,7 @@ const config: ExpoConfig = {
   slug: "repright",
   version: "1.0.0",
   orientation: "portrait",
+  owner: "repright",
   scheme: "repright",
   userInterfaceStyle: "dark",
   backgroundColor: "#0D0D0D",

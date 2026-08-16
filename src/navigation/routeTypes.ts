@@ -29,7 +29,9 @@ export type RootStackParamList = {
     | undefined;
   EmailConfirm: { email: string };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
-  SubscriptionOffer: { source?: "first_session" | "profile" } | undefined;
+  SubscriptionOffer:
+    | { source?: "first_session" | "profile" | "weekly_limit" }
+    | undefined;
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
   LiveSession: { continuedWorkout?: boolean } | undefined;
   SessionComplete: undefined;

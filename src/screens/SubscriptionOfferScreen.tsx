@@ -4,25 +4,25 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    ActivityIndicator,
-    ImageBackground,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  ImageBackground,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import {
-    endConnection,
-    finishTransaction,
-    getAvailablePurchases,
-    getSubscriptions,
-    initConnection,
-    purchaseErrorListener,
-    purchaseUpdatedListener,
-    requestSubscription,
-    type Purchase,
-    type Subscription,
+  endConnection,
+  finishTransaction,
+  getAvailablePurchases,
+  getSubscriptions,
+  initConnection,
+  purchaseErrorListener,
+  purchaseUpdatedListener,
+  requestSubscription,
+  type Purchase,
+  type Subscription,
 } from "react-native-iap";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -30,8 +30,8 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import type { RootStackParamList } from "@/navigation/routeTypes";
 import { useAuthStore } from "@/store/authStore";
 import {
-    resolveSubscriptionOwnerKey,
-    useSubscriptionStore,
+  resolveSubscriptionOwnerKey,
+  useSubscriptionStore,
 } from "@/store/subscriptionStore";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";
@@ -67,7 +67,7 @@ export function SubscriptionOfferScreen() {
 
   const source = (route.params as { source?: string } | undefined)?.source;
   const headline =
-    source === "first_session"
+    source === "first_session" || source === "weekly_limit"
       ? t("subscriptionOffer.title")
       : t("subscriptionOffer.title");
 
@@ -178,9 +178,7 @@ export function SubscriptionOfferScreen() {
   };
 
   const priceLabel =
-    product && "localizedPrice" in product
-      ? product.localizedPrice
-      : "$9.99";
+    product && "localizedPrice" in product ? product.localizedPrice : "$9.99";
   const titleLabel = product?.title ?? t("subscriptionOffer.title");
 
   return (
@@ -215,7 +213,9 @@ export function SubscriptionOfferScreen() {
             <Text style={styles.eyebrow}>
               {source === "first_session"
                 ? t("sessionComplete.sessionComplete")
-                : "TESTFLIGHT SANDBOX"}
+                : source === "weekly_limit"
+                  ? "Weekly Limit Reached"
+                  : "TESTFLIGHT SANDBOX"}
             </Text>
             <Text style={styles.title}>{headline}</Text>
             <Text style={styles.subtitle}>

@@ -2,6 +2,7 @@
 node_modules/
 .yarn/cache
 .yarn/unplugged
+credentials.json
 
 # Expo / React Native
 .expo/

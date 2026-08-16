@@ -3,14 +3,15 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert, Image,
+    Alert,
+    Image,
     InteractionManager,
     Pressable,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
-    View
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -117,17 +118,8 @@ export function DeadliftConfigureScreen() {
 
     const sessions = await getAllSessions();
     if (!subscribed && hasUsedFreeWeeklySession(sessions)) {
-      const ageMs = getSubscriptionAgeMs();
-      const ageDays =
-        ageMs == null
-          ? null
-          : Math.max(1, Math.floor(ageMs / (24 * 60 * 60 * 1000)));
-      Alert.alert(
-        "Weekly limit reached",
-        ageDays == null
-          ? "Your free plan allows one session per week. Subscribe to unlock more sessions."
-          : `Your free plan allows one session per week. You have been subscribed for ${ageDays} days.`,
-      );
+      diagBreadcrumb("deadlift_configure:weekly_limit_reached");
+      nav.navigate("SubscriptionOffer", { source: "weekly_limit" });
       return;
     }
 
