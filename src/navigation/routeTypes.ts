@@ -30,7 +30,7 @@ export type RootStackParamList = {
   EmailConfirm: { email: string };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SubscriptionOffer:
-    | { source?: "first_session" | "profile" | "weekly_limit" }
+    | { source?: "first_session" | "profile" | "weekly_limit" | "home" }
     | undefined;
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
   LiveSession: { continuedWorkout?: boolean } | undefined;

@@ -215,7 +215,9 @@ export function SubscriptionOfferScreen() {
                 ? t("sessionComplete.sessionComplete")
                 : source === "weekly_limit"
                   ? "Weekly Limit Reached"
-                  : "TESTFLIGHT SANDBOX"}
+                  : source === "home"
+                    ? "Unlock Premium"
+                    : "TESTFLIGHT SANDBOX"}
             </Text>
             <Text style={styles.title}>{headline}</Text>
             <Text style={styles.subtitle}>
@@ -307,14 +309,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg_v3,
   },
   scroll: {
-    paddingBottom: 28,
+    paddingBottom: 12,
   },
   hero: {
-    minHeight: 420,
+    minHeight: 320,
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 18,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
   heroImage: {
     opacity: 0.72,
@@ -353,76 +355,79 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   heroCopy: {
-    gap: 12,
-    maxWidth: 340,
+    gap: 8,
+    maxWidth: "100%",
   },
   eyebrow: {
     color: colors.accent_green_light,
     fontFamily: typography.fontFamily.medium,
     letterSpacing: typography.letterSpacing.capsWide,
-    fontSize: 11,
+    fontSize: 10,
   },
   title: {
     color: colors.text_primary,
     fontFamily: typography.fontFamily.display,
-    fontSize: 42,
-    lineHeight: 44,
-    letterSpacing: -1.4,
+    fontSize: 36,
+    lineHeight: 40,
+    letterSpacing: -1.2,
     textTransform: "uppercase",
   },
   subtitle: {
     color: colors.on_surface,
     fontFamily: typography.fontFamily.regular,
-    fontSize: typography.fontSize.body,
-    lineHeight: 24,
+    fontSize: 14,
+    lineHeight: 20,
   },
   card: {
-    marginTop: -28,
-    marginHorizontal: 16,
-    borderRadius: 24,
-    padding: 20,
+    marginTop: -20,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 20,
+    padding: 16,
     backgroundColor: colors.surface_v3,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
-    gap: 18,
+    gap: 14,
   },
   cardTitle: {
     color: colors.text_primary,
     fontFamily: typography.fontFamily.display,
-    fontSize: 22,
+    fontSize: 18,
     textTransform: "uppercase",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   benefits: {
-    gap: 12,
+    gap: 10,
   },
   benefitRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    alignItems: "flex-start",
+    gap: 10,
   },
   checkWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: colors.primary_green,
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 2,
+    flexShrink: 0,
   },
   benefitText: {
     flex: 1,
     color: colors.text_primary,
     fontFamily: typography.fontFamily.medium,
-    fontSize: typography.fontSize.body,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   priceCard: {
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: colors.bg_elevated,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border_subtle,
-    padding: 16,
-    gap: 4,
+    padding: 12,
+    gap: 2,
   },
   priceLabel: {
     color: colors.text_muted,
@@ -434,14 +439,14 @@ const styles = StyleSheet.create({
   priceValue: {
     color: colors.text_primary,
     fontFamily: typography.fontFamily.display,
-    fontSize: 34,
-    letterSpacing: -0.8,
+    fontSize: 28,
+    letterSpacing: -0.6,
   },
   priceFine: {
     color: colors.text_secondary,
     fontFamily: typography.fontFamily.regular,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
   },
   secondaryBtn: {
     alignItems: "center",
