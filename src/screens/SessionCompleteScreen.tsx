@@ -32,8 +32,8 @@ import { useSessionConfigStore } from "@/store/sessionConfigStore";
 import { useSessionResultStore } from "@/store/sessionResultStore";
 import { useSessionSyncStore } from "@/store/sessionSyncStore";
 import {
-    resolveSubscriptionOwnerKey,
-    useSubscriptionStore,
+  resolveSubscriptionOwnerKey,
+  useSubscriptionStore,
 } from "@/store/subscriptionStore";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/typography";

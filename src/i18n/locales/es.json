@@ -348,7 +348,30 @@
     "formIssuesMore": "{{issues}} +{{count}} más",
     "scoreLabel": "Puntuación",
     "showLess": "Ver menos",
-    "seeAll": "Ver todo ({{count}})"
+    "seeAll": "Ver todo ({{count}})",
+    "unlockAll": "Desbloquear todo ({{count}})",
+    "premiumUpsell": "Mejora a Premium para historial completo, tendencias mensuales y sync en la nube."
+  },
+  "subscription": {
+    "freePlan": "Plan gratuito",
+    "premiumActive": "Premium activo",
+    "upgrade": "Mejorar",
+    "upgradeSub": "Historial completo desde ${{price}}/mes",
+    "renewsOn": "Renueva {{date}}",
+    "paywallTitle": "RepRight Premium",
+    "paywallSubDefault": "Entrena mejor con historial ilimitado, estadísticas avanzadas y progreso sincronizado.",
+    "paywallSubPostSession": "Buena serie. Sigue el ritmo — desbloquea historial completo y stats avanzadas con Premium.",
+    "monthlyPlan": "Plan mensual",
+    "perMonth": "/ mes",
+    "cancelAnytime": "Cancela cuando quieras. Cobro vía App Store o Google Play.",
+    "featureFullHistory": "Historial de sesiones y detalle sin límite",
+    "featureMonthlyStats": "Tendencias y filtros mensuales",
+    "featureCloudSync": "Respaldo en la nube al iniciar sesión",
+    "featurePriorityFeedback": "Acceso prioritario a nuevos ejercicios (roadmap)",
+    "subscribeCta": "Suscribirse — $9.99 / mes",
+    "restorePurchases": "Restaurar compras",
+    "continueFree": "Continuar con Free",
+    "billingDisclaimer": "Facturación prototipo: la suscripción se activa localmente para demo. Producción usará StoreKit y Google Play Billing."
   },
   "sessionDetail": {
     "title": "Detalle de sesión",

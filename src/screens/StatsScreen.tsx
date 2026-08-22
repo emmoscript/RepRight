@@ -1,5 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -16,6 +17,7 @@ import { RepRightHeader } from '@/components/RepRightHeader';
 import { Icon, ICONS } from '@/components/Icon';
 import type { RootStackParamList } from '@/navigation/routeTypes';
 import { getAllSessions, type SessionLog } from '@/modules/session';
+import { useSubscriptionStore } from '@/store/subscriptionStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 import {
@@ -28,7 +30,7 @@ import { summarizeSessionFormFocus } from '@/utils/formBreakdown';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const PREVIEW_COUNT = 3;
+const FREE_STATS_PREVIEW_COUNT = 3;
 
 function sessionPerformance(log: SessionLog): number {
   return Math.round(log.summary.avgScore);
@@ -70,6 +72,7 @@ function scoreAccent(sc: number) {
 export function StatsScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
+  const subscribed = useSubscriptionStore((s) => s.subscribed);
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [refresh, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<StatsFilterKind>('week');
@@ -105,8 +108,22 @@ export function StatsScreen() {
     : null;
 
   const toggleExpanded = (exerciseId: string) => {
+    if (!subscribed) {
+      nav.navigate('SubscriptionOffer', { source: 'stats' });
+      return;
+    }
     setExpanded((prev) => ({ ...prev, [exerciseId]: !prev[exerciseId] }));
   };
+
+  const onFilterPress = (next: StatsFilterKind) => {
+    if (next === 'month' && !subscribed) {
+      nav.navigate('SubscriptionOffer', { source: 'stats' });
+      return;
+    }
+    setFilter(next);
+  };
+
+  const previewCount = subscribed ? Number.MAX_SAFE_INTEGER : FREE_STATS_PREVIEW_COUNT;
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
@@ -121,10 +138,26 @@ export function StatsScreen() {
         <Text style={styles.h1}>{t('stats.title')}</Text>
         <Text style={styles.meta}>{t('stats.meta')}</Text>
 
+        {!subscribed ? (
+          <Pressable
+            style={styles.premiumBanner}
+            onPress={() => nav.navigate('SubscriptionOffer', { source: 'stats' })}
+          >
+            <Ionicons name="lock-closed-outline" size={18} color={colors.primary_green} />
+            <Text style={styles.premiumBannerTxt}>{t('stats.premiumUpsell')}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.text_muted} />
+          </Pressable>
+        ) : null}
+
         <View style={styles.filt}>
-          <Pill tab={t('stats.thisWeek')} selected={filter === 'week'} onPress={() => setFilter('week')} />
-          <Pill tab={t('stats.lastWeek')} selected={filter === 'last'} onPress={() => setFilter('last')} />
-          <Pill tab={t('stats.monthly')} selected={filter === 'month'} onPress={() => setFilter('month')} />
+          <Pill tab={t('stats.thisWeek')} selected={filter === 'week'} onPress={() => onFilterPress('week')} />
+          <Pill tab={t('stats.lastWeek')} selected={filter === 'last'} onPress={() => onFilterPress('last')} />
+          <Pill
+            tab={t('stats.monthly')}
+            selected={filter === 'month'}
+            onPress={() => onFilterPress('month')}
+            locked={!subscribed}
+          />
         </View>
 
         <View style={styles.peakCard}>
@@ -147,8 +180,8 @@ export function StatsScreen() {
         ) : (
           grouped.map(({ exerciseId, sessions: rows }) => {
             const isOpen = expanded[exerciseId] === true;
-            const visible = isOpen ? rows : rows.slice(0, PREVIEW_COUNT);
-            const hasMore = rows.length > PREVIEW_COUNT;
+            const visible = isOpen ? rows : rows.slice(0, previewCount);
+            const hasMore = rows.length > previewCount;
             const title = exerciseDisplayName(exerciseId);
 
             return (
@@ -166,7 +199,11 @@ export function StatsScreen() {
                 {hasMore ? (
                   <Pressable onPress={() => toggleExpanded(exerciseId)} style={styles.seeMoreBtn}>
                     <Text style={styles.seeMoreTxt}>
-                      {isOpen ? t('stats.showLess') : t('stats.seeAll', { count: rows.length })}
+                      {isOpen
+                        ? t('stats.showLess')
+                        : subscribed
+                          ? t('stats.seeAll', { count: rows.length })
+                          : t('stats.unlockAll', { count: rows.length })}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -181,7 +218,12 @@ export function StatsScreen() {
   );
 }
 
-function Pill(props: { tab: string; selected: boolean; onPress: () => void }) {
+function Pill(props: {
+  tab: string;
+  selected: boolean;
+  onPress: () => void;
+  locked?: boolean;
+}) {
   return (
     <Pressable
       onPress={props.onPress}
@@ -190,6 +232,9 @@ function Pill(props: { tab: string; selected: boolean; onPress: () => void }) {
       <Text style={[styles.pillTxt, props.selected ? styles.pillTxtOn : styles.pillTxtOff]}>
         {props.tab}
       </Text>
+      {props.locked ? (
+        <Ionicons name="lock-closed" size={12} color={colors.text_muted} style={{ marginLeft: 4 }} />
+      ) : null}
     </Pressable>
   );
 }
@@ -291,6 +336,25 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   meta: { marginTop: 8, color: colors.text_muted, fontSize: typography.fontSize.bodySm },
+  premiumBanner: {
+    marginTop: 16,
+    backgroundColor: colors.green_subtle_bg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.outline_variant,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  premiumBannerTxt: {
+    flex: 1,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.bodySm,
+    color: colors.on_surface,
+    lineHeight: 20,
+  },
   filt: {
     flexDirection: 'row',
     gap: 8,
@@ -299,7 +363,9 @@ const styles = StyleSheet.create({
   },
   pillBase: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 999,

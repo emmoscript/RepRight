@@ -21,7 +21,7 @@ export type MainTabParamList = {
 
 /** Root native stack — auth flows + overlay screens */
 export type RootStackParamList = {
-  Demo: undefined;
+  Demo: { docStep?: number } | undefined;
   /** Auth entry for returning users (after sign-out). Not the first-run onboarding. */
   Welcome: undefined;
   AuthGateway:
@@ -30,10 +30,10 @@ export type RootStackParamList = {
   EmailConfirm: { email: string };
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   SubscriptionOffer:
-    | { source?: "first_session" | "profile" | "weekly_limit" | "home" }
+    | { source?: "first_session" | "profile" | "weekly_limit" | "home" | "stats" }
     | undefined;
   /** `continuedWorkout`: next set — do not reset workout index / cleared in {@link advanceToNextSet}. */
-  LiveSession: { continuedWorkout?: boolean } | undefined;
+  LiveSession: { continuedWorkout?: boolean; docForceFlow?: 'active' } | undefined;
   SessionComplete: undefined;
   SessionDetail: { sessionId: string };
   LegalDocument: { type: "privacy" | "terms" };

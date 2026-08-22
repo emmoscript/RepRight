@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -32,6 +32,7 @@ const GYM_IMAGE = require('../../assets/images/woman-deadlift.jpg');
 const APP_ICON = require('../../assets/icon.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type DemoRoute = RouteProp<RootStackParamList, 'Demo'>;
 type TFn = ReturnType<typeof useTranslation>['t'];
 
 const STEP_COUNT = 4;
@@ -46,6 +47,7 @@ const CONTENT_BOTTOM = 32;
 export function DemoScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
+  const route = useRoute<DemoRoute>();
 
   const enterAsGuest = useAuthStore((s) => s.enterAsGuest);
   const onboardingCompleted = useUserPreferencesStore((s) => s.onboardingCompleted);
@@ -55,7 +57,13 @@ export function DemoScreen() {
 
   const { hasPermission, requestPermission } = useCameraPermission();
   const cameraDevices = useCameraDevices();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => route.params?.docStep ?? 0);
+
+  useEffect(() => {
+    if (route.params?.docStep != null) {
+      setStep(route.params.docStep);
+    }
+  }, [route.params?.docStep]);
 
   const requestCam = useCallback(async () => {
     await requestPermission();

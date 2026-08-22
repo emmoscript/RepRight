@@ -173,6 +173,7 @@ export function LiveSessionScreen() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'LiveSession'>>();
   const continuedWorkout = route.params?.continuedWorkout === true;
+  const docForceFlow = route.params?.docForceFlow;
   const isFocused = useIsFocused();
   const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -351,6 +352,24 @@ export function LiveSessionScreen() {
     diagBreadcrumb('live_session:mount', { continuedWorkout });
     return () => diagBreadcrumb('live_session:unmount');
   }, [continuedWorkout]);
+
+  useEffect(() => {
+    if (!__DEV__ || docForceFlow !== 'active') return;
+    setUseMock(true);
+    setFlow('active');
+    flowRef.current = 'active';
+    setReps(3);
+    repsRef.current = 3;
+    setElapsedSec(84);
+    const mock = getMockPose(Date.now(), Date.now());
+    setUiPose(mock);
+    setLiveFormBanner({
+      message: t('formErrors.ERR_003'),
+      backgroundColor: colors.surface_v3,
+      textColor: colors.accent_yellow,
+      severity: 'warning',
+    });
+  }, [docForceFlow, t]);
   const [cameraWarmupExpired, setCameraWarmupExpired] = useState(false);
   const [liveFormBanner, setLiveFormBanner] = useState<{
     message: string;

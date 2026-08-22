@@ -1,18 +1,20 @@
 import {
-    DarkTheme,
-    NavigationContainer,
-    type Theme,
+  DarkTheme,
+  NavigationContainer,
+  type Theme,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useAuthDeepLink } from "@/hooks/useAuthDeepLink";
+import { useDocScreenshotDeepLink } from "@/hooks/useDocScreenshotDeepLink";
+import { flushPendingDocScreenshot } from "@/lib/docScreenshot";
 import {
-    flushPendingAuthNavigation,
-    navigationRef,
+  flushPendingAuthNavigation,
+  navigationRef,
 } from "@/navigation/navigationRef";
 import type {
-    MainTabParamList,
-    RootStackParamList,
+  MainTabParamList,
+  RootStackParamList,
 } from "@/navigation/routeTypes";
 import { useAuthStore } from "@/store/authStore";
 import { useUserPreferencesStore } from "@/store/userPreferencesStore";
@@ -21,7 +23,6 @@ import { colors } from "@/theme/colors";
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace -- RN recommended typing bridge
   namespace ReactNavigation {
-    // Merge root stack routes for `useNavigation()` typing site-wide (React Navigation convention).
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type
     interface RootParamList extends RootStackParamList {}
   }
@@ -46,6 +47,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function AuthLinkHandler() {
   useAuthDeepLink();
+  useDocScreenshotDeepLink();
   return null;
 }
 
@@ -68,7 +70,13 @@ export function RootNavigator() {
     <NavigationContainer
       ref={navigationRef}
       theme={theme}
-      onReady={() => flushPendingAuthNavigation(isLoggedIn)}>
+      onReady={() => {
+        flushPendingAuthNavigation(isLoggedIn);
+        flushPendingDocScreenshot();
+        if (__DEV__) {
+          console.log("[DOC_APP_READY]");
+        }
+      }}>
       <AuthLinkHandler />
       <Stack.Navigator
         initialRouteName={resolveInitialRoute(isLoggedIn, onboardingCompleted)}

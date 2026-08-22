@@ -348,7 +348,30 @@
     "formIssuesMore": "{{issues}} +{{count}} more",
     "scoreLabel": "Score",
     "showLess": "Show less",
-    "seeAll": "See all ({{count}})"
+    "seeAll": "See all ({{count}})",
+    "unlockAll": "Unlock all ({{count}})",
+    "premiumUpsell": "Upgrade to Premium for full history, monthly trends, and cloud sync."
+  },
+  "subscription": {
+    "freePlan": "Free plan",
+    "premiumActive": "Premium active",
+    "upgrade": "Upgrade",
+    "upgradeSub": "Unlock full history from ${{price}}/mo",
+    "renewsOn": "Renews {{date}}",
+    "paywallTitle": "RepRight Premium",
+    "paywallSubDefault": "Train smarter with unlimited history, deeper stats, and synced progress across devices.",
+    "paywallSubPostSession": "Great set. Keep the momentum — unlock full history and advanced stats with Premium.",
+    "monthlyPlan": "Monthly plan",
+    "perMonth": "/ month",
+    "cancelAnytime": "Cancel anytime. Billed through App Store or Google Play.",
+    "featureFullHistory": "Unlimited session history and detail views",
+    "featureMonthlyStats": "Monthly performance trends and filters",
+    "featureCloudSync": "Cloud backup when signed in",
+    "featurePriorityFeedback": "Priority access to new exercises (roadmap)",
+    "subscribeCta": "Subscribe — $9.99 / month",
+    "restorePurchases": "Restore purchases",
+    "continueFree": "Continue with Free",
+    "billingDisclaimer": "Prototype billing: subscription activates locally for demo. Production builds will use StoreKit and Google Play Billing."
   },
   "sessionDetail": {
     "title": "Session detail",
