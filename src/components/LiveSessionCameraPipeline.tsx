@@ -24,6 +24,7 @@ export type FrameProcessorMeta = {
   width: number;
   height: number;
   isMirrored: boolean;
+  pixelFormat: string;
 };
 
 export type LiveSessionInferenceHandler = (
@@ -111,6 +112,7 @@ export function LiveSessionCameraPipeline({
           width: sharedFrameWidth.value,
           height: sharedFrameHeight.value,
           isMirrored: sharedFrameMirrored.value,
+          pixelFormat: 'yuv',
         });
       }),
     [
@@ -147,6 +149,7 @@ export function LiveSessionCameraPipeline({
                 width: frame.width,
                 height: frame.height,
                 isMirrored: frame.isMirrored,
+                pixelFormat: 'yuv',
               });
               return;
             }

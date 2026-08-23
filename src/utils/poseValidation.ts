@@ -1,16 +1,15 @@
 import { KEYPOINTS, type PoseResult } from '@/modules/movenet';
 
 /**
- * Lateral deadlift: lower chain must be visible (one side is enough).
- * Slightly lower threshold than full frontal — one joint is often occluded.
+ * Lateral deadlift: hips + knees (one side is enough) to start a set.
+ * Ankles are not required — a plate-elevated bar (~9" / 22 cm) is a shallower
+ * hinge than a floor squat, and side-view ankles often stay below score cutoff.
  */
-/** Side-view ankles often dip below 0.25; keep search/arming from sticking on “GET IN POSITION”. */
 const LATERAL_MIN_SCORE = 0.2;
 
 const LOWER_CHAIN_PAIRS: [number, number][] = [
   [KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP],
   [KEYPOINTS.LEFT_KNEE, KEYPOINTS.RIGHT_KNEE],
-  [KEYPOINTS.LEFT_ANKLE, KEYPOINTS.RIGHT_ANKLE],
 ];
 
 export function isPoseValid(pose: PoseResult): boolean {

@@ -24,7 +24,10 @@ import {
   type Purchase,
   type Subscription,
 } from "react-native-iap";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import type { RootStackParamList } from "@/navigation/routeTypes";
@@ -39,6 +42,22 @@ import { typography } from "@/theme/typography";
 const HERO_IMAGE = require("../../assets/images/man-deadlifting.jpg");
 const SUBSCRIPTION_SKU = "com.unibe.repright.premium.monthly";
 
+function iapErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "code" in error) {
+    return String((error as { code?: string }).code);
+  }
+  return String(error);
+}
+
+function isIapUnavailable(error: unknown): boolean {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: string }).code)
+      : "";
+  return code === "E_IAP_NOT_AVAILABLE" || iapErrorMessage(error).includes("E_IAP_NOT_AVAILABLE");
+}
+
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const BENEFIT_KEYS = ["benefit1", "benefit2", "benefit3"] as const;
@@ -47,6 +66,8 @@ export function SubscriptionOfferScreen() {
   const { t } = useTranslation();
   const nav = useNavigation<Nav>();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
+  const headerPadTop = Math.max(insets.top, 8) + 2;
   const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
   const isGuest = useAuthStore((s) => s.isGuest);
   const participantId = useAuthStore((s) => s.participantId);
@@ -73,6 +94,7 @@ export function SubscriptionOfferScreen() {
 
   useEffect(() => {
     let active = true;
+    let connected = false;
     const listeners: { remove: () => void }[] = [];
 
     const markActive = async () => {
@@ -87,7 +109,7 @@ export function SubscriptionOfferScreen() {
         await markActive();
         setStatusMessage(t("subscriptionOffer.active"));
       } catch (error) {
-        console.warn("[iap] finish/persist failed", error);
+        console.warn("[iap] finish/persist failed", iapErrorMessage(error));
         setStatusMessage(t("subscriptionOffer.purchaseFailed"));
       } finally {
         setPurchasePending(false);
@@ -97,6 +119,15 @@ export function SubscriptionOfferScreen() {
     void (async () => {
       try {
         await initConnection();
+        connected = true;
+        if (!active) {
+          await endConnection().catch((error: unknown) => {
+            if (!isIapUnavailable(error)) {
+              console.warn("[iap] endConnection failed", iapErrorMessage(error));
+            }
+          });
+          return;
+        }
         const items = await getSubscriptions({ skus: [SUBSCRIPTION_SKU] });
         if (active) {
           setProduct(items[0] ?? null);
@@ -110,24 +141,43 @@ export function SubscriptionOfferScreen() {
         );
         listeners.push(
           purchaseErrorListener((error) => {
-            console.warn("[iap] purchase error", error);
+            if (isIapUnavailable(error)) return;
+            console.warn("[iap] purchase error", iapErrorMessage(error));
             setStatusMessage(t("subscriptionOffer.purchaseFailed"));
             setPurchasePending(false);
           }),
         );
       } catch (error) {
-        console.warn("[iap] init failed", error);
+        if (!isIapUnavailable(error)) {
+          console.warn("[iap] init failed", iapErrorMessage(error));
+        }
         if (active) {
           setLoadingProduct(false);
-          setStatusMessage(t("subscriptionOffer.purchaseFailed"));
         }
       }
     })();
 
     return () => {
       active = false;
-      for (const listener of listeners) listener.remove();
-      void endConnection();
+      for (const listener of listeners) {
+        try {
+          listener.remove();
+        } catch {
+          // native IAP may already be torn down
+        }
+      }
+      if (!connected) return;
+      try {
+        void Promise.resolve(endConnection()).catch((error: unknown) => {
+          if (!isIapUnavailable(error)) {
+            console.warn("[iap] endConnection failed", iapErrorMessage(error));
+          }
+        });
+      } catch (error) {
+        if (!isIapUnavailable(error)) {
+          console.warn("[iap] endConnection failed", iapErrorMessage(error));
+        }
+      }
     };
   }, [nav, ownerKey, t]);
 
@@ -145,7 +195,7 @@ export function SubscriptionOfferScreen() {
         appAccountToken: ownerKey,
       });
     } catch (error) {
-      console.warn("[iap] requestSubscription failed", error);
+      console.warn("[iap] requestSubscription failed", iapErrorMessage(error));
       setPurchasePending(false);
       setStatusMessage(t("subscriptionOffer.purchaseFailed"));
     }
@@ -170,7 +220,7 @@ export function SubscriptionOfferScreen() {
       await useSubscriptionStore.getState().setSubscriptionActive(ownerKey);
       nav.replace("MainTabs", { screen: "HomeMain" });
     } catch (error) {
-      console.warn("[iap] restore failed", error);
+      console.warn("[iap] restore failed", iapErrorMessage(error));
       setStatusMessage(t("subscriptionOffer.restoreFailed"));
     } finally {
       setRestorePending(false);
@@ -188,7 +238,7 @@ export function SubscriptionOfferScreen() {
         showsVerticalScrollIndicator={false}>
         <ImageBackground
           source={HERO_IMAGE}
-          style={styles.hero}
+          style={[styles.hero, { paddingTop: headerPadTop }]}
           imageStyle={styles.heroImage}>
           <View style={styles.heroScrim} />
           <View style={styles.heroTopRow}>
@@ -315,8 +365,7 @@ const styles = StyleSheet.create({
     minHeight: 320,
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 24,
   },
   heroImage: {
     opacity: 0.72,
@@ -377,9 +426,10 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     fontSize: 14,
     lineHeight: 20,
+    marginBottom: 8,
   },
   card: {
-    marginTop: -20,
+    marginTop: 16,
     marginHorizontal: 12,
     marginBottom: 12,
     borderRadius: 20,

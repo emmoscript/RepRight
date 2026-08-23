@@ -73,7 +73,7 @@ import {
   smoothHipY,
   standingHipYFromBaseline,
 } from '@/utils/deadliftRep';
-import { mapPoseToPreviewSpace, orientedPreviewSize } from '@/utils/modelFrameCoords';
+import { mapPoseToPreviewSpace, orientedPreviewSize, shouldMirrorToMatchPreview } from '@/utils/modelFrameCoords';
 import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
@@ -1197,14 +1197,19 @@ export function LiveSessionScreen() {
         previewFrameRef.current = { w: oriented.width, h: oriented.height };
         setPreviewFrameSize({ w: oriented.width, h: oriented.height });
       }
-      const mirrorPreview = Platform.OS === 'ios' && useFrontRef.current;
-      return mapPoseToPreviewSpace(
+      const mirrorPreview = shouldMirrorToMatchPreview({
+        platform: Platform.OS,
+        useFront: useFrontRef.current,
+        isMirrored: frameMeta.isMirrored,
+      });
+      const mapped = mapPoseToPreviewSpace(
         raw,
         frameMeta.width,
         frameMeta.height,
         frameOrientation,
         { mirrorPreview },
       );
+      return mapped;
     },
     [],
   );
@@ -1278,12 +1283,16 @@ export function LiveSessionScreen() {
             inferWindowStartRef.current = Date.now();
           }
         }
-        if (__DEV__ && liftRunning) {
-          const o = String(frameOrientation);
-          if (lastLoggedOrientation.current !== o) {
-            lastLoggedOrientation.current = o;
-            sessionTrace.infer('orientation', { orientation: o });
-          }
+        const o = `${frameOrientation}|mirrored=${frameMeta.isMirrored}|${Platform.OS}`;
+        if (lastLoggedOrientation.current !== o) {
+          lastLoggedOrientation.current = o;
+          sessionTrace.infer('orientation', {
+            orientation: frameOrientation,
+            isMirrored: frameMeta.isMirrored,
+            platform: Platform.OS,
+            frameWidth: frameMeta.width,
+            frameHeight: frameMeta.height,
+          });
         }
         const tensor: ArrayBuffer | ArrayBufferView =
           kind === 'f32'
