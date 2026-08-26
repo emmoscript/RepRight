@@ -407,8 +407,8 @@ export function SessionCompleteScreen() {
               <Text
                 style={styles.ringRecoveryLbl}
                 adjustsFontSizeToFit
-                numberOfLines={1}
-                minimumFontScale={0.75}>
+                numberOfLines={2}
+                minimumFontScale={0.7}>
                 {t("sessionComplete.recoveryIndex")}
               </Text>
             </View>
@@ -664,11 +664,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: colors.primary_green,
     fontFamily: typography.fontFamily.bold,
-    letterSpacing: 2,
+    letterSpacing: 0.8,
     fontSize: 9,
+    lineHeight: 12,
     textTransform: "uppercase",
     textAlign: "center",
-    maxWidth: "100%",
+    /** Chord width near the bottom of the ring — a single long line hits the stroke. */
+    width: 108,
+    maxWidth: 108,
   },
 
   eliteBadge: {

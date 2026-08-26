@@ -50,6 +50,12 @@ function confidenceColor(score: number): { line: string; point: string } {
   return { line: '#F97316', point: '#EF4444' };
 }
 
+const PREDICTED_MUTE = { line: '#F97316', point: '#EF4444', opacity: 0.45 };
+
+function isPredicted(k: KeyPoint): boolean {
+  return k.source === 'predicted';
+}
+
 function avgChainScore(keypoints: KeyPoint[], ids: readonly number[]): number {
   let s = 0;
   for (const id of ids) {
@@ -139,9 +145,22 @@ export function SkeletonOverlay({
       const p2 = keypoints[b];
       if (!p1 || !p2) return null;
       const conf = Math.min(p1.score, p2.score);
-      const color = dynamicColors ? confidenceColor(conf).line : lineColor;
-      const opacity = dynamicColors ? (conf >= TIER_PURPLE ? 0.95 : 0.72) : (conf >= 0.3 ? 0.9 : 0.4);
-      const strokeW = conf >= TIER_GREEN ? 3 : conf >= TIER_PURPLE ? 2.5 : 2;
+      const muted = isPredicted(p1) || isPredicted(p2);
+      const color = muted
+        ? PREDICTED_MUTE.line
+        : dynamicColors
+          ? confidenceColor(conf).line
+          : lineColor;
+      const opacity = muted
+        ? PREDICTED_MUTE.opacity
+        : dynamicColors
+          ? conf >= TIER_PURPLE
+            ? 0.95
+            : 0.72
+          : conf >= 0.3
+            ? 0.9
+            : 0.4;
+      const strokeW = muted ? 2 : conf >= TIER_GREEN ? 3 : conf >= TIER_PURPLE ? 2.5 : 2;
       const A = toPx(p1.x, p1.y);
       const B = toPx(p2.x, p2.y);
       return (
@@ -163,9 +182,22 @@ export function SkeletonOverlay({
     if (!keypoints) return null;
     return keypoints.map((k, i) => {
       if (!pointVisible[i]) return null;
-      const color = dynamicColors ? confidenceColor(k.score).point : pointColor;
-      const opacity = dynamicColors ? (k.score >= TIER_PURPLE ? 0.95 : 0.72) : (k.score >= 0.3 ? 0.92 : 0.35);
-      const r = k.score >= TIER_GREEN ? 4.5 : k.score >= TIER_PURPLE ? 3.5 : 3;
+      const muted = isPredicted(k);
+      const color = muted
+        ? PREDICTED_MUTE.point
+        : dynamicColors
+          ? confidenceColor(k.score).point
+          : pointColor;
+      const opacity = muted
+        ? PREDICTED_MUTE.opacity
+        : dynamicColors
+          ? k.score >= TIER_PURPLE
+            ? 0.95
+            : 0.72
+          : k.score >= 0.3
+            ? 0.92
+            : 0.35;
+      const r = muted ? 3 : k.score >= TIER_GREEN ? 4.5 : k.score >= TIER_PURPLE ? 3.5 : 3;
       const P = toPx(k.x, k.y);
       return (
         <Circle key={i} cx={P.x} cy={P.y} r={r} fill={color} fillOpacity={opacity} />

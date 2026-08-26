@@ -9,10 +9,14 @@
 import type { TensorflowModel } from 'react-native-fast-tflite';
 import { Platform } from 'react-native';
 
+export type KeypointSource = 'observed' | 'predicted';
+
 export interface KeyPoint {
   y: number;
   x: number;
   score: number;
+  /** Absent or `observed` = MoveNet detection. `predicted` = temporal hold. */
+  source?: KeypointSource;
 }
 
 export interface PoseResult {

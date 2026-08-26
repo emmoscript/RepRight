@@ -290,6 +290,15 @@ export function DeadliftConfigureScreen() {
             <Text style={styles.summaryVal}>{planSummary}</Text>
           </View>
 
+          <View style={styles.captureTips}>
+            <Text style={styles.captureTipsTitle}>
+              {t("deadliftConfigure.captureTipsTitle")}
+            </Text>
+            <Text style={styles.captureTipsBody}>
+              {t("deadliftConfigure.captureTipsBody")}
+            </Text>
+          </View>
+
           <Text style={styles.footerNote}>
             {t("deadliftConfigure.footerNote")}
           </Text>
@@ -466,6 +475,24 @@ const styles = StyleSheet.create({
     color: colors.text_primary,
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.titleSm + 2,
+  },
+  captureTips: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surface_v3,
+  },
+  captureTipsTitle: {
+    color: colors.text_muted,
+    fontSize: typography.fontSize.captionCaps + 1,
+    letterSpacing: typography.letterSpacing.capsWide,
+    textTransform: "uppercase",
+  },
+  captureTipsBody: {
+    marginTop: 8,
+    color: colors.text_secondary,
+    fontSize: typography.fontSize.body,
+    lineHeight: 22,
   },
   footerNote: {
     marginTop: 16,

@@ -132,14 +132,30 @@ describe('analyzer', () => {
   it('detects ERR_004 when torso leans back at lockout', () => {
     const history = buildPullHistory(0.62, 0.38, 8);
     const current = poseWithHipY(0.38, false);
-    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.62, y: 0.20, score: 0.9 };
-    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.60, y: 0.21, score: 0.88 };
+    // Same-side chain: shoulder well behind hip, torso nearly stacked (open lumbar).
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.66, y: 0.18, score: 0.9 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.64, y: 0.19, score: 0.88 };
     current.keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.54, y: 0.38, score: 0.88 };
-    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.5, y: 0.54, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.48, y: 0.55, score: 0.83 };
+    current.keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.52, y: 0.39, score: 0.86 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.42, y: 0.58, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.40, y: 0.59, score: 0.83 };
     const r = analyzePose(current, history);
     expect(r.phase).toBe('lockout');
     expect(r.errors.some((e) => e.errorId === 'ERR_004')).toBe(true);
+  });
+
+  it('does not flag ERR_004 for packed chest / retracted scapulae at lockout', () => {
+    const history = buildPullHistory(0.62, 0.38, 8);
+    const current = poseWithHipY(0.38, false);
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.58, y: 0.20, score: 0.9 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.56, y: 0.21, score: 0.88 };
+    current.keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.54, y: 0.38, score: 0.88 };
+    current.keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.52, y: 0.39, score: 0.86 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.52, y: 0.56, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.50, y: 0.57, score: 0.83 };
+    const r = analyzePose(current, history);
+    expect(r.phase).toBe('lockout');
+    expect(r.errors.some((e) => e.errorId === 'ERR_004')).toBe(false);
   });
 
   it('does not flag ERR_004 for neutral lockout posture', () => {
@@ -161,5 +177,31 @@ describe('analyzer', () => {
     p.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.48, y: 0.55, score: 0.9 };
     const r = analyzePose(p, [p, p, p]);
     expect(r.errors.some((e) => e.errorId === 'ERR_005')).toBe(false);
+  });
+
+  it('does not flag ERR_004 when lockout knees are predicted', () => {
+    const history = buildPullHistory(0.62, 0.38, 8);
+    const current = poseWithHipY(0.38, false);
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.66, y: 0.18, score: 0.9 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.64, y: 0.19, score: 0.88 };
+    current.keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.54, y: 0.38, score: 0.88 };
+    current.keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.52, y: 0.39, score: 0.86 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.42, y: 0.58, score: 0.22, source: 'predicted' };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.40, y: 0.59, score: 0.22, source: 'predicted' };
+    const r = analyzePose(current, history);
+    expect(r.phase).toBe('lockout');
+    expect(r.errors.some((e) => e.errorId === 'ERR_004')).toBe(false);
+  });
+
+  it('does not use a predicted ankle for ERR_003 when the hip is still close', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.6, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.58, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.22, source: 'predicted' };
+    current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.44, y: 0.89, score: 0.22, source: 'predicted' };
+    const r = analyzePose(current, history);
+    expect(r.phase).toBe('mid_pull');
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
   });
 });

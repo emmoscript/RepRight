@@ -7,7 +7,7 @@
  *  ERR_001 — Lumbar rounding (torso chain angle < 165°)
  *  ERR_002 — Hips too high at initiation (pull_initiation only)
  *  ERR_003 — Bar drift away from body
- *  ERR_004 — Hyperextension at lockout (angle < 160°)
+ *  ERR_004 — Lean-back at lockout (same-side shoulder behind hip + open torso)
  *  ERR_005 — Shoulder behind bar at setup (> 5% frame width)
  */
 
@@ -57,7 +57,8 @@ const HIP_EXTENSION_THRESHOLD = 145; // side-view 2D — soft knee at lockout
 /** Torso opens beyond this at lockout with shoulder behind hip → lean-back. */
 const LUMBAR_LEANBACK_LOCKOUT = 176;
 /** Side view: shoulder x behind hip x (normalized frame width). */
-const SHOULDER_BEHIND_HIP_LEANBACK = 0.035;
+/** Side view: shoulder x behind hip x (normalized frame width). Packed chest is ~0.03–0.05. */
+const SHOULDER_BEHIND_HIP_LEANBACK = 0.06;
 const SHOULDER_BAR_OFFSET_THRESHOLD = 0.06;
 const LUMBAR_LEANBACK_MIN_SHOULDER = 0.28;
 const LUMBAR_LEANBACK_MIN_HIP = 0.28;
@@ -114,6 +115,7 @@ function lumbarChainReliableForRounding(pose: PoseResult): boolean {
   return (
     shoulder.score >= LUMBAR_ROUND_MIN_SHOULDER &&
     hip.score >= LUMBAR_ROUND_MIN_HIP &&
+    knee.source !== 'predicted' &&
     knee.score >= LUMBAR_ROUND_MIN_KNEE
   );
 }
@@ -368,7 +370,8 @@ function checkBarDrift(
   const hip = chainPointLoose(pose, KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP);
   if (!wrist) return null;
 
-  const ankleOffset = ankle != null ? Math.abs(wrist.x - ankle.x) : 0;
+  const ankleOffset =
+    ankle != null && ankle.source !== 'predicted' ? Math.abs(wrist.x - ankle.x) : 0;
   const hipOffset = hip != null ? Math.abs(wrist.x - hip.x) : 0;
   const horizontalOffset = Math.max(ankleOffset, hipOffset);
 
@@ -384,54 +387,61 @@ function checkBarDrift(
 }
 
 function leanbackChainReliableForHyperextension(pose: PoseResult): boolean {
-  const shoulder = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_SHOULDER],
-    pose.keypoints[KEYPOINTS.RIGHT_SHOULDER],
-  );
-  const hip = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_HIP],
-    pose.keypoints[KEYPOINTS.RIGHT_HIP],
-  );
-  const knee = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_KNEE],
-    pose.keypoints[KEYPOINTS.RIGHT_KNEE],
-  );
-  return (
-    shoulder.score >= LUMBAR_LEANBACK_MIN_SHOULDER &&
-    hip.score >= LUMBAR_LEANBACK_MIN_HIP &&
-    knee.score >= LUMBAR_LEANBACK_MIN_KNEE
-  );
+  return lockoutLeanbackSide(pose) != null;
+}
+
+/** Same-side shoulder–hip–knee. Mixing far/near joints inflates “shoulder behind hip”. */
+function lockoutLeanbackSide(
+  pose: PoseResult,
+): { shoulder: KeyPoint; hip: KeyPoint; knee: KeyPoint } | null {
+  const kp = pose.keypoints;
+  const left = {
+    shoulder: kp[KEYPOINTS.LEFT_SHOULDER],
+    hip: kp[KEYPOINTS.LEFT_HIP],
+    knee: kp[KEYPOINTS.LEFT_KNEE],
+  };
+  const right = {
+    shoulder: kp[KEYPOINTS.RIGHT_SHOULDER],
+    hip: kp[KEYPOINTS.RIGHT_HIP],
+    knee: kp[KEYPOINTS.RIGHT_KNEE],
+  };
+  const minOf = (s: typeof left) => Math.min(s.shoulder.score, s.hip.score, s.knee.score);
+  const ok = (s: typeof left) =>
+    s.knee.source !== 'predicted' &&
+    s.shoulder.score >= LUMBAR_LEANBACK_MIN_SHOULDER &&
+    s.hip.score >= LUMBAR_LEANBACK_MIN_HIP &&
+    s.knee.score >= LUMBAR_LEANBACK_MIN_KNEE;
+  const leftOk = ok(left);
+  const rightOk = ok(right);
+  if (leftOk && (!rightOk || minOf(left) >= minOf(right))) return left;
+  if (rightOk) return right;
+  return null;
 }
 
 function checkHyperextension(pose: PoseResult, phase: Phase): BiomechanicalError | null {
   if (phase !== 'lockout') return null;
 
-  const hip = chainPointLoose(pose, KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP);
-  const knee = chainPointLoose(pose, KEYPOINTS.LEFT_KNEE, KEYPOINTS.RIGHT_KNEE);
-  const ankle = chainPointLoose(pose, KEYPOINTS.LEFT_ANKLE, KEYPOINTS.RIGHT_ANKLE);
-  const shoulder = chainPointLoose(
-    pose,
-    KEYPOINTS.LEFT_SHOULDER,
-    KEYPOINTS.RIGHT_SHOULDER,
-  );
+  const chain = lockoutLeanbackSide(pose);
+  if (!chain) return null;
 
-  if (shoulder && hip && knee && leanbackChainReliableForHyperextension(pose)) {
-    const shoulderBehindHip = shoulder.x - hip.x;
-    if (shoulderBehindHip >= SHOULDER_BEHIND_HIP_LEANBACK) {
-      const lumbar = angleBetween(shoulder, hip, knee);
-      return {
-        errorId: 'ERR_004',
-        severity: 'warning',
-        confidence: Math.min(
-          1,
-          (shoulderBehindHip - SHOULDER_BEHIND_HIP_LEANBACK) / 0.06 +
-            Math.max(0, (lumbar - LUMBAR_LEANBACK_LOCKOUT) / 12),
-        ),
-        frameTimestamp: pose.timestamp,
-      };
-    }
-  }
-  return null;
+  const { shoulder, hip, knee } = chain;
+  const shoulderBehindHip = shoulder.x - hip.x;
+  if (shoulderBehindHip < SHOULDER_BEHIND_HIP_LEANBACK) return null;
+
+  const lumbar = angleBetween(shoulder, hip, knee);
+  // Packed chest / retracted scapulae open the torso a little. Layback opens it further.
+  if (lumbar < LUMBAR_LEANBACK_LOCKOUT) return null;
+
+  return {
+    errorId: 'ERR_004',
+    severity: 'warning',
+    confidence: Math.min(
+      1,
+      (shoulderBehindHip - SHOULDER_BEHIND_HIP_LEANBACK) / 0.06 +
+        Math.max(0, (lumbar - LUMBAR_LEANBACK_LOCKOUT) / 12),
+    ),
+    frameTimestamp: pose.timestamp,
+  };
 }
 
 function isHingedSetupPose(pose: PoseResult, history: PoseResult[]): boolean {

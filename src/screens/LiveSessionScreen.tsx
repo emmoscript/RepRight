@@ -78,6 +78,7 @@ import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
 import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
+import { createLowerBodyTrackState, stabilizeLowerBodyPose } from '@/utils/lowerBodyTrack';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -284,6 +285,7 @@ export function LiveSessionScreen() {
   const returnStreakRef = useRef(0);
   const activeEnteredRef = useRef(false);
   const poseRef = useRef<PoseResult | null>(null);
+  const lowerBodyTrackRef = useRef(createLowerBodyTrackState());
   const lastUiPoseAtRef = useRef(0);
   const historyRef = useRef<PoseResult[]>([]);
   const sessionStartRef = useRef(0);
@@ -377,6 +379,12 @@ export function LiveSessionScreen() {
     textColor: string;
     severity: 'critical' | 'warning';
   } | null>(null);
+  const [livePhase, setLivePhase] = useState<Phase | null>(null);
+  const [lastRepFlash, setLastRepFlash] = useState<{
+    rep: number;
+    durationSec: string;
+  } | null>(null);
+  const lastRepFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Pulsing dot indicator (search state) — plain RN, no Reanimated (conflicts with VC on iOS Release) ─
   useEffect(() => {
@@ -567,12 +575,22 @@ export function LiveSessionScreen() {
     }
     setReps(0);
     setElapsedSec(0);
+    setLivePhase(null);
+    setLastRepFlash(null);
+    if (lastRepFlashTimeoutRef.current) {
+      clearTimeout(lastRepFlashTimeoutRef.current);
+      lastRepFlashTimeoutRef.current = null;
+    }
     recordedFormErrIdsRef.current = new Set();
     formErrStreakByIdRef.current = new Map();
     lastFormAudioAtRef.current = 0;
   }, [continuedWorkout, clearResults, setStarted]);
 
-  useEffect(() => () => { void Speech.stop(); }, []);
+  useEffect(() => () => {
+    void Speech.stop();
+    if (lastRepFlashTimeoutRef.current) clearTimeout(lastRepFlashTimeoutRef.current);
+    lowerBodyTrackRef.current = createLowerBodyTrackState();
+  }, []);
 
   useEffect(() => {
     if (!cameraGranted || device != null || allDevices.length === 0) return;
@@ -983,6 +1001,17 @@ export function LiveSessionScreen() {
                 }
                 return next;
               });
+              if (lastRepFlashTimeoutRef.current) {
+                clearTimeout(lastRepFlashTimeoutRef.current);
+              }
+              setLastRepFlash({
+                rep: repsRef.current + 1,
+                durationSec: (armAgeMs / 1000).toFixed(1),
+              });
+              lastRepFlashTimeoutRef.current = setTimeout(() => {
+                setLastRepFlash(null);
+                lastRepFlashTimeoutRef.current = null;
+              }, 2200);
               void impactAsync(ImpactFeedbackStyle.Medium);
             }
           }
@@ -1040,6 +1069,7 @@ export function LiveSessionScreen() {
 
       if (stage === 'active' && !showQuitModalRef.current) {
       const analysis = analyzePose(pose, historyRef.current.slice(-16));
+      setLivePhase(analysis.phase);
       const activeErrIds = analysis.errors.map((e) => e.errorId);
       if (activeErrIds.length > 0) {
         sessionTrace.analyzer(
@@ -1088,9 +1118,7 @@ export function LiveSessionScreen() {
         ? (formErrStreakByIdRef.current.get(fb.topError.errorId) ?? 0)
         : 0;
       const streakTarget =
-        fb.topError?.severity === 'critical' || fb.topError?.errorId === 'ERR_004'
-          ? 1
-          : FORM_ERR_STREAK_TARGET;
+        fb.topError?.severity === 'critical' ? 1 : FORM_ERR_STREAK_TARGET;
       const formAnalysisLive = fb.topError != null;
       const setNum = currentSetNumberRef.current;
       const repNum = analysis.phase === 'setup' ? 0 : Math.max(1, repsRef.current);
@@ -1170,12 +1198,22 @@ export function LiveSessionScreen() {
     }
   }, [addErrors]);
 
+  const stabilizeMapped = useCallback((mapped: PoseResult) => {
+    const { pose, state } = stabilizeLowerBodyPose(
+      mapped,
+      lowerBodyTrackRef.current,
+      Date.now(),
+    );
+    lowerBodyTrackRef.current = state;
+    return pose;
+  }, []);
+
   // ── Mock pose loop (dev only, only if TFLite failed) ───────────────────────
   useEffect(() => {
     if (!__DEV__ || !isFocused || !useMock) return;
-    const id = setInterval(() => ingestPose(getMockPose(Date.now(), Date.now())), 200);
+    const id = setInterval(() => ingestPose(stabilizeMapped(getMockPose(Date.now(), Date.now()))), 200);
     return () => clearInterval(id);
-  }, [isFocused, useMock, ingestPose]);
+  }, [isFocused, useMock, ingestPose, stabilizeMapped]);
 
   // ── Coordinate transforms ──────────────────────────────────────────────────
   /**
@@ -1253,12 +1291,12 @@ export function LiveSessionScreen() {
       }
       try {
         const raw = keypointsFromMovenetOutput(out, ts);
-        ingestPose(mapInferencePose(raw, frameOrientation, frameMeta));
+        ingestPose(stabilizeMapped(mapInferencePose(raw, frameOrientation, frameMeta)));
       } catch {
         // swallow
       }
     },
-    [ingestPose, mapInferencePose],
+    [ingestPose, mapInferencePose, stabilizeMapped],
   );
 
   const onInferenceResult = useCallback(
@@ -1301,12 +1339,12 @@ export function LiveSessionScreen() {
               ? new Uint8Array(values)
               : new Int8Array(values);
         const raw = keypointsFromMovenetOutput(tensor, ts);
-        ingestPose(mapInferencePose(raw, frameOrientation, frameMeta));
+        ingestPose(stabilizeMapped(mapInferencePose(raw, frameOrientation, frameMeta)));
       } catch {
         // swallow — worklet errors must not crash JS thread
       }
     },
-    [ingestPose, mapInferencePose],
+    [ingestPose, mapInferencePose, stabilizeMapped],
   );
 
   /** JS fallback when TFLite runSync is unavailable in the camera worklet. */
@@ -1539,6 +1577,14 @@ export function LiveSessionScreen() {
   const arcDash = `${(countdown / 3) * RING_C} ${RING_C}`;
   /** Minutes without leading-zero padding (“0:05” instead of “00:05”). */
   const elapsedClock = `${Math.floor(elapsedSec / 60)}:${String(elapsedSec % 60).padStart(2, '0')}`;
+  const trackingStatus = lastRepFlash
+    ? t('liveSession.repFlash', {
+        rep: lastRepFlash.rep,
+        duration: lastRepFlash.durationSec,
+      })
+    : livePhase
+      ? t(`formPhases.${livePhase}`)
+      : t('liveSession.tracking');
 
   const onConfirmQuitWholeWorkout = useCallback(() => {
     void Speech.stop();
@@ -1757,7 +1803,10 @@ export function LiveSessionScreen() {
             <View style={[styles.topBannerAbs, { top: belowHeaderBannerTop, zIndex: 12 }]} pointerEvents="none">
               <View style={[styles.infoBanner, styles.infoBannerPoseLost]}>
                 <SvgHudWarnTriangle color={colors.accent_yellow} size={22} />
-                <Text style={styles.infoBannerPoseLostTitle}>{t('liveSession.poseLost')}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.infoBannerPoseLostTitle}>{t('liveSession.poseLost')}</Text>
+                  <Text style={styles.infoBannerBody}>{t('liveSession.poseLostDetail')}</Text>
+                </View>
               </View>
             </View>
           ) : null}
@@ -1788,9 +1837,11 @@ export function LiveSessionScreen() {
               style={[styles.statsPanel, { paddingBottom: Math.max(32, insets.bottom + 14) }]}
               onLayout={onTrackingStripLayout}
             >
-              <View style={styles.statusPill}>
+              <View style={[styles.statusPill, lastRepFlash ? styles.statusPillFlash : null]}>
                 <View style={styles.statusDot} />
-                <Text style={styles.statusTxt}>{t('liveSession.tracking')}</Text>
+                <Text style={styles.statusTxt} numberOfLines={2}>
+                  {trackingStatus}
+                </Text>
               </View>
               <View style={styles.statsRow}>
                 <StatCard label={t('liveSession.reps')} value={`${reps}/${targetRepsForSet}`} />
@@ -2222,6 +2273,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface_v3,
     borderColor: colors.accent_yellow,
     borderWidth: 1.5,
+    alignItems: 'flex-start',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.45,
@@ -2229,7 +2281,6 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   infoBannerPoseLostTitle: {
-    flex: 1,
     color: colors.accent_yellow,
     fontFamily: typography.fontFamily.display,
     fontSize: typography.fontSize.captionCaps + 3,
@@ -2357,6 +2408,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderWidth: 1,
     borderColor: 'rgba(39,195,79,0.30)',
+    maxWidth: '92%',
+  },
+  statusPillFlash: {
+    backgroundColor: 'rgba(39,195,79,0.18)',
+    borderColor: colors.primary_green,
   },
   statusDot: {
     width: 8,
@@ -2370,6 +2426,8 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.captionCaps + 1,
     letterSpacing: typography.letterSpacing.capsWide,
     textTransform: 'uppercase',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   statsRow: { flexDirection: 'row', gap: 10 },
   finishSetBtn: { marginTop: 14 },
