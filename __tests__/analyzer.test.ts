@@ -10,6 +10,8 @@ function poseWithHipY(hipY: number, rounded = false): PoseResult {
   const shoulderY = rounded ? hipY + 0.02 : hipY - 0.18;
   keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.58, y: shoulderY, score: 0.85 };
   keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.56, y: shoulderY + 0.01, score: 0.82 };
+  keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.5, y: shoulderY + 0.12, score: 0.8 };
+  keypoints[KEYPOINTS.RIGHT_ELBOW] = { x: 0.48, y: shoulderY + 0.13, score: 0.75 };
   keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.54, y: hipY, score: 0.88 };
   keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.52, y: hipY + 0.01, score: 0.86 };
   keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.5, y: hipY + 0.16, score: 0.2 };
@@ -81,6 +83,61 @@ describe('analyzer', () => {
     expect(r.errors.some((e) => e.errorId === 'ERR_002')).toBe(false);
   });
 
+  it('does not flag ERR_001 when the shoulder keypoint sits on the upper arm', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, true);
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.52, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.5, y: 0.62, score: 0.82 };
+    current.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.51, y: 0.64, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_ELBOW] = { x: 0.49, y: 0.64, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.5, y: 0.72, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.48, y: 0.73, score: 0.83 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_001')).toBe(false);
+  });
+
+  it('does not flag ERR_001 for a 3/4 hinged pull while the chest is still up', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.46, y: 0.46, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.5, y: 0.47, score: 0.82 };
+    current.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.44, y: 0.58, score: 0.8 };
+    current.keypoints[KEYPOINTS.RIGHT_ELBOW] = { x: 0.48, y: 0.59, score: 0.75 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.58, y: 0.74, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.56, y: 0.75, score: 0.83 };
+    const r = analyzePose(current, history);
+    expect(r.phase === 'pull_initiation' || r.phase === 'mid_pull').toBe(true);
+    expect(r.errors.some((e) => e.errorId === 'ERR_001')).toBe(false);
+  });
+
+  it('keeps ERR_001 when the chest has collapsed in 3/4 view', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    for (const frame of history) {
+      const hipY = frame.keypoints[KEYPOINTS.LEFT_HIP].y;
+      frame.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.46, y: hipY - 0.06, score: 0.85 };
+      frame.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.5, y: hipY - 0.05, score: 0.82 };
+    }
+    const current = poseWithHipY(0.56, true);
+    current.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.46, y: 0.54, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_SHOULDER] = { x: 0.5, y: 0.55, score: 0.82 };
+    current.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.44, y: 0.64, score: 0.8 };
+    current.keypoints[KEYPOINTS.RIGHT_ELBOW] = { x: 0.48, y: 0.65, score: 0.75 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.58, y: 0.74, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.56, y: 0.75, score: 0.83 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_001')).toBe(true);
+  });
+
+  it('does not flag ERR_001 for a chest-up pull when both knees are visible', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.5, y: 0.72, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_KNEE] = { x: 0.48, y: 0.73, score: 0.83 };
+    const r = analyzePose(current, history);
+    expect(r.phase === 'pull_initiation' || r.phase === 'mid_pull').toBe(true);
+    expect(r.errors.some((e) => e.errorId === 'ERR_001')).toBe(false);
+  });
+
   it('does not flag ERR_001 for neutral torso at setup', () => {
     const current = poseWithHipY(0.62, false);
     const r = analyzePose(current, buildPullHistory(0.62, 0.62, 3));
@@ -90,12 +147,24 @@ describe('analyzer', () => {
   it('detects ERR_003 when wrist drifts from ankle mid-pull', () => {
     const history = buildPullHistory(0.62, 0.58, 6);
     const current = poseWithHipY(0.56, false);
-    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.28, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.26, y: 0.63, score: 0.8 };
     current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.75 };
     const r = analyzePose(current, history);
     expect(r.phase).toBe('mid_pull');
     expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(true);
+  });
+
+  it('does not flag ERR_003 when the elbow sits on the knee (bar on the shins)', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.28, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.26, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.75 };
+    current.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.5, y: 0.72, score: 0.85 };
+    current.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.5, y: 0.72, score: 0.85 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
   });
 
   it('does not flag ERR_003 during pull initiation when the bar is over the mid-foot', () => {
@@ -108,12 +177,25 @@ describe('analyzer', () => {
     expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
   });
 
+  it('does not flag ERR_003 when the near wrist stays over the near ankle (far leg is louder)', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.47, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.46, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.7 };
+    current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.7, y: 0.88, score: 0.92 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
   it('prefers ERR_003 over false ERR_001 when bar drifts forward', () => {
     const history = buildPullHistory(0.62, 0.58, 6);
     const current = poseWithHipY(0.56, true);
-    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.28, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.26, y: 0.63, score: 0.8 };
     current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.75 };
+    current.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.36, y: 0.48, score: 0.8 };
+    current.keypoints[KEYPOINTS.RIGHT_ELBOW] = { x: 0.34, y: 0.49, score: 0.75 };
     const r = analyzePose(current, history);
     expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(true);
     expect(r.errors.some((e) => e.errorId === 'ERR_001')).toBe(false);
@@ -266,8 +348,8 @@ describe('analyzer', () => {
   it('uses a planted predicted ankle as the mid-foot for ERR_003', () => {
     const history = buildPullHistory(0.62, 0.58, 6);
     const current = poseWithHipY(0.56, false);
-    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.28, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.26, y: 0.63, score: 0.8 };
     current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.22, source: 'predicted' };
     current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.44, y: 0.89, score: 0.22, source: 'predicted' };
     const r = analyzePose(current, history);

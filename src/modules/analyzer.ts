@@ -13,6 +13,7 @@
 
 import { PoseResult, KEYPOINTS, MIN_KEYPOINT_SCORE, type KeyPoint } from './movenet';
 import { angleBetween } from '../utils/angles';
+import { barHeldAtShins, shoulderTrackingBroken, upperArmPlausible } from '../utils/poseValidation';
 
 export type ErrorId = 'ERR_001' | 'ERR_002' | 'ERR_003' | 'ERR_004' | 'ERR_005';
 export type Severity = 'critical' | 'warning' | 'info';
@@ -53,6 +54,9 @@ const LUMBAR_OPEN_TORSO = 168;
 /** Late pull: lean-back prep and lockout geometry confuse 2D lumbar reads. */
 const LUMBAR_ROUND_MAX_DEPTH = 0.11;
 const LUMBAR_ROUNDING_THRESHOLD = 165;
+/** Chest-up hinge still looks “round” in 3/4 2D. Require a real collapse toward the hip. */
+const LUMBAR_CHEST_DROP_GAP = 0.08;
+const BAR_DRIFT_THRESHOLD = 0.12;
 const HIP_EXTENSION_THRESHOLD = 145; // side-view 2D — soft knee at lockout
 /** Torso opens beyond this at lockout with shoulder behind hip → lean-back. */
 const LUMBAR_LEANBACK_LOCKOUT = 176;
@@ -65,7 +69,6 @@ const LUMBAR_LEANBACK_MIN_HIP = 0.28;
 const LUMBAR_LEANBACK_MIN_KNEE = 0.22;
 /** Hinged setup: hip must sit in lower ~45% of observed ROM (not idle standing). */
 const SETUP_HIP_ROM_FRAC = 0.45;
-const BAR_DRIFT_THRESHOLD = 0.08;
 /** Hallucinated ankles sit on the frame edge, ~0.5 away from the hip. A real shin is not that long. */
 const ANKLE_HIP_MAX_DX = 0.22;
 /** Ankle glued to the hip is a shin hallucination — real mid-foot sits in front. */
@@ -107,25 +110,34 @@ function lumbarAngleForPose(pose: PoseResult): number | null {
   return angleBetween(shoulder, hip, knee);
 }
 
-function lumbarChainReliableForRounding(pose: PoseResult): boolean {
-  const shoulder = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_SHOULDER],
-    pose.keypoints[KEYPOINTS.RIGHT_SHOULDER],
-  );
-  const hip = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_HIP],
-    pose.keypoints[KEYPOINTS.RIGHT_HIP],
-  );
-  const knee = bestKeypoint(
-    pose.keypoints[KEYPOINTS.LEFT_KNEE],
-    pose.keypoints[KEYPOINTS.RIGHT_KNEE],
-  );
-  return (
-    shoulder.score >= LUMBAR_ROUND_MIN_SHOULDER &&
-    hip.score >= LUMBAR_ROUND_MIN_HIP &&
-    knee.source !== 'predicted' &&
-    knee.score >= LUMBAR_ROUND_MIN_KNEE
-  );
+function roundingSide(
+  pose: PoseResult,
+): { shoulder: KeyPoint; hip: KeyPoint; knee: KeyPoint } | null {
+  const kp = pose.keypoints;
+  const left = {
+    shoulder: kp[KEYPOINTS.LEFT_SHOULDER],
+    hip: kp[KEYPOINTS.LEFT_HIP],
+    knee: kp[KEYPOINTS.LEFT_KNEE],
+    elbow: kp[KEYPOINTS.LEFT_ELBOW],
+  };
+  const right = {
+    shoulder: kp[KEYPOINTS.RIGHT_SHOULDER],
+    hip: kp[KEYPOINTS.RIGHT_HIP],
+    knee: kp[KEYPOINTS.RIGHT_KNEE],
+    elbow: kp[KEYPOINTS.RIGHT_ELBOW],
+  };
+  const minOf = (s: typeof left) => Math.min(s.shoulder.score, s.hip.score, s.knee.score);
+  const ok = (s: typeof left) =>
+    s.knee.source !== 'predicted' &&
+    s.shoulder.score >= LUMBAR_ROUND_MIN_SHOULDER &&
+    s.hip.score >= LUMBAR_ROUND_MIN_HIP &&
+    s.knee.score >= LUMBAR_ROUND_MIN_KNEE &&
+    (s.elbow.score < 0.25 || upperArmPlausible(s.shoulder, s.elbow));
+  const leftOk = ok(left);
+  const rightOk = ok(right);
+  if (leftOk && (!rightOk || minOf(left) >= minOf(right))) return left;
+  if (rightOk) return right;
+  return null;
 }
 
 // ─── Phase Detection ──────────────────────────────────────────────────────────
@@ -294,14 +306,17 @@ function checkLumbarRounding(
 ): BiomechanicalError | null {
   if (!isPullPhase(phase)) return null;
   if (hipsShootingFirstSignal(pose, history, phase)) return null;
-  if (!lumbarChainReliableForRounding(pose)) return null;
+
+  const chain = roundingSide(pose);
+  if (!chain) return null;
+  if (chain.shoulder.y <= chain.hip.y - LUMBAR_CHEST_DROP_GAP) return null;
 
   const depth = depthFromBottomRom(pose, history);
   /** Hinged bottom position reads as flexion in 2D — wait until the bar leaves the floor. */
   if (depth == null || depth < 0.04 || depth > LUMBAR_ROUND_MAX_DEPTH) return null;
 
-  const angle = lumbarAngleForPose(pose);
-  if (angle == null || angle >= LUMBAR_OPEN_TORSO) return null;
+  const angle = angleBetween(chain.shoulder, chain.hip, chain.knee);
+  if (angle >= LUMBAR_OPEN_TORSO) return null;
 
   if (angle < LUMBAR_ROUNDING_THRESHOLD) {
     const rise = hipShoulderRise(pose, history);
@@ -374,15 +389,33 @@ function isPlausibleMidfoot(ankle: KeyPoint, hip: KeyPoint): boolean {
   return dx >= ANKLE_HIP_MIN_DX && dx <= ANKLE_HIP_MAX_DX;
 }
 
-/** Prefer a real planted foot. Highest-score ankle is often a plate hallucination at x≈0. */
-function midfootAnkle(pose: PoseResult): KeyPoint | null {
-  const hip = chainPoint(pose, KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP, MIN_KEYPOINT_SCORE);
-  if (!hip) return null;
-  const candidates = [pose.keypoints[KEYPOINTS.LEFT_ANKLE], pose.keypoints[KEYPOINTS.RIGHT_ANKLE]].filter(
-    (a): a is KeyPoint => a != null && isPlausibleMidfoot(a, hip),
-  );
-  if (candidates.length === 0) return null;
-  return candidates.reduce((best, a) => (a.score >= best.score ? a : best));
+/**
+ * How far the wrist sits past the ankle, away from the hip (same-side).
+ * 0 = bar at or behind mid-foot. Mixing left wrist with right ankle is what
+ * made every iPhone rep look like bar-forward.
+ */
+function barDriftPastMidfoot(pose: PoseResult): number | null {
+  const sides: Array<[number, number, number]> = [
+    [KEYPOINTS.LEFT_WRIST, KEYPOINTS.LEFT_ANKLE, KEYPOINTS.LEFT_HIP],
+    [KEYPOINTS.RIGHT_WRIST, KEYPOINTS.RIGHT_ANKLE, KEYPOINTS.RIGHT_HIP],
+  ];
+  let closest: number | null = null;
+  for (const [wristIdx, ankleIdx, hipIdx] of sides) {
+    const wrist = pose.keypoints[wristIdx];
+    const ankle = pose.keypoints[ankleIdx];
+    const hip = pose.keypoints[hipIdx];
+    if (!wrist || wrist.score < MIN_KEYPOINT_SCORE) continue;
+    if (!hip || hip.score < MIN_KEYPOINT_SCORE) continue;
+    if (!ankle || !isPlausibleMidfoot(ankle, hip)) continue;
+    const fromHipAnkle = ankle.x - hip.x;
+    const fromHipWrist = wrist.x - hip.x;
+    if (Math.abs(fromHipAnkle) < 0.02) continue;
+    if (fromHipWrist * fromHipAnkle <= 0) continue;
+    const past = Math.abs(fromHipWrist) - Math.abs(fromHipAnkle);
+    const value = past < 0 ? 0 : past;
+    if (closest == null || value < closest) closest = value;
+  }
+  return closest;
 }
 
 function checkBarDrift(
@@ -391,21 +424,17 @@ function checkBarDrift(
   _history: PoseResult[],
 ): BiomechanicalError | null {
   if (phase === 'lockout' || phase === 'descent' || phase === 'unknown') return null;
+  if (barHeldAtShins(pose)) return null;
 
-  const wrist = chainPoint(pose, KEYPOINTS.LEFT_WRIST, KEYPOINTS.RIGHT_WRIST, MIN_KEYPOINT_SCORE);
-  const ankle = midfootAnkle(pose);
-  if (!wrist || !ankle) return null;
+  const pastMidfoot = barDriftPastMidfoot(pose);
+  if (pastMidfoot == null || pastMidfoot <= BAR_DRIFT_THRESHOLD) return null;
 
-  const horizontalOffset = Math.abs(wrist.x - ankle.x);
-  if (horizontalOffset > BAR_DRIFT_THRESHOLD) {
-    return {
-      errorId: 'ERR_003',
-      severity: 'warning',
-      confidence: Math.min(1, (horizontalOffset - BAR_DRIFT_THRESHOLD) / 0.1),
-      frameTimestamp: pose.timestamp,
-    };
-  }
-  return null;
+  return {
+    errorId: 'ERR_003',
+    severity: 'warning',
+    confidence: Math.min(1, (pastMidfoot - BAR_DRIFT_THRESHOLD) / 0.1),
+    frameTimestamp: pose.timestamp,
+  };
 }
 
 function leanbackChainReliableForHyperextension(pose: PoseResult): boolean {
@@ -421,18 +450,21 @@ function lockoutLeanbackSide(
     shoulder: kp[KEYPOINTS.LEFT_SHOULDER],
     hip: kp[KEYPOINTS.LEFT_HIP],
     knee: kp[KEYPOINTS.LEFT_KNEE],
+    elbow: kp[KEYPOINTS.LEFT_ELBOW],
   };
   const right = {
     shoulder: kp[KEYPOINTS.RIGHT_SHOULDER],
     hip: kp[KEYPOINTS.RIGHT_HIP],
     knee: kp[KEYPOINTS.RIGHT_KNEE],
+    elbow: kp[KEYPOINTS.RIGHT_ELBOW],
   };
   const minOf = (s: typeof left) => Math.min(s.shoulder.score, s.hip.score, s.knee.score);
   const ok = (s: typeof left) =>
     s.knee.source !== 'predicted' &&
     s.shoulder.score >= LUMBAR_LEANBACK_MIN_SHOULDER &&
     s.hip.score >= LUMBAR_LEANBACK_MIN_HIP &&
-    s.knee.score >= LUMBAR_LEANBACK_MIN_KNEE;
+    s.knee.score >= LUMBAR_LEANBACK_MIN_KNEE &&
+    (s.elbow.score < 0.25 || upperArmPlausible(s.shoulder, s.elbow));
   const leftOk = ok(left);
   const rightOk = ok(right);
   if (leftOk && (!rightOk || minOf(left) >= minOf(right))) return left;
@@ -487,6 +519,7 @@ function checkShoulderBarAlignment(
 ): BiomechanicalError | null {
   if (phase !== 'setup') return null;
   if (!isHingedSetupPose(pose, history)) return null;
+  if (shoulderTrackingBroken(pose)) return null;
 
   const shoulder = chainPoint(
     pose,

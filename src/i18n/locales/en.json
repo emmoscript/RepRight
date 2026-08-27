@@ -264,6 +264,8 @@
     "poseLost": "POSE LOST — STEP BACK IN FRAME",
     "poseLostDetail": "Step back in frame. If people are walking behind you, wait until the background is clear.",
     "formCue": "FORM CUE",
+    "trackingCue": "TRACKING",
+    "trackingShoulders": "Shoulders aren't tracking. Step back or add light.",
     "tracking": "TRACKING DEADLIFT",
     "repFlash": "Rep {{rep}} · {{duration}}s",
     "finishSet": "FINISH SET",

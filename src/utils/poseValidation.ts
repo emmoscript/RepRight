@@ -40,3 +40,47 @@ export function isPoseStableForLiftTracking(pose: PoseResult): boolean {
   if (!lh || !rh) return false;
   return observedScore(lh) >= LIFT_TRACK_MIN_SCORE || observedScore(rh) >= LIFT_TRACK_MIN_SCORE;
 }
+
+const ARM_SCORE_MIN = 0.25;
+/** Elbow glued to the knee = bar on the shins. iPhone still reads wrist-vs-ankle as “drift”. */
+const ELBOW_KNEE_CLOSE = 0.11;
+const UPPER_ARM_MIN_LEN = 0.07;
+const SHOULDER_ABOVE_ELBOW = 0.04;
+
+export function upperArmPlausible(shoulder: KeyPoint, elbow: KeyPoint): boolean {
+  const drop = elbow.y - shoulder.y;
+  const len = Math.hypot(elbow.x - shoulder.x, elbow.y - shoulder.y);
+  return drop >= SHOULDER_ABOVE_ELBOW && len >= UPPER_ARM_MIN_LEN;
+}
+
+/** True when every visible arm has the “shoulder” sitting on the biceps. */
+export function shoulderTrackingBroken(pose: PoseResult): boolean {
+  if (!pose?.keypoints?.length) return false;
+  const sides: Array<[number, number]> = [
+    [KEYPOINTS.LEFT_SHOULDER, KEYPOINTS.LEFT_ELBOW],
+    [KEYPOINTS.RIGHT_SHOULDER, KEYPOINTS.RIGHT_ELBOW],
+  ];
+  const visible = sides.filter(([si, ei]) => {
+    const s = pose.keypoints[si];
+    const e = pose.keypoints[ei];
+    return s != null && e != null && s.score >= 0.3 && e.score >= ARM_SCORE_MIN;
+  });
+  if (visible.length === 0) return false;
+  return visible.every(([si, ei]) => !upperArmPlausible(pose.keypoints[si], pose.keypoints[ei]));
+}
+
+export function barHeldAtShins(pose: PoseResult): boolean {
+  if (!pose?.keypoints?.length) return false;
+  const pairs: Array<[number, number]> = [
+    [KEYPOINTS.LEFT_ELBOW, KEYPOINTS.LEFT_KNEE],
+    [KEYPOINTS.RIGHT_ELBOW, KEYPOINTS.RIGHT_KNEE],
+  ];
+  return pairs.some(([ei, ki]) => {
+    const elbow = pose.keypoints[ei];
+    const knee = pose.keypoints[ki];
+    if (!elbow || !knee || elbow.score < ARM_SCORE_MIN || knee.score < LATERAL_MIN_SCORE) {
+      return false;
+    }
+    return Math.hypot(elbow.x - knee.x, elbow.y - knee.y) < ELBOW_KNEE_CLOSE;
+  });
+}

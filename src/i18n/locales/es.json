@@ -264,6 +264,8 @@
     "poseLost": "POSE PERDIDA — VUELVE AL CUADRO",
     "poseLostDetail": "Vuelve al cuadro. Si hay gente caminando detrás, espera a que el fondo esté despejado.",
     "formCue": "CORRECCIÓN",
+    "trackingCue": "SEGUIMIENTO",
+    "trackingShoulders": "No vemos bien los hombros. Un paso atrás o más luz.",
     "tracking": "SIGUIENDO PESO MUERTO",
     "repFlash": "Rep {{rep}} · {{duration}}s",
     "finishSet": "TERMINAR SERIE",

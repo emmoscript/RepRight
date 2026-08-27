@@ -78,7 +78,7 @@ import { mapPoseToPreviewSpace, orientedPreviewSize, shouldMirrorToMatchPreview 
 import { framingHintFromPose } from '@/utils/framingGuide';
 import { getSetTarget } from '@/utils/setPlan';
 import { getContainPreviewRect, type ContainRect } from '@/utils/previewContainRect';
-import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
+import { isPoseStableForLiftTracking, isPoseValid, shoulderTrackingBroken } from '@/utils/poseValidation';
 import { createLowerBodyTrackState, stabilizeLowerBodyPose } from '@/utils/lowerBodyTrack';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -335,6 +335,7 @@ export function LiveSessionScreen() {
     backgroundColor: string;
     textColor: string;
     severity: 'critical' | 'warning';
+    kind?: 'form' | 'tracking';
   } | null>(null);
   const [livePhase, setLivePhase] = useState<Phase | null>(null);
   const [lastRepFlash, setLastRepFlash] = useState<{
@@ -1060,6 +1061,8 @@ export function LiveSessionScreen() {
       if (liveErrors.some((e) => e.errorId === 'ERR_003')) {
         liveErrors = liveErrors.filter((e) => e.errorId !== 'ERR_001');
       }
+      const trackingBroken = shoulderTrackingBroken(pose);
+      if (trackingBroken) liveErrors = [];
       const liveErrIds = liveErrors.map((e) => e.errorId);
 
       for (const err of liveErrors) {
@@ -1145,6 +1148,17 @@ export function LiveSessionScreen() {
       }
 
       setLiveFormBanner((prev) => {
+        if (trackingBroken) {
+          const next = {
+            message: t('liveSession.trackingShoulders'),
+            backgroundColor: colors.bg_high,
+            textColor: colors.text_primary,
+            severity: 'warning' as const,
+            kind: 'tracking' as const,
+          };
+          if (prev?.kind === 'tracking' && prev.message === next.message) return prev;
+          return next;
+        }
         if (!formAnalysisLive || topStreak < streakTarget) return null;
         if (!showBn || !fb.activeBanner) return prev;
         const next = {
@@ -1152,11 +1166,13 @@ export function LiveSessionScreen() {
           backgroundColor: fb.activeBanner.backgroundColor,
           textColor: fb.activeBanner.textColor,
           severity: fb.activeBanner.severity,
+          kind: 'form' as const,
         };
         if (
           prev?.message === next.message &&
           prev?.backgroundColor === next.backgroundColor &&
-          prev?.severity === next.severity
+          prev?.severity === next.severity &&
+          prev?.kind === 'form'
         ) {
           return prev;
         }
@@ -1789,7 +1805,9 @@ export function LiveSessionScreen() {
                 <SvgHudWarnTriangle color={liveFormBanner.textColor} size={22} />
                 <View style={styles.formFeedbackTextCol}>
                   <Text style={[styles.formFeedbackKicker, { color: liveFormBanner.textColor }]}>
-                    {t('liveSession.formCue')}
+                    {liveFormBanner.kind === 'tracking'
+                      ? t('liveSession.trackingCue')
+                      : t('liveSession.formCue')}
                   </Text>
                   <Text style={[styles.formFeedbackTxt, { color: liveFormBanner.textColor }]}>
                     {liveFormBanner.message}

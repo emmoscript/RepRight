@@ -1,5 +1,10 @@
 import { KEYPOINTS, type PoseResult } from '@/modules/movenet';
-import { isPoseStableForLiftTracking, isPoseValid } from '@/utils/poseValidation';
+import {
+  barHeldAtShins,
+  isPoseStableForLiftTracking,
+  isPoseValid,
+  shoulderTrackingBroken,
+} from '@/utils/poseValidation';
 
 function poseWithScores(partial: Partial<Record<number, number>>): PoseResult {
   const keypoints = Array.from({ length: 17 }, () => ({ x: 0.5, y: 0.5, score: 0 }));
@@ -80,5 +85,37 @@ describe('isPoseStableForLiftTracking (active COUNT gate)', () => {
     pose.keypoints[KEYPOINTS.LEFT_KNEE].source = 'predicted';
     pose.keypoints[KEYPOINTS.RIGHT_KNEE].source = 'predicted';
     expect(isPoseStableForLiftTracking(pose)).toBe(false);
+  });
+});
+
+describe('barHeldAtShins / shoulderTrackingBroken', () => {
+  it('treats elbow-on-knee as bar against the shins', () => {
+    const pose = poseWithScores({
+      [KEYPOINTS.LEFT_ELBOW]: 0.9,
+      [KEYPOINTS.LEFT_KNEE]: 0.9,
+    });
+    pose.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.5, y: 0.7, score: 0.9 };
+    pose.keypoints[KEYPOINTS.LEFT_KNEE] = { x: 0.51, y: 0.71, score: 0.9 };
+    expect(barHeldAtShins(pose)).toBe(true);
+  });
+
+  it('flags a shoulder sitting on the biceps', () => {
+    const pose = poseWithScores({
+      [KEYPOINTS.LEFT_SHOULDER]: 0.9,
+      [KEYPOINTS.LEFT_ELBOW]: 0.9,
+    });
+    pose.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.5, y: 0.55, score: 0.9 };
+    pose.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.51, y: 0.57, score: 0.9 };
+    expect(shoulderTrackingBroken(pose)).toBe(true);
+  });
+
+  it('does not flag a normal hanging arm', () => {
+    const pose = poseWithScores({
+      [KEYPOINTS.LEFT_SHOULDER]: 0.9,
+      [KEYPOINTS.LEFT_ELBOW]: 0.9,
+    });
+    pose.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.5, y: 0.38, score: 0.9 };
+    pose.keypoints[KEYPOINTS.LEFT_ELBOW] = { x: 0.48, y: 0.52, score: 0.9 };
+    expect(shoulderTrackingBroken(pose)).toBe(false);
   });
 });
