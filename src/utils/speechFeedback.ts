@@ -21,5 +21,8 @@ export function speechLocaleForAppLanguage(lang: AppLanguage): string {
 /** Speak live form feedback in the user's selected app language. */
 export function speakFeedbackMessage(text: string): void {
   const lang = resolveAppLanguage();
-  Speech.speak(text, { language: speechLocaleForAppLanguage(lang) });
+  const opts = { language: speechLocaleForAppLanguage(lang) };
+  void Speech.stop().then(() => {
+    Speech.speak(text, opts);
+  });
 }

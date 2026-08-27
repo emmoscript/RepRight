@@ -109,6 +109,27 @@ describe('stabilizeLowerBodyPose', () => {
     expect(ankle.score).toBeCloseTo(0.08);
   });
 
+  it('does not seed an ankle that sits at hip height', () => {
+    const state = createLowerBodyTrackState();
+    const fake = poseAt({ x: 0.32, y: 0.45, score: 0.9 }, { x: 0.31, y: 0.42, score: 0.9 });
+    const seeded = stabilizeLowerBodyPose(fake, state, 1000);
+    expect(seeded.state.anchors[KEYPOINTS.LEFT_ANKLE]).toBeUndefined();
+    expect(seeded.pose.keypoints[KEYPOINTS.LEFT_ANKLE].x).toBeCloseTo(0.31);
+  });
+
+  it('does not seed an ankle anchor from a frame-edge hallucination', () => {
+    const state = createLowerBodyTrackState();
+    const edge = poseAt({ x: 0.32, y: 0.72, score: 0.9 }, { x: 0.016, y: 0.51, score: 0.43 });
+    const seeded = stabilizeLowerBodyPose(edge, state, 1000);
+    expect(seeded.pose.keypoints[KEYPOINTS.LEFT_ANKLE].source).not.toBe('predicted');
+    expect(seeded.pose.keypoints[KEYPOINTS.LEFT_ANKLE].x).toBeCloseTo(0.016);
+
+    const later = poseAt({ x: 0.12, y: 0.55, score: 0.12 }, { x: 0.02, y: 0.4, score: 0.1 });
+    const held = stabilizeLowerBodyPose(later, seeded.state, 1200);
+    expect(held.pose.keypoints[KEYPOINTS.LEFT_ANKLE].source ?? 'observed').not.toBe('predicted');
+    expect(held.pose.keypoints[KEYPOINTS.LEFT_ANKLE].x).toBeCloseTo(0.02);
+  });
+
   it('does not modify hips or shoulders', () => {
     const raw = poseAt({ x: 0.32, y: 0.72, score: 0.2 }, { x: 0.31, y: 0.92, score: 0.2 });
     raw.keypoints[KEYPOINTS.LEFT_HIP] = kp(0.41, 0.51, 0.91);

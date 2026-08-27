@@ -2,10 +2,8 @@
  * feedback.ts
  * Generates real-time visual and audio feedback from AnalysisResult.
  *
- * Throttling rules:
- *  - Audio: max 1 cue per 2 seconds
- *  - Visual: stays for duration of error
- *  - Trigger only if error persists for ≥ 3 consecutive frames (enforced by caller)
+ * Caller owns when to speak (once per error episode). Bar drift (ERR_003)
+ * outranks rounding — forward bar looks like a rounded back in 2D.
  */
 
 import i18n from '@/i18n';
@@ -44,12 +42,7 @@ const BANNER_CRITICAL_TXT = '#FFFFFF';
 const BANNER_WARNING_BG = colors.accent_yellow;
 const BANNER_WARNING_TXT = colors.bg_v3;
 
-const AUDIO_THROTTLE_MS = 2000;
-
-export function generateFeedback(
-  analysis: AnalysisResult,
-  lastFeedbackTimestamp: number,
-): FeedbackOutput {
+export function generateFeedback(analysis: AnalysisResult): FeedbackOutput {
   if (analysis.errors.length === 0) {
     return {
       topError: null,
@@ -60,8 +53,9 @@ export function generateFeedback(
     };
   }
 
-  // Prioritize: critical first, then highest confidence
   const topError = [...analysis.errors].sort((a, b) => {
+    if (a.errorId === 'ERR_003' && b.errorId !== 'ERR_003') return -1;
+    if (b.errorId === 'ERR_003' && a.errorId !== 'ERR_003') return 1;
     if (a.severity === 'critical' && b.severity !== 'critical') return -1;
     if (b.severity === 'critical' && a.severity !== 'critical') return 1;
     return b.confidence - a.confidence;
@@ -69,7 +63,6 @@ export function generateFeedback(
 
   const severity = ERROR_SEVERITY[topError.errorId];
   const message = i18n.t(`formErrors.${topError.errorId}`);
-  const canPlayAudio = Date.now() - lastFeedbackTimestamp > AUDIO_THROTTLE_MS;
   const isCritical = severity === 'critical';
 
   return {
@@ -81,8 +74,8 @@ export function generateFeedback(
       textColor: isCritical ? BANNER_CRITICAL_TXT : BANNER_WARNING_TXT,
       severity,
     },
-    keypointColors: {},  // TODO: Map affected keypoints to error color
+    keypointColors: {},
     triggerHaptic: isCritical,
-    audioMessage: canPlayAudio ? message : null,
+    audioMessage: message,
   };
 }

@@ -63,18 +63,22 @@ export function RepsSlider({
 
   const measureTrack = useCallback(() => {
     trackRef.current?.measureInWindow((x, _y, width) => {
-      trackPageXRef.current = x;
-      trackWidthRef.current = width;
-      setTrackWidth(width);
+      if (Number.isFinite(x)) trackPageXRef.current = x;
+      if (width > 0) {
+        trackWidthRef.current = width;
+        setTrackWidth((prev) => (prev === width ? prev : width));
+      }
     });
   }, []);
 
   const onTrackLayout = useCallback(
     (e: LayoutChangeEvent) => {
       const w = e.nativeEvent.layout.width;
-      trackWidthRef.current = w;
-      setTrackWidth(w);
-      measureTrack();
+      if (w > 0) {
+        trackWidthRef.current = w;
+        setTrackWidth(w);
+      }
+      requestAnimationFrame(measureTrack);
     },
     [measureTrack],
   );
@@ -141,7 +145,15 @@ export function RepsSlider({
             <View style={[styles.fill, { width: `${displayRatio * 100}%` }]} />
           )}
         </View>
-        <View style={[styles.thumb, { left: thumbLeft }]} />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.thumb,
+            trackWidth > 0
+              ? { left: thumbLeft }
+              : { left: `${displayRatio * 100}%`, marginLeft: -THUMB_SIZE / 2 },
+          ]}
+        />
       </View>
 
       <View style={styles.rangeRow}>

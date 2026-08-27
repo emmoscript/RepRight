@@ -54,6 +54,7 @@ import {
   type PoseResult,
 } from '@/modules/movenet';
 import { analyzePose, type ErrorId, type Phase } from '@/modules/analyzer';
+import { formFeedbackLiveForError, LOCKOUT_IDLE_SLACK, type RepPhase } from '@/utils/formFeedbackLive';
 import { generateFeedback } from '@/modules/feedback';
 import { sessionTrace } from '@/modules/sessionTrace';
 import type { RootStackParamList } from '@/navigation/routeTypes';
@@ -91,49 +92,6 @@ const RING_C = 2 * Math.PI * RING_R;
 const AUTO_FINISH_TARGET_REPS_DELAY_MS = 900;
 /** Hold lockout (after a counted rep) this long to auto-finish without tapping FINISH SET. */
 const LOCKOUT_IDLE_FINISH_MS = 4500;
-/** Extra slack on lockoutTopY for idle detection (smoothed hip Y lags slightly). */
-const LOCKOUT_IDLE_SLACK = 0.012;
-
-type RepPhase = 'need_return' | 'need_setup' | 'need_lockout';
-
-/** When each error may drive live banners / recording (rep FSM + hip height). */
-function formFeedbackLiveForError(
-  errorId: ErrorId,
-  repPhase: RepPhase,
-  hipY: number | null,
-  standing: number | null,
-  armedDeep: number,
-  analyzerPhase?: Phase,
-): boolean {
-  if (standing == null) return false;
-  const lockoutZoneY =
-    standing +
-    DEADLIFT_REP_THRESH.lockoutStandingSlack +
-    DEADLIFT_REP_THRESH.lockoutCountSlack;
-  const atLockoutTop = hipY != null && hipY <= lockoutZoneY + LOCKOUT_IDLE_SLACK;
-  const bottomGate = standing + DEADLIFT_REP_THRESH.setupDropBelowStanding;
-  const atSetupBottom = hipY != null && hipY > bottomGate;
-
-  switch (errorId) {
-    case 'ERR_001':
-    case 'ERR_002':
-      return repPhase === 'need_lockout' && armedDeep > 0;
-    case 'ERR_003':
-      if (atLockoutTop) return false;
-      return repPhase === 'need_lockout' && armedDeep > 0;
-    case 'ERR_004':
-      if (!atLockoutTop) return false;
-      return (
-        analyzerPhase === 'lockout' ||
-        repPhase === 'need_lockout' ||
-        repPhase === 'need_return'
-      );
-    case 'ERR_005':
-      return repPhase === 'need_setup' && analyzerPhase === 'setup' && atSetupBottom;
-    default:
-      return false;
-  }
-}
 
 /** State tick still 100ms; streak × tick ≈ min time “valid” before leaving search (~400–550 ms typical). */
 const SEARCH_VALID_STREAK = 5;
@@ -279,7 +237,7 @@ export function LiveSessionScreen() {
   const detectedInvalidStreakRef = useRef(0);
   const poseInvalidStreakRef = useRef(0);
   const poseRecoverStreakRef = useRef(0);
-  const repPhaseRef = useRef<'need_return' | 'need_setup' | 'need_lockout'>('need_setup');
+  const repPhaseRef = useRef<RepPhase>('need_setup');
   const setupStreakRef = useRef(0);
   const lockoutStreakRef = useRef(0);
   const returnStreakRef = useRef(0);
@@ -332,8 +290,7 @@ export function LiveSessionScreen() {
   /** Biomechanical cue streak per errorId → banner after stable detection. */
   const formErrStreakByIdRef = useRef<Map<ErrorId, number>>(new Map());
   const FORM_ERR_STREAK_TARGET = 3;
-  /** Audio throttle for `generateFeedback` (max 1 cue / 2s in feedback module). */
-  const lastFormAudioAtRef = useRef(0);
+  const lastSpokenErrorIdRef = useRef<ErrorId | null>(null);
   /** One `addErrors` per `errorId` per session (summary / Session Complete). */
   const recordedFormErrIdsRef = useRef<Set<string>>(new Set());
   const showQuitModalRef = useRef(false);
@@ -583,7 +540,7 @@ export function LiveSessionScreen() {
     }
     recordedFormErrIdsRef.current = new Set();
     formErrStreakByIdRef.current = new Map();
-    lastFormAudioAtRef.current = 0;
+    lastSpokenErrorIdRef.current = null;
   }, [continuedWorkout, clearResults, setStarted]);
 
   useEffect(() => () => {
@@ -1100,6 +1057,9 @@ export function LiveSessionScreen() {
           (e) => e.errorId !== 'ERR_001' && e.errorId !== 'ERR_002',
         );
       }
+      if (liveErrors.some((e) => e.errorId === 'ERR_003')) {
+        liveErrors = liveErrors.filter((e) => e.errorId !== 'ERR_001');
+      }
       const liveErrIds = liveErrors.map((e) => e.errorId);
 
       for (const err of liveErrors) {
@@ -1110,15 +1070,14 @@ export function LiveSessionScreen() {
         if (!liveErrIds.includes(id)) formErrStreakByIdRef.current.set(id, 0);
       }
 
-      const fb = generateFeedback(
-        { ...analysis, errors: liveErrors },
-        lastFormAudioAtRef.current,
-      );
+      const fb = generateFeedback({ ...analysis, errors: liveErrors });
       const topStreak = fb.topError
         ? (formErrStreakByIdRef.current.get(fb.topError.errorId) ?? 0)
         : 0;
       const streakTarget =
-        fb.topError?.severity === 'critical' ? 1 : FORM_ERR_STREAK_TARGET;
+        fb.topError?.severity === 'critical' || fb.topError?.errorId === 'ERR_003'
+          ? 1
+          : FORM_ERR_STREAK_TARGET;
       const formAnalysisLive = fb.topError != null;
       const setNum = currentSetNumberRef.current;
       const repNum = analysis.phase === 'setup' ? 0 : Math.max(1, repsRef.current);
@@ -1172,9 +1131,17 @@ export function LiveSessionScreen() {
         }
       }
 
-      if (showBn && fb.audioMessage && audioOnRef.current) {
+      if (!fb.topError) lastSpokenErrorIdRef.current = null;
+
+      if (
+        showBn &&
+        fb.audioMessage &&
+        audioOnRef.current &&
+        fb.topError != null &&
+        lastSpokenErrorIdRef.current !== fb.topError.errorId
+      ) {
+        lastSpokenErrorIdRef.current = fb.topError.errorId;
         speakFeedbackMessage(fb.audioMessage);
-        lastFormAudioAtRef.current = Date.now();
       }
 
       setLiveFormBanner((prev) => {

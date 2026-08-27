@@ -25,8 +25,24 @@ export function createLowerBodyTrackState(): LowerBodyTrackState {
   return { anchors: {} };
 }
 
+function isAnkle(idx: number): boolean {
+  return idx === KEYPOINTS.LEFT_ANKLE || idx === KEYPOINTS.RIGHT_ANKLE;
+}
+
 function isKnee(idx: number): boolean {
   return idx === KEYPOINTS.LEFT_KNEE || idx === KEYPOINTS.RIGHT_KNEE;
+}
+
+function isFrameEdgeX(x: number): boolean {
+  return x < 0.12 || x > 0.88;
+}
+
+function bestHipY(pose: PoseResult): number | null {
+  const lh = pose.keypoints[KEYPOINTS.LEFT_HIP];
+  const rh = pose.keypoints[KEYPOINTS.RIGHT_HIP];
+  if (!lh && !rh) return null;
+  if (!rh || (lh && lh.score >= rh.score)) return lh && lh.score >= 0.25 ? lh.y : null;
+  return rh.score >= 0.25 ? rh.y : null;
 }
 
 function observed(raw: KeyPoint): KeyPoint {
@@ -42,8 +58,18 @@ function stabilizeOne(
   raw: KeyPoint,
   anchor: Anchor | undefined,
   nowMs: number,
+  hipY: number | null,
 ): { kp: KeyPoint; anchor?: Anchor } {
   const { observeMin, holdRawFloor, jitterMax, maxHoldMs } = LOWER_BODY_TRACK;
+
+  const ankleNotAFoot =
+    isAnkle(idx) && (isFrameEdgeX(raw.x) || (hipY != null && raw.y < hipY + 0.1));
+  if (ankleNotAFoot) {
+    if (anchor && nowMs - anchor.lastObservedAt <= maxHoldMs) {
+      return { kp: predicted(anchor.x, anchor.y), anchor };
+    }
+    return { kp: { ...raw }, anchor };
+  }
 
   if (raw.score >= observeMin) {
     return {
@@ -53,7 +79,7 @@ function stabilizeOne(
   }
 
   if (!anchor) {
-    if (raw.score >= holdRawFloor) {
+    if (raw.score >= (isAnkle(idx) ? observeMin : holdRawFloor)) {
       return {
         kp: { ...raw },
         anchor: { x: raw.x, y: raw.y, lastObservedAt: nowMs },
@@ -95,11 +121,12 @@ export function stabilizeLowerBodyPose(
 ): { pose: PoseResult; state: LowerBodyTrackState } {
   const anchors: LowerBodyTrackState['anchors'] = { ...state.anchors };
   const keypoints = pose.keypoints.map((k) => ({ ...k }));
+  const hipY = bestHipY(pose);
 
   for (const idx of TRACKED) {
     const raw = pose.keypoints[idx];
     if (!raw) continue;
-    const next = stabilizeOne(idx, raw, anchors[idx], nowMs);
+    const next = stabilizeOne(idx, raw, anchors[idx], nowMs, hipY);
     keypoints[idx] = next.kp;
     if (next.anchor) anchors[idx] = next.anchor;
   }

@@ -98,11 +98,11 @@ describe('analyzer', () => {
     expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(true);
   });
 
-  it('does not flag ERR_003 during pull initiation (wrist noise)', () => {
+  it('does not flag ERR_003 during pull initiation when the bar is over the mid-foot', () => {
     const history = buildPullHistory(0.62, 0.615, 5);
     const current = poseWithHipY(0.578, false);
-    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.48, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.47, y: 0.63, score: 0.8 };
     const r = analyzePose(current, history);
     expect(r.phase).toBe('pull_initiation');
     expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
@@ -193,15 +193,84 @@ describe('analyzer', () => {
     expect(r.errors.some((e) => e.errorId === 'ERR_004')).toBe(false);
   });
 
-  it('does not use a predicted ankle for ERR_003 when the hip is still close', () => {
+  it('does not flag ERR_003 when hips are behind the bar but wrists stay over the ankles', () => {
     const history = buildPullHistory(0.62, 0.58, 6);
     const current = poseWithHipY(0.56, false);
-    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.6, y: 0.62, score: 0.85 };
-    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.58, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.62, y: 0.56, score: 0.88 };
+    current.keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.60, y: 0.57, score: 0.86 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.47, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.45, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.75 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
+  it('prefers ERR_003 over ERR_005 when the bar is forward of the ankle at setup', () => {
+    const history = buildPullHistory(0.66, 0.38, 8);
+    const p = poseWithHipY(0.64, false);
+    p.keypoints[KEYPOINTS.LEFT_SHOULDER] = { x: 0.62, y: 0.48, score: 0.9 };
+    p.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.30, y: 0.55, score: 0.9 };
+    p.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.28, y: 0.56, score: 0.85 };
+    p.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.75 };
+    const r = analyzePose(p, history);
+    expect(r.phase).toBe('setup');
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(true);
+    expect(r.errors.some((e) => e.errorId === 'ERR_005')).toBe(false);
+  });
+
+  it('does not flag ERR_003 from a plate-hallucinated ankle on the frame edge', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.5, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.48, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.016, y: 0.51, score: 0.43 };
+    current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.02, y: 0.52, score: 0.12 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
+  it('does not flag ERR_003 while standing still with a plate-height fake ankle', () => {
+    const p = poseWithHipY(0.44, false);
+    p.keypoints[KEYPOINTS.LEFT_HIP] = { x: 0.635, y: 0.541, score: 0.299 };
+    p.keypoints[KEYPOINTS.RIGHT_HIP] = { x: 0.62, y: 0.339, score: 0.55 };
+    p.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.119, y: 0.52, score: 0.037 };
+    p.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.58, y: 0.4, score: 0.25 };
+    p.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.4, y: 0.55, score: 0.7 };
+    p.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.38, y: 0.56, score: 0.65 };
+    const r = analyzePose(p, [p, p, p]);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
+  it('does not flag ERR_003 when the visible ankle is glued to the hip', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.033, y: 0.44, score: 0.3 };
+    current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.53, y: 0.74, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.4, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.38, y: 0.63, score: 0.8 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
+  it('does not flag ERR_003 when the ankle sits at hip height', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
+    current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.54, y: 0.56, score: 0.75 };
+    current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.52, y: 0.57, score: 0.7 };
+    const r = analyzePose(current, history);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+  });
+
+  it('uses a planted predicted ankle as the mid-foot for ERR_003', () => {
+    const history = buildPullHistory(0.62, 0.58, 6);
+    const current = poseWithHipY(0.56, false);
+    current.keypoints[KEYPOINTS.LEFT_WRIST] = { x: 0.72, y: 0.62, score: 0.85 };
+    current.keypoints[KEYPOINTS.RIGHT_WRIST] = { x: 0.7, y: 0.63, score: 0.8 };
     current.keypoints[KEYPOINTS.LEFT_ANKLE] = { x: 0.46, y: 0.88, score: 0.22, source: 'predicted' };
     current.keypoints[KEYPOINTS.RIGHT_ANKLE] = { x: 0.44, y: 0.89, score: 0.22, source: 'predicted' };
     const r = analyzePose(current, history);
-    expect(r.phase).toBe('mid_pull');
-    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(false);
+    expect(r.errors.some((e) => e.errorId === 'ERR_003')).toBe(true);
   });
 });

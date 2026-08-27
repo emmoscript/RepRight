@@ -66,6 +66,14 @@ const LUMBAR_LEANBACK_MIN_KNEE = 0.22;
 /** Hinged setup: hip must sit in lower ~45% of observed ROM (not idle standing). */
 const SETUP_HIP_ROM_FRAC = 0.45;
 const BAR_DRIFT_THRESHOLD = 0.08;
+/** Hallucinated ankles sit on the frame edge, ~0.5 away from the hip. A real shin is not that long. */
+const ANKLE_HIP_MAX_DX = 0.22;
+/** Ankle glued to the hip is a shin hallucination — real mid-foot sits in front. */
+const ANKLE_HIP_MIN_DX = 0.06;
+/** Plates often land at x≈0.12, not only at the true edge. */
+const FRAME_EDGE_X = 0.12;
+/** A real foot is below the hip. Gym log: “ankle” y=0.52 with hip y=0.54. */
+const ANKLE_BELOW_HIP = 0.1;
 
 /** Knee often drops below 0.3 during pulls; shoulder/hip stay reliable. */
 const CHAIN_KNEE_MIN_SCORE = 0.12;
@@ -357,24 +365,38 @@ function checkHipsShootingFirst(
   };
 }
 
+function isPlausibleMidfoot(ankle: KeyPoint, hip: KeyPoint): boolean {
+  const minScore = ankle.source === 'predicted' ? 0.22 : MIN_KEYPOINT_SCORE;
+  if (ankle.score < minScore) return false;
+  if (ankle.x < FRAME_EDGE_X || ankle.x > 1 - FRAME_EDGE_X) return false;
+  if (ankle.y < hip.y + ANKLE_BELOW_HIP) return false;
+  const dx = Math.abs(ankle.x - hip.x);
+  return dx >= ANKLE_HIP_MIN_DX && dx <= ANKLE_HIP_MAX_DX;
+}
+
+/** Prefer a real planted foot. Highest-score ankle is often a plate hallucination at x≈0. */
+function midfootAnkle(pose: PoseResult): KeyPoint | null {
+  const hip = chainPoint(pose, KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP, MIN_KEYPOINT_SCORE);
+  if (!hip) return null;
+  const candidates = [pose.keypoints[KEYPOINTS.LEFT_ANKLE], pose.keypoints[KEYPOINTS.RIGHT_ANKLE]].filter(
+    (a): a is KeyPoint => a != null && isPlausibleMidfoot(a, hip),
+  );
+  if (candidates.length === 0) return null;
+  return candidates.reduce((best, a) => (a.score >= best.score ? a : best));
+}
+
 function checkBarDrift(
   pose: PoseResult,
   phase: Phase,
   _history: PoseResult[],
 ): BiomechanicalError | null {
-  // Bar path is only meaningful mid-pull; initiation wrist noise causes false positives.
-  if (phase !== 'mid_pull') return null;
+  if (phase === 'lockout' || phase === 'descent' || phase === 'unknown') return null;
 
-  const wrist = chainPointLoose(pose, KEYPOINTS.LEFT_WRIST, KEYPOINTS.RIGHT_WRIST);
-  const ankle = chainPointLoose(pose, KEYPOINTS.LEFT_ANKLE, KEYPOINTS.RIGHT_ANKLE);
-  const hip = chainPointLoose(pose, KEYPOINTS.LEFT_HIP, KEYPOINTS.RIGHT_HIP);
-  if (!wrist) return null;
+  const wrist = chainPoint(pose, KEYPOINTS.LEFT_WRIST, KEYPOINTS.RIGHT_WRIST, MIN_KEYPOINT_SCORE);
+  const ankle = midfootAnkle(pose);
+  if (!wrist || !ankle) return null;
 
-  const ankleOffset =
-    ankle != null && ankle.source !== 'predicted' ? Math.abs(wrist.x - ankle.x) : 0;
-  const hipOffset = hip != null ? Math.abs(wrist.x - hip.x) : 0;
-  const horizontalOffset = Math.max(ankleOffset, hipOffset);
-
+  const horizontalOffset = Math.abs(wrist.x - ankle.x);
   if (horizontalOffset > BAR_DRIFT_THRESHOLD) {
     return {
       errorId: 'ERR_003',
@@ -520,11 +542,11 @@ function resolveHipSwayErrors(
   return errors.filter((e) => e.errorId !== 'ERR_002' && e.errorId !== 'ERR_005');
 }
 
-/** Forward bar path changes the 2D torso read — prefer drift over rounding. */
-function resolveBarDriftErrors(errors: BiomechanicalError[], phase: Phase): BiomechanicalError[] {
+/** Forward bar is bar-drift, not rounding and not “shoulders over the bar”. */
+function resolveBarDriftErrors(errors: BiomechanicalError[]): BiomechanicalError[] {
   const has003 = errors.some((e) => e.errorId === 'ERR_003');
-  if (!has003 || !isPullPhase(phase)) return errors;
-  return errors.filter((e) => e.errorId !== 'ERR_001');
+  if (!has003) return errors;
+  return errors.filter((e) => e.errorId !== 'ERR_001' && e.errorId !== 'ERR_005');
 }
 
 /** Lean-back (ERR_004) and rounding (ERR_001) share a torso chain — never both at once. */
@@ -595,7 +617,7 @@ export function analyzePose(pose: PoseResult, history: PoseResult[]): AnalysisRe
   const errors = resolveLockoutErrors(
     resolveSwayHyperextensionConflict(
       suppressPullPhaseNoise(
-        resolveBarDriftErrors(resolveHipSwayErrors(rawErrors, lumbar, pose), phase),
+        resolveBarDriftErrors(resolveHipSwayErrors(rawErrors, lumbar, pose)),
         phase,
       ),
       lumbar,
